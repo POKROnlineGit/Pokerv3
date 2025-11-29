@@ -1,13 +1,16 @@
 'use client'
 
-import { motion } from 'framer-motion'
+import { motion, HTMLMotionProps } from 'framer-motion'
 import { fastTransition } from '@/lib/motion.config'
 import { buttonVariants, type ButtonProps } from '@/components/ui/button'
 import { forwardRef } from 'react'
 import { cn } from '@/lib/utils'
 
-interface MotionButtonProps extends ButtonProps {
-  motionProps?: React.ComponentProps<typeof motion.button>
+// Exclude conflicting props that React and Framer Motion handle differently
+type MotionButtonHTMLProps = Omit<HTMLMotionProps<'button'>, 'onDrag' | 'onDragStart' | 'onDragEnd'>
+
+interface MotionButtonProps extends Omit<ButtonProps, 'onDrag' | 'onDragStart' | 'onDragEnd'> {
+  motionProps?: MotionButtonHTMLProps
 }
 
 export const MotionButton = forwardRef<HTMLButtonElement, MotionButtonProps>(
@@ -19,7 +22,7 @@ export const MotionButton = forwardRef<HTMLButtonElement, MotionButtonProps>(
         whileTap={{ scale: 0.95 }}
         transition={fastTransition}
         className={cn(buttonVariants({ variant, size }), className)}
-        {...props}
+        {...(props as MotionButtonHTMLProps)}
         {...motionProps}
       >
         {children}

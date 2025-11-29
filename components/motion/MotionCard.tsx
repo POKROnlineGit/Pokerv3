@@ -2,11 +2,15 @@
 
 import { motion, type HTMLMotionProps } from 'framer-motion'
 import { transition } from '@/lib/motion.config'
-import { Card, type CardProps } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { forwardRef } from 'react'
+import type { HTMLAttributes } from 'react'
 
-interface MotionCardProps extends CardProps {
-  motionProps?: HTMLMotionProps<'div'>
+// Exclude conflicting props that React and Framer Motion handle differently
+type MotionCardHTMLProps = Omit<HTMLMotionProps<'div'>, 'onDrag' | 'onDragStart' | 'onDragEnd'>
+
+interface MotionCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onDrag' | 'onDragStart' | 'onDragEnd'> {
+  motionProps?: MotionCardHTMLProps
   hover?: boolean
 }
 
@@ -18,9 +22,10 @@ export const MotionCard = forwardRef<HTMLDivElement, MotionCardProps>(
         whileHover={hover ? { y: -8, scale: 1.03 } : undefined}
         transition={transition}
         className={className}
+        {...(props as MotionCardHTMLProps)}
         {...motionProps}
       >
-        <Card {...props}>
+        <Card>
           {children}
         </Card>
       </motion.div>

@@ -38,7 +38,7 @@ export default function GamePage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [showActionModal, setShowActionModal] = useState(false)
   const [showLeaveDialog, setShowLeaveDialog] = useState(false)
-  const [actionValidation, setActionValidation] = useState<ActionValidation & { action?: ActionType }>({ valid: false })
+  const [actionValidation, setActionValidation] = useState<ActionValidation & { action?: 'bet' | 'raise' }>({ valid: false })
 
   // Local game store
   const {

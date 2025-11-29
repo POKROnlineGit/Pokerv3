@@ -1,6 +1,7 @@
 'use client'
 
 import { GameState, Player } from '@/lib/poker-game/legacyTypes'
+import { Card as CardType } from '@/lib/poker-game/types'
 import { Card } from '@/components/Card'
 import { cn } from '@/lib/utils'
 import { getNextActivePlayer } from '@/lib/poker-game/seatUtils'
@@ -60,10 +61,11 @@ export function PokerTable({ gameState, currentUserId, onAction, playerNames, is
                 chips: p.chips,
                 currentBet: p.betThisRound,
                 totalBet: p.totalBet,
-                holeCards: p.holeCards,
+                holeCards: p.holeCards as CardType[], // Cast string[] to Card[] for debug display
                 folded: p.folded,
                 allIn: p.allIn,
                 isBot: p.isBot,
+                eligibleToBet: !p.folded && !p.allIn && p.chips > 0, // Default to true for active players in debug
               })));
               return nextPlayer || 'N/A';
             })()}</div>
@@ -92,7 +94,7 @@ export function PokerTable({ gameState, currentUserId, onAction, playerNames, is
         {/* Community cards area */}
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex gap-2">
           {gameState.communityCards.map((card, i) => (
-            <Card key={i} card={card} size="md" />
+            <Card key={i} card={card as CardType} size="md" />
           ))}
         </div>
 
@@ -188,7 +190,7 @@ export function PokerTable({ gameState, currentUserId, onAction, playerNames, is
                       return (
                         <Card
                           key={i}
-                          card={card}
+                          card={card as CardType}
                           size="sm"
                           faceDown={showFaceDown}
                         />
