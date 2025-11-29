@@ -3,9 +3,10 @@ import { NextResponse } from 'next/server'
 
 export async function GET(
   request: Request,
-  { params }: { params: { gameId: string } }
+  { params }: { params: Promise<{ gameId: string }> }
 ) {
   try {
+    const { gameId } = await params
     const supabase = await createServerComponentClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -16,7 +17,7 @@ export async function GET(
     const { data: game, error } = await supabase
       .from('games')
       .select('*')
-      .eq('id', params.gameId)
+      .eq('id', gameId)
       .single()
 
     if (error || !game) {

@@ -168,8 +168,9 @@ Remember: The goal is long-term growth, not short-term gains.`,
   },
 }
 
-export default async function LessonPage({ params }: { params: { lessonId: string } }) {
-  const lessonId = parseInt(params.lessonId)
+export default async function LessonPage({ params }: { params: Promise<{ lessonId: string }> }) {
+  const { lessonId: lessonIdParam } = await params
+  const lessonId = parseInt(lessonIdParam)
   const lesson = LESSONS[lessonId]
 
   if (!lesson) {
