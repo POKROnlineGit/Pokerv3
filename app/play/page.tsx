@@ -24,7 +24,7 @@ export default function PlayPage() {
           <CardHeader>
             <CardTitle className="text-3xl">Find a Game</CardTitle>
             <CardDescription>
-              Join a 6-max No-Limit Texas Hold'em table
+              Join a 6-max No-Limit Texas Hold&apos;em table
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -33,7 +33,7 @@ export default function PlayPage() {
               <ul className="space-y-1 text-sm text-muted-foreground">
                 <li>• Stakes: 1/2 play-money chips</li>
                 <li>• Table Size: 6 players maximum</li>
-                <li>• Format: No-Limit Texas Hold'em</li>
+                <li>• Format: No-Limit Texas Hold&apos;em</li>
               </ul>
             </div>
             <Link href="/play/queue">

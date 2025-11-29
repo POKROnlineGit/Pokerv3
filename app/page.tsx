@@ -136,7 +136,7 @@ export default function HomePage() {
             transition={{ type: "spring", stiffness: 100, damping: 15, delay: 0.2 }}
             className="text-2xl md:text-3xl text-green-100 mb-12 font-medium"
           >
-            Master Texas Hold'em – Play Free, Learn Fast, Win Big
+            Master Texas Hold&apos;em – Play Free, Learn Fast, Win Big
           </motion.p>
 
           <motion.div
@@ -396,7 +396,7 @@ export default function HomePage() {
               className="text-center mt-12"
             >
               <h3 className="text-3xl md:text-4xl font-bold text-white mb-4">
-                Real-time 6-max No-Limit Hold'em
+                Real-time 6-max No-Limit Hold&apos;em
               </h3>
               <p className="text-xl text-green-100">
                 Experience authentic poker gameplay with smooth animations and instant updates
@@ -479,7 +479,7 @@ export default function HomePage() {
               Ready to Play Poker Like a Pro?
             </h2>
             <p className="text-2xl text-green-100 mb-12">
-              Join thousands of players mastering Texas Hold'em
+              Join thousands of players mastering Texas Hold&apos;em
             </p>
             <motion.div
               whileHover={{ scale: 1.05 }}
