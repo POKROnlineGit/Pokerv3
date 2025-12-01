@@ -1,53 +1,63 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-import { Sidebar } from '@/components/Sidebar'
-import { createServerComponentClient } from '@/lib/supabaseClient'
-import { redirect } from 'next/navigation'
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { Sidebar } from "@/components/Sidebar";
+import { createServerComponentClient } from "@/lib/supabaseClient";
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'PokerOnline - Learn & Play Texas Hold\'em',
-  description: 'Play and learn No-Limit Texas Hold\'em poker for free',
-}
+  title: "PokerOnline - Learn & Play Texas Hold'em",
+  description: "Play and learn No-Limit Texas Hold'em poker for free",
+};
 
 export default async function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  const supabase = await createServerComponentClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  // Get user theme preference
-  let theme = 'light'
+  const supabase = await createServerComponentClient();
+
+  // Use getUser() to authenticate the session with Supabase Auth server
+  // This is more secure than getSession() which only reads from storage
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Get user theme preference and check super user status
+  let theme = "light";
+  let isSuperUser = false;
+
   if (user) {
     const { data: profile } = await supabase
-      .from('profiles')
-      .select('theme')
-      .eq('id', user.id)
-      .single()
+      .from("profiles")
+      .select("theme, is_superuser")
+      .eq("id", user.id)
+      .single();
     if (profile?.theme) {
-      theme = profile.theme
+      theme = profile.theme;
     }
+    isSuperUser = profile?.is_superuser || false;
   }
+
+  // Only show sidebar for authenticated super users
+  // This ensures sidebar is hidden when:
+  // - User is logged out (user is null)
+  // - User is not a super user (isSuperUser is false)
+  const showSidebar = Boolean(user && isSuperUser);
 
   return (
     <html lang="en" className={theme}>
       <body className={inter.className}>
-        {user ? (
+        {showSidebar ? (
           <div className="flex h-screen">
             <Sidebar />
-            <main className="flex-1 overflow-auto">
-              {children}
-            </main>
+            <main className="flex-1 overflow-auto">{children}</main>
           </div>
         ) : (
           <main>{children}</main>
         )}
       </body>
     </html>
-  )
+  );
 }
-

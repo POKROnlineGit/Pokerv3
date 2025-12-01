@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     if (user) {
       const { data: existingProfile } = await supabase
         .from("profiles")
-        .select("id")
+        .select("id, is_superuser")
         .eq("id", user.id)
         .single();
 
@@ -26,12 +26,30 @@ export async function GET(request: Request) {
           username: user.email?.split("@")[0] || `user_${user.id.slice(0, 8)}`,
           chips: 10000,
           theme: "light",
+          is_superuser: false,
+          debug_mode: false,
         });
       }
+
+      // Check if user is super user
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_superuser")
+        .eq("id", user.id)
+        .single();
+
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
+
+      if (!profile?.is_superuser) {
+        // Not a super user, redirect to coming-soon with denied message
+        return NextResponse.redirect(new URL("/coming-soon?denied=1", siteUrl));
+      }
+
+      // Super user, allow access
+      return NextResponse.redirect(new URL("/play", siteUrl));
     }
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
-
-  return NextResponse.redirect(new URL("/play", siteUrl));
+  return NextResponse.redirect(new URL("/coming-soon", siteUrl));
 }

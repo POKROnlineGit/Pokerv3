@@ -5,6 +5,7 @@ import { Card as CardType } from '@/lib/poker-game/types'
 import { Card } from '@/components/Card'
 import { cn } from '@/lib/utils'
 import { getNextActivePlayer } from '@/lib/poker-game/seatUtils'
+import { useDebugMode } from '@/lib/hooks/useDebugMode'
 
 interface PokerTableProps {
   gameState: GameState
@@ -27,6 +28,8 @@ const SEAT_POSITIONS = [
 ]
 
 export function PokerTable({ gameState, currentUserId, onAction, playerNames, isLocalGame = false }: PokerTableProps) {
+  const { isEnabled: debugMode } = useDebugMode()
+
   const getPlayerAtSeat = (seat: number): Player | undefined => {
     return gameState.players.find(p => p.seat === seat)
   }
@@ -46,8 +49,8 @@ export function PokerTable({ gameState, currentUserId, onAction, playerNames, is
 
   return (
     <div className="relative w-full max-w-4xl mx-auto aspect-[4/3]">
-      {/* Debug overlay (development only) */}
-      {process.env.NODE_ENV === 'development' && (
+      {/* Debug overlay (super user + debug mode only) */}
+      {debugMode && (
         <div className="absolute top-4 left-4 bg-black/90 text-white p-4 rounded-lg text-xs font-mono z-50 border-2 border-yellow-500">
           <div className="font-bold mb-2 text-yellow-400">DEBUG INFO</div>
           <div>Button: Seat {gameState.buttonSeat}</div>

@@ -12,11 +12,14 @@ import { useRouter } from 'next/navigation'
 interface SettingsFormProps {
   initialUsername: string
   initialTheme: 'light' | 'dark'
+  isSuperUser?: boolean
+  initialDebugMode?: boolean
 }
 
-export function SettingsForm({ initialUsername, initialTheme }: SettingsFormProps) {
+export function SettingsForm({ initialUsername, initialTheme, isSuperUser = false, initialDebugMode = false }: SettingsFormProps) {
   const [username, setUsername] = useState(initialUsername)
   const [theme, setTheme] = useState(initialTheme)
+  const [debugMode, setDebugMode] = useState(initialDebugMode)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -46,9 +49,14 @@ export function SettingsForm({ initialUsername, initialTheme }: SettingsFormProp
       }
 
       // Update profile
+      const updateData: { username: string; theme: string; debug_mode?: boolean } = { username, theme }
+      if (isSuperUser) {
+        updateData.debug_mode = debugMode
+      }
+
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ username, theme })
+        .update(updateData)
         .eq('id', user.id)
 
       if (updateError) throw updateError
@@ -109,6 +117,24 @@ export function SettingsForm({ initialUsername, initialTheme }: SettingsFormProp
               Toggle between light and dark theme
             </p>
           </div>
+
+          {isSuperUser && (
+            <div className="space-y-2 pt-4 border-t">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="debug-mode">Debug Mode</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Enable debug overlays, console logs, and development tools
+                  </p>
+                </div>
+                <Switch
+                  id="debug-mode"
+                  checked={debugMode}
+                  onCheckedChange={setDebugMode}
+                />
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">

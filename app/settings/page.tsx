@@ -12,7 +12,7 @@ export default async function SettingsPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('username, theme')
+    .select('username, theme, is_superuser, debug_mode')
     .eq('id', user.id)
     .single()
 
@@ -22,6 +22,8 @@ export default async function SettingsPage() {
       <SettingsForm
         initialUsername={profile?.username || ''}
         initialTheme={profile?.theme || 'light'}
+        isSuperUser={profile?.is_superuser || false}
+        initialDebugMode={profile?.debug_mode || false}
       />
     </div>
   )

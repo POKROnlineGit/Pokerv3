@@ -15,8 +15,8 @@ export function Sidebar() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
-    router.push('/')
-    router.refresh()
+    // Redirect to coming-soon and force a hard refresh to clear any cached state
+    window.location.href = '/coming-soon'
   }
 
   const navItems = [
