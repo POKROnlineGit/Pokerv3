@@ -31,5 +31,7 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(new URL("/play", requestUrl.origin));
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
+
+  return NextResponse.redirect(new URL("/play", siteUrl));
 }
