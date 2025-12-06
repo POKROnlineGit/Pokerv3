@@ -2,7 +2,6 @@
 
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
-import { createClientComponentClient } from '@/lib/supabaseClient'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
@@ -96,8 +95,6 @@ function FloatingCard({ card, index }: { card: string; index: number }) {
 export default function ComingSoonPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createClientComponentClient()
-  const [loading, setLoading] = useState(false)
   const [cards] = useState(() => generateCards())
 
   // Check for access denied message
@@ -118,21 +115,8 @@ export default function ComingSoonPage() {
     }
   }, [denied])
 
-  const handleDeveloperLogin = async () => {
-    setLoading(true)
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
-
-      if (error) throw error
-    } catch (err: any) {
-      console.error('Login error:', err)
-      setLoading(false)
-    }
+  const handleDeveloperLogin = () => {
+    router.push('/auth/signin')
   }
 
   return (
@@ -184,13 +168,12 @@ export default function ComingSoonPage() {
           >
             <Button
               onClick={handleDeveloperLogin}
-              disabled={loading}
               className="bg-[#9A1F40] hover:bg-[#7A1A30] text-white px-8 py-6 text-lg font-semibold rounded-xl shadow-2xl transition-all duration-300"
               style={{
                 boxShadow: '0 10px 40px rgba(154, 31, 64, 0.4), 0 0 20px rgba(154, 31, 64, 0.2)',
               }}
             >
-              {loading ? 'Signing in...' : 'Developer Login'}
+              Developer Login
             </Button>
           </motion.div>
 
