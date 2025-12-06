@@ -1,12 +1,8 @@
 import { createServerComponentClient } from '@/lib/supabaseClient'
 import { NextResponse } from 'next/server'
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ gameId: string }> }
-) {
+export async function POST() {
   try {
-    const { gameId } = await params
     const supabase = await createServerComponentClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -14,19 +10,17 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: game, error } = await supabase
-      .from('games')
-      .select('*')
-      .eq('id', gameId)
-      .single()
+    const { error } = await supabase
+      .from('queue')
+      .delete()
+      .eq('user_id', user.id)
 
-    if (error || !game) {
-      return NextResponse.json({ error: 'Game not found' }, { status: 404 })
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json(game)
+    return NextResponse.json({ success: true })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-

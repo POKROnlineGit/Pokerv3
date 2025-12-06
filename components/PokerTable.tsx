@@ -14,6 +14,7 @@ interface PokerTableProps {
   onAction?: () => void
   playerNames?: Record<string, string>
   isLocalGame?: boolean
+  isHeadsUp?: boolean
 }
 
 // Calculate seat positions using sin/cos for equal spacing
@@ -36,11 +37,15 @@ function calculateSeatPositions(numSeats: number, radiusX: number = 48, radiusY:
   return positions
 }
 
-const NUM_SEATS = 6
-const SEAT_POSITIONS = calculateSeatPositions(NUM_SEATS)
-
-export function PokerTable({ gameState, currentUserId, onAction, playerNames, isLocalGame = false }: PokerTableProps) {
+export function PokerTable({ gameState, currentUserId, onAction, playerNames, isLocalGame = false, isHeadsUp = false }: PokerTableProps) {
   const { isEnabled: debugMode } = useDebugMode()
+  
+  // Dynamic seat count based on game type
+  const NUM_SEATS = isHeadsUp ? 2 : 6
+  // For heads-up, use larger radius and adjust positions for better 2-player layout
+  const radiusX = isHeadsUp ? 35 : 48
+  const radiusY = isHeadsUp ? 30 : 42
+  const SEAT_POSITIONS = calculateSeatPositions(NUM_SEATS, radiusX, radiusY)
 
   const getPlayerAtSeat = (seat: number): Player | undefined => {
     return gameState.players.find(p => p.seat === seat)
@@ -87,7 +92,7 @@ export function PokerTable({ gameState, currentUserId, onAction, playerNames, is
           <div>Round: {gameState.currentRound}</div>
           <div className="mt-2 pt-2 border-t border-yellow-500/50">
             <div className="text-yellow-400">Players (clockwise):</div>
-            {[1, 2, 3, 4, 5, 6].map(seat => {
+            {Array.from({ length: NUM_SEATS }, (_, i) => i + 1).map(seat => {
               const p = gameState.players.find(p => p.seat === seat)
               const isActive = p && !p.folded && !p.allIn && p.chips > 0
               return (
@@ -120,10 +125,10 @@ export function PokerTable({ gameState, currentUserId, onAction, playerNames, is
           border: '12px solid #8b4513',
         }}
       >
-        {/* Community cards area - centered */}
+        {/* Community cards area - centered, larger for heads-up */}
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex gap-2 z-10">
           {gameState.communityCards.map((card, i) => (
-            <Card key={i} card={card as CardType} size="sm" />
+            <Card key={i} card={card as CardType} size={isHeadsUp ? "md" : "sm"} />
           ))}
         </div>
 
@@ -249,7 +254,7 @@ export function PokerTable({ gameState, currentUserId, onAction, playerNames, is
                   )}
                 </div>
                 
-                {/* Hole cards - always positioned beneath the player */}
+                {/* Hole cards - always positioned beneath the player, larger for heads-up */}
                 {player.holeCards && player.holeCards.length > 0 && (
                   <div className="absolute left-1/2 transform -translate-x-1/2 flex gap-1 z-10 top-full mt-2">
                     {player.holeCards.map((card, i) => {
@@ -264,7 +269,7 @@ export function PokerTable({ gameState, currentUserId, onAction, playerNames, is
                         <Card
                           key={i}
                           card={card as CardType}
-                          size="sm"
+                          size={isHeadsUp ? "md" : "sm"}
                           faceDown={showFaceDown}
                         />
                       )

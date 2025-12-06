@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { PokerTable } from '@/components/PokerTable'
 import { ActionPopup } from '@/components/ActionPopup'
 import { GameState, ActionType } from '@/lib/poker-game/ui/legacyTypes'
 import { createClientComponentClient } from '@/lib/supabaseClient'
+import { getSocket, disconnectSocket } from '@/lib/socketClient'
 import { gameContextToUI } from '@/lib/poker-game/ui/adapters'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -37,6 +38,7 @@ export default function GamePage() {
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [showLeaveDialog, setShowLeaveDialog] = useState(false)
+  const [isHeadsUp, setIsHeadsUp] = useState(false)
 
   // Local game store
   const {
@@ -78,50 +80,137 @@ export default function GamePage() {
     return unsubscribe
   }, [isLocalGame, localGameContext])
 
-  // Load multiplayer game
+  // Load multiplayer game with Socket.io
   useEffect(() => {
     if (isLocalGame) return
 
+    let socket: any = null
+    let mounted = true
+
     const loadGame = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/')
-        return
-      }
-      setCurrentUserId(user.id)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          router.push('/')
+          return
+        }
+        setCurrentUserId(user.id)
 
-      // Load game state
-      const { data: game } = await supabase
-        .from('games')
-        .select('current_hand')
-        .eq('id', gameId)
-        .single()
+        // Initial load from Supabase (recovery)
+        const { data: game } = await supabase
+          .from('games')
+          .select('current_hand, game_type')
+          .eq('id', gameId)
+          .single()
 
-      if (game?.current_hand) {
-        setGameState(game.current_hand as GameState)
-      }
-
-      // Subscribe to game updates
-      const channel = supabase.channel(`game:${gameId}`)
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'games',
-          filter: `id=eq.${gameId}`
-        }, async (payload) => {
-          const updatedGame = payload.new as any
-          if (updatedGame.current_hand) {
-            setGameState(updatedGame.current_hand as GameState)
+        if (game && mounted) {
+          if (game.current_hand) {
+            setGameState(game.current_hand as GameState)
           }
-        })
-        .subscribe()
+          // Detect heads-up mode
+          setIsHeadsUp(game.game_type === 'heads_up')
+        }
 
-      return () => {
-        channel.unsubscribe()
+        // Connect to Socket.io and join game room (optional)
+        socket = await getSocket()
+        
+        if (socket) {
+          // Join the game room
+          socket.emit('joinGame', { gameId })
+
+          // Listen for game state updates from server
+          socket.on('gameState', (newState: GameState) => {
+            if (mounted) {
+              setGameState(newState)
+            }
+          })
+
+          // Listen for action confirmations
+          socket.on('actionProcessed', (data: { success: boolean; error?: string }) => {
+            if (!data.success && data.error) {
+              console.error('[Game] Action error:', data.error)
+              alert(data.error)
+            }
+          })
+
+          // Listen for errors
+          socket.on('error', (error: { message: string }) => {
+            console.error('[Game] Socket error:', error.message)
+            alert(error.message)
+          })
+        } else {
+          console.log('[Game] Socket.io server not available - using Supabase Realtime only')
+        }
+
+        // Fallback: Also subscribe to Supabase Realtime for redundancy
+        const channel = supabase.channel(`game:${gameId}`)
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'games',
+            filter: `id=eq.${gameId}`
+          }, async (payload) => {
+            const updatedGame = payload.new as any
+            if (updatedGame && mounted) {
+              if (updatedGame.current_hand) {
+                setGameState(updatedGame.current_hand as GameState)
+              }
+              if (updatedGame.game_type) {
+                setIsHeadsUp(updatedGame.game_type === 'heads_up')
+              }
+            }
+          })
+          .subscribe()
+
+        return () => {
+          mounted = false
+          if (socket) {
+            socket.emit('leaveGame', { gameId })
+            socket.off('gameState')
+            socket.off('actionProcessed')
+            socket.off('error')
+          }
+          channel.unsubscribe()
+        }
+      } catch (error) {
+        console.error('[Game] Failed to load game:', error)
+        // Fallback to Supabase-only mode
+        const channel = supabase.channel(`game:${gameId}`)
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'games',
+            filter: `id=eq.${gameId}`
+          }, async (payload) => {
+            const updatedGame = payload.new as any
+            if (updatedGame && mounted) {
+              if (updatedGame.current_hand) {
+                setGameState(updatedGame.current_hand as GameState)
+              }
+              if (updatedGame.game_type) {
+                setIsHeadsUp(updatedGame.game_type === 'heads_up')
+              }
+            }
+          })
+          .subscribe()
+
+        return () => {
+          mounted = false
+          channel.unsubscribe()
+        }
       }
     }
 
-    loadGame()
+    const cleanup = loadGame()
+
+    return () => {
+      mounted = false
+      cleanup.then(cleanupFn => {
+        if (cleanupFn) cleanupFn()
+      }).catch(() => {
+        // Ignore cleanup errors
+      })
+    }
   }, [gameId, supabase, router, isLocalGame])
 
   const handleAction = async (action: ActionType, amount?: number) => {
@@ -131,27 +220,40 @@ export default function GamePage() {
       // Local game action
       localPlayerAction(action, amount)
     } else {
-      // Multiplayer game action
+      // Multiplayer game action via Socket.io (with API fallback)
       try {
-        const response = await fetch('/api/game/action', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        const socket = await getSocket()
+        
+        if (socket) {
+          // Emit action to server via Socket.io
+          socket.emit('action', {
             gameId,
             action,
             amount,
-          }),
-        })
-
-        if (!response.ok) {
-          const error = await response.json()
-          alert(error.error || 'Action failed')
-          return
+            seat: gameState.players.find(p => p.id === currentUserId)?.seat,
+          })
+          // State will be updated via 'gameState' event from server
+        } else {
+          // Fallback to API route if Socket.io is not available
+          const response = await fetch(`/api/game/action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              gameId,
+              action,
+              amount,
+              seat: gameState.players.find(p => p.id === currentUserId)?.seat,
+            }),
+          })
+          
+          if (!response.ok) {
+            const error = await response.json()
+            throw new Error(error.error || 'Failed to submit action')
+          }
+          // State will be updated via Supabase Realtime subscription
         }
-
-        const updatedState = await response.json()
-        setGameState(updatedState)
       } catch (err: any) {
+        console.error('[Game] Failed to send action:', err)
         alert(err.message || 'Failed to submit action')
       }
     }
@@ -214,6 +316,7 @@ export default function GamePage() {
           currentUserId={currentUserId}
           playerNames={isLocalGame ? BOT_NAMES : undefined}
           isLocalGame={isLocalGame}
+          isHeadsUp={isHeadsUp}
         />
       </div>
 
