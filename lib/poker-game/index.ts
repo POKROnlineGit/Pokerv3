@@ -1,26 +1,22 @@
 // Public API for the poker game engine
-export { GameEngine } from "./GameEngine";
-export { createInitialContext } from "./GameContext";
+export { GameEngine } from "./engine/core/GameEngine";
+export { createInitialContext } from "./engine/core/GameContext";
 export {
   validateAction,
   applyAction,
   isBettingRoundComplete,
   getCurrentBet,
-} from "./actions";
+} from "./engine/utils/actions";
 export {
   getNextActivePlayer,
   getNextEligiblePlayer,
   getActivePlayersInOrder,
   nextSeat,
   prevSeat,
-} from "./seatUtils";
-export { createDeck, shuffleDeck, dealCards } from "./deck";
-export { getHandStrength, evaluateHandSimple } from "./botHandEvaluator";
-export { checkQueueAndCreateGame } from "./queueManager";
-// Note: handEvaluator is server-only (uses poker-evaluator with fs module)
-// For client-side, use botHandEvaluator above
-// handEvaluator functions are NOT exported here to prevent client-side imports
-// Server-side code should import directly from './handEvaluator'
+} from "./engine/utils/seatUtils";
+export { createDeck, shuffleDeck, dealCards } from "./engine/utils/deck";
+export { getHandStrength, evaluateHandSimple } from "./engine/evaluation/botHandEvaluator";
+export { checkQueueAndCreateGame } from "./multiplayer/queueManager";
 export type {
   GameContext,
   Player,
@@ -30,4 +26,4 @@ export type {
   Pot,
   ActionValidation,
   Card,
-} from "./types";
+} from "./engine/core/types";

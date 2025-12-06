@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { PokerTable } from '@/components/PokerTable'
-import { ActionModal } from '@/components/ActionModal'
-import { GameState, ActionType, ActionValidation, validateAction, getCurrentBet } from '@/lib/poker-game/legacyTypes'
+import { ActionPopup } from '@/components/ActionPopup'
+import { GameState, ActionType } from '@/lib/poker-game/ui/legacyTypes'
 import { createClientComponentClient } from '@/lib/supabaseClient'
-import { gameContextToLegacyState } from '@/lib/poker-game/adapters'
+import { gameContextToUI } from '@/lib/poker-game/ui/adapters'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useLocalGameStore } from '@/lib/stores/useLocalGameStore'
@@ -36,9 +36,7 @@ export default function GamePage() {
   const supabase = createClientComponentClient()
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [showActionModal, setShowActionModal] = useState(false)
   const [showLeaveDialog, setShowLeaveDialog] = useState(false)
-  const [actionValidation, setActionValidation] = useState<ActionValidation & { action?: 'bet' | 'raise' }>({ valid: false })
 
   // Local game store
   const {
@@ -64,7 +62,7 @@ export default function GamePage() {
     
     // Initial state
     if (localGameContext) {
-      setGameState(gameContextToLegacyState(localGameContext))
+      setGameState(gameContextToUI(localGameContext))
     }
 
     // Subscribe to store updates
@@ -72,7 +70,7 @@ export default function GamePage() {
       (state) => {
         // Update local state whenever store gameContext changes
         if (state.gameContext) {
-          setGameState(gameContextToLegacyState(state.gameContext))
+          setGameState(gameContextToUI(state.gameContext))
         }
       }
     )
@@ -126,78 +124,12 @@ export default function GamePage() {
     loadGame()
   }, [gameId, supabase, router, isLocalGame])
 
-  // Handle action modal for human player
-  useEffect(() => {
-    if (!gameState || !currentUserId) {
-      setShowActionModal(false)
-      return
-    }
-
-    // Check if it's the human player's turn
-    if (gameState.currentActorSeat === 0 || gameState.currentActorSeat === -1) {
-      setShowActionModal(false)
-      return
-    }
-
-    const currentPlayer = gameState.players.find(p => p.seat === gameState.currentActorSeat)
-    
-    // Debug logging in development
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[Action Modal Check]', {
-        currentActorSeat: gameState.currentActorSeat,
-        currentPlayer: currentPlayer?.name,
-        currentPlayerId: currentPlayer?.id,
-        humanId: currentUserId,
-        isHumanTurn: currentPlayer?.id === currentUserId,
-        folded: currentPlayer?.folded,
-        allIn: currentPlayer?.allIn,
-        chips: currentPlayer?.chips,
-      })
-    }
-    
-    // Only show modal if it's the human player's turn and they can act
-    if (currentPlayer?.id === currentUserId && !currentPlayer.folded && !currentPlayer.allIn && currentPlayer.chips > 0) {
-      const currentBet = getCurrentBet(gameState)
-      const chipsToCall = currentBet - currentPlayer.betThisRound
-      const canCheck = chipsToCall === 0
-
-      // Determine available actions
-      let availableAction: 'bet' | 'raise' | undefined = undefined
-      if (canCheck && currentPlayer.chips >= gameState.minRaise) {
-        // Can bet
-        const betValidation = validateAction(gameState, currentUserId, 'bet')
-        if (betValidation.valid) {
-          availableAction = 'bet'
-          setActionValidation({ ...betValidation, action: 'bet' })
-        }
-      } else if (!canCheck && currentPlayer.chips > chipsToCall) {
-        // Can raise
-        const raiseValidation = validateAction(gameState, currentUserId, 'raise')
-        if (raiseValidation.valid) {
-          availableAction = 'raise'
-          setActionValidation({ ...raiseValidation, action: 'raise' })
-        }
-      }
-
-      if (!availableAction) {
-        // Just check/call/fold available
-        setActionValidation({ valid: true })
-      }
-
-      setShowActionModal(true)
-    } else {
-      // Not human's turn - close modal
-      setShowActionModal(false)
-    }
-  }, [gameState, currentUserId])
-
   const handleAction = async (action: ActionType, amount?: number) => {
     if (!gameState || !currentUserId) return
 
     if (isLocalGame) {
       // Local game action
       localPlayerAction(action, amount)
-      setShowActionModal(false)
     } else {
       // Multiplayer game action
       try {
@@ -219,7 +151,6 @@ export default function GamePage() {
 
         const updatedState = await response.json()
         setGameState(updatedState)
-        setShowActionModal(false)
       } catch (err: any) {
         alert(err.message || 'Failed to submit action')
       }
@@ -247,16 +178,11 @@ export default function GamePage() {
     )
   }
 
-  const currentPlayer = gameState.players.find(p => p.id === currentUserId)
-  const currentBet = getCurrentBet(gameState)
-  const chipsToCall = currentBet - (currentPlayer?.betThisRound || 0)
-  const canCheck = chipsToCall === 0
-
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Local game banner */}
+    <div className="relative h-screen overflow-hidden">
+      {/* Local game banner - positioned absolutely at top */}
       {isLocalGame && (
-        <div className="mb-4 bg-primary-500/10 border border-primary-500/20 rounded-xl p-4 flex items-center justify-between">
+        <div className="absolute top-4 left-4 right-4 z-50 bg-primary-500/10 border border-primary-500/20 rounded-xl p-4 flex items-center justify-between">
           <div>
             <h3 className="font-semibold text-primary-500">Local Game • 200 chips • Unlimited rebuys</h3>
             <p className="text-sm text-muted-foreground">Playing against 5 bots - perfect for testing!</p>
@@ -272,31 +198,31 @@ export default function GamePage() {
         </div>
       )}
 
-      {/* Multiplayer leave button */}
+      {/* Multiplayer leave button - positioned absolutely at top */}
       {!isLocalGame && (
-        <div className="mb-4">
+        <div className="absolute top-4 left-4 z-50">
           <Button variant="outline" onClick={() => setShowLeaveDialog(true)}>
             Leave Game
           </Button>
         </div>
       )}
 
-      <PokerTable
+      {/* Table container - centered vertically and horizontally */}
+      <div className="h-full flex items-center justify-center">
+        <PokerTable
+          gameState={gameState}
+          currentUserId={currentUserId}
+          playerNames={isLocalGame ? BOT_NAMES : undefined}
+          isLocalGame={isLocalGame}
+        />
+      </div>
+
+      {/* Action Popup - shows automatically when player can act */}
+      <ActionPopup
         gameState={gameState}
         currentUserId={currentUserId}
-        playerNames={isLocalGame ? BOT_NAMES : undefined}
-        isLocalGame={isLocalGame}
-      />
-
-      <ActionModal
-        open={showActionModal}
-        onClose={() => setShowActionModal(false)}
         onAction={handleAction}
-        validation={actionValidation}
-        currentBet={currentBet}
-        playerChips={currentPlayer?.chips || 0}
-        chipsToCall={chipsToCall}
-        canCheck={canCheck}
+        isLocalGame={isLocalGame}
       />
 
       {/* Leave game confirmation dialog */}

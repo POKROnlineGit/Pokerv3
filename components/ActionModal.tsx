@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ActionValidation } from '@/lib/poker-game/legacyTypes'
+import { ActionValidation } from '@/lib/poker-game/ui/legacyTypes'
 
 interface ActionModalProps {
   open: boolean

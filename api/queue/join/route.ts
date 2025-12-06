@@ -37,7 +37,7 @@ export async function POST() {
 
     if (queuePlayers && queuePlayers.length >= 6) {
       // Import here to avoid circular dependencies
-      const { checkQueueAndCreateGame } = await import('@/lib/poker-game/queueManager')
+      const { checkQueueAndCreateGame } = await import('@/lib/poker-game/multiplayer/queueManager')
       await checkQueueAndCreateGame()
       // Game creation will be detected via postgres subscriptions on the client
     }

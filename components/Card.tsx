@@ -1,5 +1,5 @@
 import Image from 'next/image'
-import { Card as CardType } from '@/lib/poker-game/legacyTypes'
+import { Card as CardType } from '@/lib/poker-game/ui/legacyTypes'
 
 interface CardProps {
   card: CardType

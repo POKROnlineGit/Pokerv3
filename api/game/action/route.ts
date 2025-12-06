@@ -1,8 +1,8 @@
 import { createServerComponentClient, createServiceRoleClient } from '@/lib/supabaseClient';
 import { NextResponse } from 'next/server';
 import { GameEngine } from '@/lib/poker-game';
-import { Action } from '@/lib/poker-game/types';
-import { legacyToGameContext, gameContextToLegacy, LegacyGameState } from '@/lib/poker-game/multiplayerAdapters';
+import { Action } from '@/lib/poker-game/engine/core/types';
+import { legacyToGameContext, gameContextToLegacy, LegacyGameState } from '@/lib/poker-game/multiplayer/multiplayerAdapters';
 
 export async function POST(request: Request) {
   try {

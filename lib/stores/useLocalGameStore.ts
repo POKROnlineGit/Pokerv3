@@ -2,8 +2,8 @@
 
 import { create } from 'zustand';
 import { GameEngine, createInitialContext, isBettingRoundComplete } from '@/lib/poker-game';
-import { GameContext, Player, Action, ActionType } from '@/lib/poker-game/types';
-import { makeBotDecision } from '@/lib/poker-game/botLogic';
+import { GameContext, Player, Action, ActionType } from '@/lib/poker-game/engine/core/types';
+import { makeBotDecision } from '@/lib/poker-game/engine/bots/botLogic';
 
 const INITIAL_CHIPS = 200;
 const HUMAN_PLAYER_ID = 'human-player';
@@ -138,11 +138,6 @@ export const useLocalGameStore = create<LocalGameState>((set, get) => {
         };
 
         engine.processAction(actionObj);
-
-        // Debug logging in development
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[Player Action]', action, amount);
-        }
       } catch (error) {
         console.error('Player action error:', error);
       }
