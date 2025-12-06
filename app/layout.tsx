@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { createServerComponentClient } from "@/lib/supabaseClient";
+import { ToastProvider } from "@/components/ToastProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -49,14 +50,16 @@ export default async function RootLayout({
   return (
     <html lang="en" className={theme}>
       <body className={inter.className}>
-        {showSidebar ? (
-          <div className="flex h-screen">
-            <Sidebar />
-            <main className="flex-1 overflow-auto">{children}</main>
-          </div>
-        ) : (
-          <main>{children}</main>
-        )}
+        <ToastProvider>
+          {showSidebar ? (
+            <div className="flex h-screen">
+              <Sidebar />
+              <main className="flex-1 overflow-auto">{children}</main>
+            </div>
+          ) : (
+            <main>{children}</main>
+          )}
+        </ToastProvider>
       </body>
     </html>
   );
