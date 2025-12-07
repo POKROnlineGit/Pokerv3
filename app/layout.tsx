@@ -4,6 +4,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { createServerComponentClient } from "@/lib/supabaseClient";
 import { ToastProvider } from "@/components/ToastProvider";
+import { GameRedirectProvider } from "@/components/GameRedirectProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -50,6 +51,7 @@ export default async function RootLayout({
   return (
     <html lang="en" className={theme}>
       <body className={inter.className}>
+        <GameRedirectProvider />
         <ToastProvider>
           {showSidebar ? (
             <div className="flex h-screen">

@@ -1,7 +1,7 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Play, Bot, Users, User } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useLocalGameStore } from '@/lib/stores/useLocalGameStore'
@@ -15,27 +15,12 @@ export default function PlayPage() {
   const handlePlayLocal = () => {
     const gameId = `local-${crypto.randomUUID()}`
     startLocalGame()
-    router.push(`/play/game/${gameId}`)
+    router.push(`/play/local/${gameId}`)
   }
 
-  const joinQueue = async (queueType: 'six_max' | 'heads_up') => {
-    try {
-      const response = await fetch('/api/queue/join', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ queue_type: queueType }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        alert(error.error || 'Failed to join queue')
-        return
-      }
-
-      router.push(`/play/queue?type=${queueType}`)
-    } catch (err: any) {
-      alert(err.message || 'Failed to join queue')
-    }
+  const joinQueue = (queueType: 'six_max' | 'heads_up') => {
+    // Navigate to queue page - it will handle joining via Supabase Realtime
+    router.push(`/play/queue?type=${queueType}`)
   }
 
   return (
@@ -158,4 +143,3 @@ export default function PlayPage() {
     </div>
   )
 }
-

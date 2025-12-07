@@ -3,26 +3,12 @@
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import Image from 'next/image'
 
-// Card suits and ranks for floating cards
-const CARD_SUITS = ['h', 'd', 'c', 's']
-const CARD_RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7']
-
-// Generate 8 unique cards
-const generateCards = () => {
-  const cards: string[] = []
-  while (cards.length < 8) {
-    const suit = CARD_SUITS[Math.floor(Math.random() * CARD_SUITS.length)]
-    const rank = CARD_RANKS[Math.floor(Math.random() * CARD_RANKS.length)]
-    const card = `${rank}${suit}`
-    if (!cards.includes(card)) {
-      cards.push(card)
-    }
-  }
-  return cards
-}
+// Fixed set of cards to avoid hydration mismatch
+// Using a deterministic set ensures server and client render the same cards
+const FIXED_CARDS = ['Ah', 'Kd', 'Qc', 'Js', 'Th', '9s', '8h', '7d']
 
 function FloatingCard({ card, index }: { card: string; index: number }) {
   const positions = [
@@ -95,7 +81,8 @@ function FloatingCard({ card, index }: { card: string; index: number }) {
 export default function ComingSoonPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [cards] = useState(() => generateCards())
+  // Use fixed cards to prevent hydration mismatch
+  const cards = FIXED_CARDS
 
   // Check for access denied message
   const denied = searchParams.get('denied')

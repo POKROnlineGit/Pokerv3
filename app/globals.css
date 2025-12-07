@@ -86,6 +86,48 @@
   html {
     scroll-behavior: smooth;
   }
+
+  /* Minimalist scrollbar styles */
+  * {
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(115, 115, 115, 0.3) transparent;
+  }
+
+  /* Webkit browsers (Chrome, Safari, Edge) */
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: rgba(115, 115, 115, 0.3);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 0.2s ease;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(115, 115, 115, 0.5);
+  }
+
+  /* Dark mode scrollbar */
+  .dark * {
+    scrollbar-color: rgba(212, 212, 212, 0.3) transparent;
+  }
+
+  .dark *::-webkit-scrollbar-thumb {
+    background-color: rgba(212, 212, 212, 0.3);
+  }
+
+  .dark *::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(212, 212, 212, 0.5);
+  }
 }
 
 @layer components {

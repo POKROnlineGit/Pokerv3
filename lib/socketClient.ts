@@ -1,120 +1,79 @@
+'use client'
+
 import { io, Socket } from 'socket.io-client'
 import { createClientComponentClient } from './supabaseClient'
 
 let socket: Socket | null = null
-let connectionPromise: Promise<Socket | null> | null = null
-let connectionFailed = false
 
 /**
- * Get or create Socket.io connection
- * Authenticates with Supabase session token
- * Returns null if connection fails (graceful degradation)
+ * Get or create Socket.io connection (single source of truth)
+ * Connects with Supabase auth token
  */
-export async function getSocket(): Promise<Socket | null> {
-  // If we've already failed to connect, don't retry immediately
-  if (connectionFailed && !socket?.connected) {
-    return null
-  }
-
-  if (socket?.connected) {
-    return socket
-  }
-
-  if (connectionPromise) {
-    return connectionPromise
-  }
-
-  connectionPromise = (async () => {
-    try {
-      const supabase = createClientComponentClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session?.access_token) {
-        console.warn('[Socket] No authentication token available')
-        connectionFailed = true
-        return null
-      }
-
-      const wsUrl = process.env.NEXT_PUBLIC_SERVER_WS_URL || 'ws://localhost:4000'
-      
-      socket = io(wsUrl, {
-        auth: {
-          token: session.access_token,
-        },
-        transports: ['websocket', 'polling'],
-        reconnection: false, // Disable auto-reconnection to avoid spam
-        timeout: 5000, // 5 second timeout
-        autoConnect: true,
-      })
-
-      // Set up event handlers
-      socket.on('connect', () => {
-        console.log('[Socket] Connected to server')
-        connectionFailed = false
-      })
-
-      socket.on('disconnect', (reason) => {
-        console.log('[Socket] Disconnected:', reason)
-        if (reason === 'io server disconnect') {
-          // Server disconnected, don't retry
-          connectionFailed = true
-        }
-      })
-
-      socket.on('error', (error) => {
-        console.warn('[Socket] Error:', error)
-      })
-
-      socket.on('connect_error', (error) => {
-        console.warn('[Socket] Connection error:', error.message)
-        connectionFailed = true
-        // Don't throw - return null instead
-      })
-
-      // Wait for connection with timeout
-      return new Promise<Socket | null>((resolve) => {
-        const timeout = setTimeout(() => {
-          if (!socket?.connected) {
-            console.warn('[Socket] Connection timeout - server may not be running')
-            connectionFailed = true
-            if (socket) {
-              socket.disconnect()
-              socket = null
-            }
-            resolve(null)
-          }
-        }, 5000)
-
-        socket.once('connect', () => {
-          clearTimeout(timeout)
-          resolve(socket)
-        })
-
-        socket.once('connect_error', () => {
-          clearTimeout(timeout)
-          if (socket) {
-            socket.disconnect()
-            socket = null
-          }
-          resolve(null)
-        })
-      })
-    } catch (error) {
-      console.warn('[Socket] Failed to initialize:', error)
-      connectionFailed = true
-      return null
+export function getSocket(): Socket {
+  if (!socket) {
+    const supabase = createClientComponentClient()
+    
+    // Get server URL - support both production and local
+    let serverUrl = process.env.NEXT_PUBLIC_SERVER_WS_URL || process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:10000'
+    
+    // Normalize URL: convert ws:// to http:// and wss:// to https://
+    if (serverUrl.startsWith('ws://')) {
+      serverUrl = serverUrl.replace('ws://', 'http://')
+    } else if (serverUrl.startsWith('wss://')) {
+      serverUrl = serverUrl.replace('wss://', 'https://')
     }
-  })()
 
-  try {
-    const result = await connectionPromise
-    connectionPromise = null
-    return result
-  } catch (error) {
-    connectionPromise = null
-    connectionFailed = true
-    return null
+    socket = io(serverUrl, {
+      transports: ['websocket'], // WebSocket only - no polling
+      autoConnect: false, // Manual connect
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: Infinity,
+    })
+
+    // Set up auth token refresh
+    socket.on('connect', async () => {
+      console.log('[Socket] ✅ Connected to poker server')
+      
+      // Refresh token on connect
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token && socket) {
+        socket.auth = { token: session.access_token }
+      }
+    })
+
+    socket.on('disconnect', (reason) => {
+      console.log('[Socket] Disconnected:', reason)
+    })
+
+    socket.on('connect_error', async (error) => {
+      console.error('[Socket] ❌ Connection error:', error.message)
+      
+      // Refresh token on connection error
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token && socket) {
+        socket.auth = { token: session.access_token }
+      }
+    })
+
+    // Refresh token on reconnection attempt
+    socket.on('reconnect_attempt', async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token && socket) {
+        socket.auth = { token: session.access_token }
+      }
+    })
   }
+
+  // Set auth token before returning
+  const supabase = createClientComponentClient()
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session?.access_token && socket) {
+      socket.auth = { token: session.access_token }
+    }
+  })
+
+  return socket
 }
 
 /**
@@ -125,8 +84,6 @@ export function disconnectSocket() {
     socket.disconnect()
     socket = null
   }
-  connectionPromise = null
-  connectionFailed = false // Reset on manual disconnect
 }
 
 /**
@@ -135,4 +92,3 @@ export function disconnectSocket() {
 export function isSocketConnected(): boolean {
   return socket?.connected ?? false
 }
-

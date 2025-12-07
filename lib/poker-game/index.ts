@@ -16,7 +16,6 @@ export {
 } from "./engine/utils/seatUtils";
 export { createDeck, shuffleDeck, dealCards } from "./engine/utils/deck";
 export { getHandStrength, evaluateHandSimple } from "./engine/evaluation/botHandEvaluator";
-export { checkQueueAndCreateGame } from "./multiplayer/queueManager";
 export type {
   GameContext,
   Player,
