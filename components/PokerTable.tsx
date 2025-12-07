@@ -27,9 +27,11 @@ function calculateSeatPositions(
 ) {
   const positions = [];
   for (let i = 0; i < numSeats; i++) {
-    // Start at top (90 degrees offset) and go clockwise
+    // Start at bottom (90 degrees offset) and go clockwise
     // Each seat is 360/numSeats degrees apart
-    const angle = Math.PI / 2 + (2 * Math.PI * i) / numSeats;
+    const angleInterval = (2 * Math.PI) / numSeats;
+    // Apply rotation offset to shift positions
+    const angle = angleInterval * i + Math.PI / 2;
     const x = 50 + radiusX * Math.cos(angle);
     const y = 50 + radiusY * Math.sin(angle);
     positions.push({
@@ -56,7 +58,27 @@ export function PokerTable({
   // Use same radius for both heads-up and 6-max for consistency
   const radiusX = 48;
   const radiusY = 42;
+
+  // Find the current user's seat to position them at the bottom
+  const currentUserSeat = gameState.players.find(
+    (p) => p.id === currentUserId
+  )?.seat;
+
+  // Calculate positions with rotation so current user is at bottom
   const SEAT_POSITIONS = calculateSeatPositions(NUM_SEATS, radiusX, radiusY);
+
+  // Helper function to map position index to actual seat number
+  const getSeatForPosition = (positionIndex: number): number => {
+    // Rotate seat mapping to get the seat of a given position
+    let computedSeat = positionIndex;
+    if (currentUserSeat !== undefined) {
+      computedSeat =
+        currentUserSeat + positionIndex > NUM_SEATS
+          ? currentUserSeat + positionIndex - NUM_SEATS
+          : currentUserSeat + positionIndex;
+    }
+    return computedSeat;
+  };
 
   const getPlayerAtSeat = (seat: number): Player | undefined => {
     return gameState.players.find((p) => p.seat === seat);
@@ -196,7 +218,7 @@ export function PokerTable({
 
       {/* Player seats */}
       {SEAT_POSITIONS.map((position, index) => {
-        const seat = index + 1;
+        const seat = getSeatForPosition(index);
         const player = getPlayerAtSeat(seat);
         const isEmpty = !player;
         const isCurrent = player && isCurrentPlayer(player);

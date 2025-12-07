@@ -56,7 +56,7 @@ export default function GamePage() {
         // Check if game exists and get status
         const { data: game, error: gameError } = await supabase
           .from("games")
-          .select("id, status, players, game_type")
+          .select("id, status, players, game_type, player_ids")
           .eq("id", gameId)
           .single();
 
@@ -69,13 +69,28 @@ export default function GamePage() {
         setGameStatus(game.status);
 
         // Check if user is in game
-        if (game.players && Array.isArray(game.players)) {
-          const isPlayer = game.players.some((p: any) => p.id === user.id);
-          if (!isPlayer) {
-            console.error("[Game] User not in game");
-            router.push("/play");
-            return;
-          }
+        // First check player_ids array (more reliable)
+        let isPlayer = false;
+        if (game.player_ids && Array.isArray(game.player_ids)) {
+          isPlayer = game.player_ids.some(
+            (id: any) => String(id) === String(user.id)
+          );
+        }
+        // Fallback: check players JSONB array
+        if (!isPlayer && game.players && Array.isArray(game.players)) {
+          isPlayer = game.players.some((p: any) => {
+            const playerId = p?.id || p?.userId || p?.user_id;
+            return playerId && String(playerId) === String(user.id);
+          });
+        }
+        if (!isPlayer) {
+          console.error("[Game] User not in game", {
+            userId: user.id,
+            playerIds: game.player_ids,
+            players: game.players,
+          });
+          router.push("/play");
+          return;
         }
 
         // Detect heads-up mode
