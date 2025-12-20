@@ -36,6 +36,14 @@ export function useGameRedirect() {
           ? playerIds.map((id: any) => String(id))
           : [];
 
+        const leftPlayers = Array.isArray(game.left_players)
+          ? game.left_players.map((id: any) => String(id))
+          : [];
+
+        if (leftPlayers.includes(userIdStr)) {
+          return false;
+        }
+
         if (playerIdsStr.includes(userIdStr)) {
           return true;
         }

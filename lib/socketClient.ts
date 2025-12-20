@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useMemo } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { createClientComponentClient } from './supabaseClient'
 
@@ -74,6 +75,22 @@ export function getSocket(): Socket {
   })
 
   return socket
+}
+
+/**
+ * React hook wrapper for the shared socket instance.
+ * Ensures the socket is connected when used in client components.
+ */
+export function useSocket(): Socket {
+  const socketInstance = useMemo(() => getSocket(), [])
+
+  useEffect(() => {
+    if (!socketInstance.connected) {
+      socketInstance.connect()
+    }
+  }, [socketInstance])
+
+  return socketInstance
 }
 
 /**

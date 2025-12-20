@@ -4,11 +4,21 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PokerTable } from "@/components/PokerTable";
 import { ActionPopup } from "@/components/ActionPopup";
+import { LeaveGameButton } from "@/components/LeaveGameButton";
 import { GameState, ActionType } from "@/lib/poker-game/ui/legacyTypes";
-import { getSocket } from "@/lib/socketClient";
+import { getSocket, disconnectSocket } from "@/lib/socketClient";
 import { createClientComponentClient } from "@/lib/supabaseClient";
-import { Button } from "@/components/ui/button";
 import { AlertCircle, Wifi, WifiOff } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 export default function GamePage() {
   const params = useParams();
@@ -21,8 +31,23 @@ export default function GamePage() {
   const [timeoutSeconds, setTimeoutSeconds] = useState<number | null>(null);
   const [isHeadsUp, setIsHeadsUp] = useState(false);
   const [gameStatus, setGameStatus] = useState<string | null>(null);
+  const [runoutCards, setRunoutCards] = useState<string[]>([]); // Cards to animate for runout
+  const [isRunningOut, setIsRunningOut] = useState(false); // Flag for runout animation
+  const [gameFinished, setGameFinished] = useState<{ reason: string } | null>(
+    null
+  ); // Game finished modal
+  const [playerDisconnectTimers, setPlayerDisconnectTimers] = useState<
+    Record<string, number>
+  >({}); // Track disconnect countdowns per player
+  const [forceHideActions, setForceHideActions] = useState(false); // Force hide action controls
   const timeoutIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const prevPhaseRef = useRef<string | null>(null); // Track previous phase for disconnect detection
+  const runoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const disconnectTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const gameEndedRef = useRef<boolean>(false); // Track if GAME_FINISHED received
+  const handRunoutRef = useRef<boolean>(false); // Track if HAND_RUNOUT received
   const supabase = createClientComponentClient();
+  const { toast } = useToast();
 
   // Redirect local games to the local game page
   useEffect(() => {
@@ -166,10 +191,40 @@ export default function GamePage() {
         socket.once("connect", onConnect);
       }
 
+      const handleGameEnded = (data: { message?: string; reason?: string }) => {
+        if (!mounted) return;
+
+        console.log("[Game] 🏁 Game ended (gameEnded event):", data);
+
+        // IMMEDIATE ACTION CLEANUP: Force hide action controls
+        setForceHideActions(true);
+        gameEndedRef.current = true;
+
+        // Set game finished state - this will show the modal
+        // Do NOT redirect immediately - user stays on table view
+        setGameFinished({
+          reason: data.reason || data.message || "GAME_ENDED",
+        });
+      };
+
       // Listen for game state
       socket.on("gameState", (state: GameState) => {
         if (mounted) {
           console.log("[Game] 📊 Game state received:", state);
+
+          // Reset force hide flag if we get a new hand (handNumber changed)
+          if (gameState && state.handNumber !== gameState.handNumber) {
+            console.log(
+              "[Game] 🔄 New hand detected - resetting action controls"
+            );
+            gameEndedRef.current = false;
+            handRunoutRef.current = false;
+            setForceHideActions(false);
+          }
+
+          // CRITICAL: Fully replace local state on every gameState event
+          // This ensures we always have the latest server state, even if phase reverts
+          // (e.g., Flop → Waiting due to player leaving)
 
           // Normalize pots from server format to UI format
           // Server sends: pots: [{ amount: 3, eligiblePlayers: [...] }]
@@ -200,35 +255,138 @@ export default function GamePage() {
             sidePots = Array.isArray(state.sidePots) ? state.sidePots : [];
           }
 
-          // Normalize game state
-          const normalizedState: GameState = {
-            ...state,
-            // Set pot and sidePots from normalized values
-            pot: mainPot,
-            sidePots: sidePots,
-            // Community cards should be an array of strings (e.g., ["2h", "9d"])
-            communityCards: Array.isArray(state.communityCards)
+          // Detect actual phase from server (may be "waiting" or mapped to currentRound)
+          const serverPhase =
+            (state as any).currentPhase || state.currentRound || "preflop";
+          const isWaitingPhase = serverPhase === "waiting";
+
+          // BLOCK WAITING TRANSITION DURING ACTIVE HAND
+          // Safety layer: If server sends WAITING_FOR_PLAYERS but we have cards/chips in pot,
+          // ignore the waiting state and keep the current active state
+          const hasActiveHand =
+            (state.communityCards && state.communityCards.length > 0) ||
+            mainPot > 0 ||
+            (state.players &&
+              state.players.some(
+                (p: any) =>
+                  (p.holeCards && p.holeCards.length > 0) ||
+                  (p.betThisRound && p.betThisRound > 0) ||
+                  (p.currentBet && p.currentBet > 0)
+              ));
+
+          // If we have an active hand, block waiting transition
+          const shouldBlockWaiting = hasActiveHand && isWaitingPhase;
+
+          if (shouldBlockWaiting && mounted) {
+            console.log(
+              "[Game] 🛡️ Blocked waiting transition - active hand detected",
+              {
+                communityCards: state.communityCards?.length || 0,
+                pot: mainPot,
+                hasHoleCards: state.players?.some(
+                  (p: any) => p.holeCards && p.holeCards.length > 0
+                ),
+              }
+            );
+            // Don't update phase to waiting - keep current active state
+            // The game will end via GAME_FINISHED event instead
+          }
+
+          // Update previous phase ref (only if not blocking waiting)
+          if (!shouldBlockWaiting) {
+            prevPhaseRef.current = isWaitingPhase
+              ? "waiting"
+              : (serverPhase as string);
+          }
+
+          // Safety: Ensure all required fields exist, even if server sends incomplete data
+          // This prevents crashes when phase reverts (e.g., Flop → Waiting)
+          const normalizedState: GameState & { currentPhase?: string } = {
+            gameId: state.gameId || gameId,
+            // Ensure players array exists and is valid
+            players: Array.isArray(state.players)
+              ? state.players.map((p: any) => ({
+                  id: p.id || "",
+                  name: p.name || `Player ${p.seat || ""}`,
+                  seat: p.seat || 0,
+                  chips: typeof p.chips === "number" ? p.chips : 0,
+                  betThisRound: p.betThisRound ?? p.currentBet ?? 0,
+                  totalBet: p.totalBet ?? p.totalBetThisHand ?? 0,
+                  holeCards: Array.isArray(p.holeCards)
+                    ? p.holeCards.filter(
+                        (c: any): c is string => typeof c === "string"
+                      )
+                    : [],
+                  folded: Boolean(p.folded),
+                  allIn: Boolean(p.allIn),
+                  isBot: Boolean(p.isBot),
+                  leaving: Boolean(p.leaving),
+                  playerHandType: p.playerHandType,
+                  // Preserve disconnected/ghost state from previous state if not explicitly updated
+                  disconnected: p.disconnected ?? false,
+                  left: p.left ?? false,
+                  isGhost: p.isGhost ?? p.disconnected ?? false,
+                  disconnectTimestamp: p.disconnectTimestamp,
+                }))
+              : [],
+            // Ensure communityCards is always an array
+            // DO NOT clear cards/pot if blocking waiting transition (active hand)
+            communityCards: shouldBlockWaiting
+              ? Array.isArray(state.communityCards)
+                ? state.communityCards.filter(
+                    (c): c is string => typeof c === "string"
+                  )
+                : []
+              : isWaitingPhase
+              ? [] // Clear community cards when waiting (only if no active hand)
+              : Array.isArray(state.communityCards)
               ? state.communityCards.filter(
                   (c): c is string => typeof c === "string"
                 )
               : [],
+            pot: shouldBlockWaiting ? mainPot : isWaitingPhase ? 0 : mainPot, // Preserve pot if blocking waiting
+            sidePots: shouldBlockWaiting
+              ? sidePots
+              : isWaitingPhase
+              ? []
+              : sidePots, // Preserve side pots if blocking waiting
+            buttonSeat:
+              typeof state.buttonSeat === "number" ? state.buttonSeat : 1,
+            sbSeat: typeof state.sbSeat === "number" ? state.sbSeat : 1,
+            bbSeat: typeof state.bbSeat === "number" ? state.bbSeat : 2,
+            // Map phase to currentRound, handle phase reversals safely
+            // If blocking waiting, preserve current round from previous state
+            currentRound: shouldBlockWaiting
+              ? gameState?.currentRound || state.currentRound || "preflop"
+              : isWaitingPhase
+              ? "preflop" // Map "waiting" to "preflop" for UI (adapter does this too)
+              : state.currentRound ||
+                (serverPhase === "waiting"
+                  ? "preflop"
+                  : (serverPhase as any)) ||
+                "preflop",
+            // Store actual phase for detection
+            currentPhase: serverPhase,
+            currentActorSeat:
+              typeof state.currentActorSeat === "number"
+                ? state.currentActorSeat
+                : 0,
+            minRaise: typeof state.minRaise === "number" ? state.minRaise : 2,
+            lastRaise:
+              typeof state.lastRaise === "number" ? state.lastRaise : 0,
             betsThisRound: Array.isArray(state.betsThisRound)
               ? state.betsThisRound
-              : state.players?.map((p) => p.betThisRound || 0) || [],
-            players:
-              state.players?.map((p: any) => ({
-                ...p,
-                // Handle both betThisRound and currentBet (server might use either)
-                betThisRound: p.betThisRound ?? p.currentBet ?? 0,
-                // Hole cards should be an array of strings (e.g., ["2h", "9d"])
-                holeCards: Array.isArray(p.holeCards)
-                  ? p.holeCards.filter(
-                      (c: any): c is string => typeof c === "string"
-                    )
-                  : [],
-              })) || [],
+              : [],
+            handNumber:
+              typeof state.handNumber === "number" ? state.handNumber : 0,
+            // Preserve left_players if server sends it (for visual feedback)
+            ...((state as any).left_players && {
+              left_players: (state as any).left_players,
+            }),
           };
 
+          // Fully replace state - no merging, no partial updates
+          // This ensures UI always reflects server state exactly
           setGameState(normalizedState);
         }
       });
@@ -269,6 +427,10 @@ export default function GamePage() {
         if (mounted) {
           setIsDisconnected(false);
           socket.emit("joinGame", gameId);
+
+          // Request game state sync to clear any disconnect overlays
+          console.log("[Game] 🔄 Requesting game state sync after reconnect");
+          socket.emit("SYNC_GAME", { gameId });
         }
       });
 
@@ -288,6 +450,385 @@ export default function GamePage() {
         if (mounted) {
           router.push(data.path);
         }
+      });
+
+      socket.on("gameEnded", handleGameEnded);
+
+      // ============================================
+      // GHOST STATES & RUNOUT ANIMATIONS HANDLERS
+      // ============================================
+
+      // 1. PLAYER_STATUS_UPDATE: Handle DISCONNECTED vs LEFT statuses
+      socket.on(
+        "PLAYER_STATUS_UPDATE",
+        (data: {
+          playerId: string;
+          status: string;
+          action?: string;
+          timestamp?: number;
+        }) => {
+          if (!mounted) return;
+
+          console.log("[Game] 👻 Player status update:", data);
+
+          if (data.status === "DISCONNECTED" || data.status === "LEFT") {
+            setGameState((prevState) => {
+              if (!prevState) return prevState;
+
+              // Find and update the disconnected/left player
+              const updatedPlayers = prevState.players.map((player) => {
+                if (player.id === data.playerId) {
+                  return {
+                    ...player,
+                    disconnected: data.status === "DISCONNECTED",
+                    left: data.status === "LEFT",
+                    isGhost: data.status === "DISCONNECTED",
+                    // If action is FOLD, mark as folded immediately
+                    folded: data.action === "FOLD" ? true : player.folded,
+                    disconnectTimestamp:
+                      data.status === "DISCONNECTED"
+                        ? data.timestamp || Date.now()
+                        : undefined,
+                  };
+                }
+                return player;
+              });
+
+              // Check if active players dropped to 1
+              const activePlayers = updatedPlayers.filter(
+                (p) => !p.folded && p.chips > 0 && !(p as any).left
+              );
+
+              // IMMEDIATE ACTION CLEANUP: Force hide action controls if only 1 active player
+              if (activePlayers.length <= 1) {
+                console.log(
+                  "[Game] 🛑 Active players dropped to 1 - forcing action controls to hide"
+                );
+                setForceHideActions(true);
+              }
+
+              // Get player name for toast (before state update)
+              const player = prevState.players.find(
+                (p) => p.id === data.playerId
+              );
+
+              // Start disconnect countdown timer (60 seconds)
+              if (data.timestamp) {
+                const disconnectTime = data.timestamp;
+                const countdownDuration = 60000; // 60 seconds
+                const endTime = disconnectTime + countdownDuration;
+
+                setPlayerDisconnectTimers((prev) => ({
+                  ...prev,
+                  [data.playerId]: endTime,
+                }));
+
+                // Update countdown every second
+                if (disconnectTimerIntervalRef.current) {
+                  clearInterval(disconnectTimerIntervalRef.current);
+                }
+                disconnectTimerIntervalRef.current = setInterval(() => {
+                  setPlayerDisconnectTimers((prev) => {
+                    const updated = { ...prev };
+                    const now = Date.now();
+                    Object.keys(updated).forEach((playerId) => {
+                      if (updated[playerId] <= now) {
+                        delete updated[playerId];
+                      }
+                    });
+                    return updated;
+                  });
+                }, 1000);
+              }
+
+              // Show toast notification
+              toast({
+                title:
+                  data.status === "LEFT"
+                    ? "Player left"
+                    : "Player disconnected",
+                description:
+                  data.status === "LEFT"
+                    ? `${player?.name || "A player"} has left the game`
+                    : `${player?.name || "A player"} disconnected${
+                        data.action === "FOLD" ? " and folded" : ""
+                      }`,
+                variant: "default",
+              });
+
+              return {
+                ...prevState,
+                players: updatedPlayers,
+              };
+            });
+
+            // Clear disconnect timer if player left
+            if (data.status === "LEFT") {
+              setPlayerDisconnectTimers((prev) => {
+                const updated = { ...prev };
+                delete updated[data.playerId];
+                return updated;
+              });
+            }
+          }
+        }
+      );
+
+      // 2. HAND_RUNOUT: Animate remaining cards to board
+      // REMOVED CLIENT-SIDE TIMEOUTS - Rely entirely on server events arriving in sequence
+      socket.on(
+        "HAND_RUNOUT",
+        (data: {
+          winnerId: string;
+          board: string[];
+          runoutCards: string[];
+        }) => {
+          if (!mounted) return;
+
+          console.log("[Game] 🎰 Hand runout:", data);
+
+          // IMMEDIATE ACTION CLEANUP: Clear action controls immediately
+          // This event is a definitive signal that betting is over
+          console.log(
+            "[Game] 🛑 HAND_RUNOUT received - forcing action controls to hide"
+          );
+          setForceHideActions(true);
+          handRunoutRef.current = true; // Mark that runout has occurred
+
+          // Set runout flag for visual animation
+          setIsRunningOut(true);
+          setRunoutCards(data.runoutCards || []);
+
+          // Update board state immediately - server controls timing via DEAL_STREET events
+          // We just need to show the final board state
+          const finalBoard = data.board || [];
+          setGameState((prevState) => {
+            if (!prevState) return prevState;
+
+            const winner = prevState.players.find(
+              (p) => p.id === data.winnerId
+            );
+
+            // Show winner notification
+            toast({
+              title: "Hand complete",
+              description: `${winner?.name || "Player"} wins the pot!`,
+              variant: "default",
+            });
+
+            return {
+              ...prevState,
+              communityCards: finalBoard,
+            };
+          });
+
+          // Clear runout flags after a brief moment (for visual feedback)
+          setTimeout(() => {
+            if (!mounted) return;
+            setIsRunningOut(false);
+            setRunoutCards([]);
+          }, 1000);
+        }
+      );
+
+      // 3. SEAT_VACATED: Remove player from UI (only event that removes player)
+      socket.on("SEAT_VACATED", (data: { seatIndex: number }) => {
+        if (!mounted) return;
+
+        console.log("[Game] 🪑 Seat vacated:", data);
+
+        setGameState((prevState) => {
+          if (!prevState) return prevState;
+
+          // Remove player at the specified seat
+          const updatedPlayers = prevState.players.filter(
+            (player) => player.seat !== data.seatIndex
+          );
+
+          return {
+            ...prevState,
+            players: updatedPlayers,
+          };
+        });
+
+        toast({
+          title: "Seat vacated",
+          description: "A player has left the table",
+          variant: "default",
+        });
+      });
+
+      // 4. DEAL_STREET: Handle rapid-fire street dealing during auto-runouts
+      // REMOVED CLIENT-SIDE TIMING - Rely entirely on server events (2s intervals from backend)
+      socket.on(
+        "DEAL_STREET",
+        (data: {
+          cards: string[];
+          round: string;
+          communityCards: string[];
+        }) => {
+          if (!mounted) return;
+
+          console.log("[Game] 🃏 Deal street:", data);
+
+          // Update board state immediately - server controls timing (2s intervals)
+          setGameState((prevState) => {
+            if (!prevState) return prevState;
+
+            return {
+              ...prevState,
+              communityCards: data.communityCards || prevState.communityCards,
+              currentRound:
+                data.round === "flop"
+                  ? "flop"
+                  : data.round === "turn"
+                  ? "turn"
+                  : data.round === "river"
+                  ? "river"
+                  : prevState.currentRound,
+            };
+          });
+        }
+      );
+
+      // 5. GAME_FINISHED: Show modal when game ends (DO NOT redirect immediately)
+      // Listen specifically for 'GAME_FINISHED' event (backend sends this exact string)
+      socket.on(
+        "GAME_FINISHED",
+        (data: { reason?: string; message?: string; payload?: any }) => {
+          if (!mounted) return;
+
+          // DEBUG: Log the event payload
+          console.log("[Game] 🏁 GAME_FINISHED received", data);
+          console.log(
+            "[Game] 🏁 GAME_FINISHED payload:",
+            JSON.stringify(data, null, 2)
+          );
+
+          // IMMEDIATE ACTION CLEANUP: Force hide action controls
+          console.log(
+            "[Game] 🛑 GAME_FINISHED received - forcing action controls to hide"
+          );
+          setForceHideActions(true);
+          gameEndedRef.current = true; // Mark that game has ended
+
+          // Set game finished state - this will show the modal
+          // Extract reason/message from payload
+          const reason =
+            data.reason ||
+            data.message ||
+            data.payload?.message ||
+            "GAME_FINISHED";
+          const message =
+            data.message ||
+            data.reason ||
+            data.payload?.message ||
+            "The game has ended.";
+
+          console.log("[Game] 🏁 Setting game finished state:", {
+            reason,
+            message,
+          });
+          setGameFinished({ reason: message });
+        }
+      );
+
+      // Also listen for GAME_ENDED (alternative event name) for backward compatibility
+      socket.on(
+        "GAME_ENDED",
+        (data: { reason?: string; message?: string; payload?: any }) => {
+          if (!mounted) return;
+
+          console.log("[Game] 🏁 GAME_ENDED received (fallback)", data);
+
+          // IMMEDIATE ACTION CLEANUP: Force hide action controls
+          setForceHideActions(true);
+          gameEndedRef.current = true;
+
+          // Set game finished state
+          const reason =
+            data.reason ||
+            data.message ||
+            data.payload?.message ||
+            "GAME_ENDED";
+          const message =
+            data.message ||
+            data.reason ||
+            data.payload?.message ||
+            "The game has ended.";
+          setGameFinished({ reason: message });
+        }
+      );
+
+      // Listen for SYNC_GAME response (after reconnection)
+      socket.on("SYNC_GAME", (state: GameState) => {
+        if (!mounted) return;
+
+        console.log("[Game] 🔄 Game state synced after reconnect:", state);
+
+        // Normalize and set state (same logic as gameState handler)
+        // This clears any disconnect overlays
+        const normalizedState: GameState & { currentPhase?: string } = {
+          gameId: state.gameId || gameId,
+          players: Array.isArray(state.players)
+            ? state.players.map((p: any) => ({
+                id: p.id || "",
+                name: p.name || `Player ${p.seat || ""}`,
+                seat: p.seat || 0,
+                chips: typeof p.chips === "number" ? p.chips : 0,
+                betThisRound: p.betThisRound ?? p.currentBet ?? 0,
+                totalBet: p.totalBet ?? p.totalBetThisHand ?? 0,
+                holeCards: Array.isArray(p.holeCards)
+                  ? p.holeCards.filter(
+                      (c: any): c is string => typeof c === "string"
+                    )
+                  : [],
+                folded: Boolean(p.folded),
+                allIn: Boolean(p.allIn),
+                isBot: Boolean(p.isBot),
+                leaving: Boolean(p.leaving),
+                playerHandType: p.playerHandType,
+                disconnected: false, // Clear disconnect status on sync
+                left: false,
+                isGhost: false,
+              }))
+            : [],
+          communityCards: Array.isArray(state.communityCards)
+            ? state.communityCards.filter(
+                (c): c is string => typeof c === "string"
+              )
+            : [],
+          pot: typeof state.pot === "number" ? state.pot : 0,
+          sidePots: Array.isArray(state.sidePots) ? state.sidePots : [],
+          buttonSeat:
+            typeof state.buttonSeat === "number" ? state.buttonSeat : 1,
+          sbSeat: typeof state.sbSeat === "number" ? state.sbSeat : 1,
+          bbSeat: typeof state.bbSeat === "number" ? state.bbSeat : 2,
+          currentRound:
+            state.currentRound || (state as any).currentPhase || "preflop",
+          currentActorSeat:
+            typeof state.currentActorSeat === "number"
+              ? state.currentActorSeat
+              : 0,
+          minRaise: typeof state.minRaise === "number" ? state.minRaise : 2,
+          lastRaise: typeof state.lastRaise === "number" ? state.lastRaise : 0,
+          betsThisRound: Array.isArray(state.betsThisRound)
+            ? state.betsThisRound
+            : [],
+          handNumber:
+            typeof state.handNumber === "number" ? state.handNumber : 0,
+        };
+
+        setGameState(normalizedState);
+
+        // Clear disconnect timers
+        setPlayerDisconnectTimers({});
+
+        toast({
+          title: "Reconnected",
+          description: "Game state synchronized",
+          variant: "default",
+        });
       });
 
       // Listen for errors
@@ -324,11 +865,27 @@ export default function GamePage() {
         socket.off("connect");
         socket.off("game-reconnected");
         socket.off("navigate");
+        socket.off("gameEnded");
+        socket.off("PLAYER_STATUS_UPDATE");
+        socket.off("HAND_RUNOUT");
+        socket.off("SEAT_VACATED");
+        socket.off("DEAL_STREET");
+        socket.off("GAME_FINISHED");
+        socket.off("GAME_ENDED");
+        socket.off("SYNC_GAME");
         socket.off("error");
         socket.emit("leaveGame", gameId);
       }
+
+      // Clear all timeouts
+      if (runoutTimeoutRef.current) {
+        clearTimeout(runoutTimeoutRef.current);
+      }
+      if (disconnectTimerIntervalRef.current) {
+        clearInterval(disconnectTimerIntervalRef.current);
+      }
     };
-  }, [gameId, router, supabase]);
+  }, [gameId, router, supabase, toast]);
 
   const handleAction = (action: ActionType, amount?: number) => {
     if (!gameState || !currentUserId) return;
@@ -344,65 +901,134 @@ export default function GamePage() {
     });
   };
 
-  if (!gameState || !currentUserId) {
-    return (
-      <div className="container mx-auto px-4 py-8 flex items-center justify-center min-h-[60vh]">
-        <div>
-          {gameStatus === "starting"
-            ? "Waiting for all players to connect..."
-            : "Connecting to game..."}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="relative h-screen overflow-hidden bg-poker-felt">
-      {/* Disconnect Banner */}
-      {isDisconnected && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md bg-yellow-500/90 border-2 border-yellow-600 rounded-lg p-4 flex items-center gap-2 text-yellow-900">
-          <WifiOff className="h-4 w-4" />
-          <span>You disconnected. Reconnecting...</span>
-          <Wifi className="h-4 w-4 animate-pulse ml-auto" />
+    <>
+      {/* Game Finished Modal - RENDERED AT TOP LEVEL to persist when table state changes */}
+      <Dialog
+        open={!!gameFinished}
+        onOpenChange={(open) => {
+          // Prevent closing modal by clicking outside - user must click "Return to Lobby"
+          if (!open && gameFinished) {
+            return;
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-md !z-[10000]"
+          style={{ zIndex: 10000 }}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {gameFinished?.reason === "OPPONENT_LEFT" ||
+              gameFinished?.reason?.includes("opponent") ||
+              gameFinished?.reason?.includes("Opponent")
+                ? "Game Over"
+                : "Game Finished"}
+            </DialogTitle>
+            <DialogDescription className="text-lg">
+              {gameFinished?.reason === "OPPONENT_LEFT" ||
+              gameFinished?.reason?.includes("opponent") ||
+              gameFinished?.reason?.includes("Opponent")
+                ? "Game Complete! No opponents remaining."
+                : gameFinished?.reason === "NOT_ENOUGH_PLAYERS"
+                ? "The game has ended because there are not enough players to continue."
+                : gameFinished?.reason || "The game has ended."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                console.log(
+                  "[Game] 🚪 Returning to lobby - cleaning up socket"
+                );
+
+                // Clean exit: disconnect socket and redirect
+                // Do NOT emit leaveGame event (game is already over)
+                const socket = getSocket();
+                if (socket) {
+                  // Remove all listeners to prevent any further events
+                  socket.removeAllListeners();
+                  // Disconnect the socket
+                  disconnectSocket();
+                }
+
+                // Clear state
+                setGameFinished(null);
+                setForceHideActions(false);
+
+                // Redirect to lobby
+                router.push("/play");
+              }}
+              className="w-full"
+            >
+              Return to Lobby
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Main game content - conditional rendering */}
+      {!gameState || !currentUserId ? (
+        <div className="container mx-auto px-4 py-8 flex items-center justify-center min-h-[60vh]">
+          <div>
+            {gameStatus === "starting"
+              ? "Waiting for all players to connect..."
+              : "Connecting to game..."}
+          </div>
+        </div>
+      ) : (
+        <div className="relative h-screen overflow-hidden bg-poker-felt">
+          {/* Disconnect Banner */}
+          {isDisconnected && (
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md bg-yellow-500/90 border-2 border-yellow-600 rounded-lg p-4 flex items-center gap-2 text-yellow-900">
+              <WifiOff className="h-4 w-4" />
+              <span>You disconnected. Reconnecting...</span>
+              <Wifi className="h-4 w-4 animate-pulse ml-auto" />
+            </div>
+          )}
+
+          {/* Timeout Countdown */}
+          {timeoutSeconds !== null && timeoutSeconds > 0 && (
+            <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 max-w-md bg-red-500/90 border-2 border-red-600 rounded-lg p-4 flex items-center gap-2 text-red-50">
+              <AlertCircle className="h-4 w-4" />
+              <span>
+                Time remaining:{" "}
+                <span className="font-bold">{timeoutSeconds}s</span> -
+                Auto-folding soon
+              </span>
+            </div>
+          )}
+
+          {/* Multiplayer leave button - positioned absolutely at top */}
+          <div className="absolute top-4 left-4 z-50">
+            <LeaveGameButton gameId={gameId} />
+          </div>
+
+          {/* Table container - centered vertically and horizontally */}
+          <div className="h-full w-full flex items-center justify-center">
+            <PokerTable
+              gameState={gameState}
+              currentUserId={currentUserId}
+              playerNames={undefined}
+              isLocalGame={false}
+              isHeadsUp={isHeadsUp}
+              runoutCards={runoutCards}
+              isRunningOut={isRunningOut}
+              playerDisconnectTimers={playerDisconnectTimers}
+            />
+          </div>
+
+          {/* Action Popup - Disabled if game finished */}
+          {!gameFinished && (
+            <ActionPopup
+              gameState={gameState}
+              currentUserId={currentUserId}
+              onAction={handleAction}
+              isLocalGame={false}
+            />
+          )}
         </div>
       )}
-
-      {/* Timeout Countdown */}
-      {timeoutSeconds !== null && timeoutSeconds > 0 && (
-        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 max-w-md bg-red-500/90 border-2 border-red-600 rounded-lg p-4 flex items-center gap-2 text-red-50">
-          <AlertCircle className="h-4 w-4" />
-          <span>
-            Time remaining: <span className="font-bold">{timeoutSeconds}s</span>{" "}
-            - Auto-folding soon
-          </span>
-        </div>
-      )}
-
-      {/* Multiplayer leave button - positioned absolutely at top */}
-      <div className="absolute top-4 left-4 z-50">
-        <Button variant="outline" onClick={() => router.push("/play")}>
-          Leave Game
-        </Button>
-      </div>
-
-      {/* Table container - centered vertically and horizontally */}
-      <div className="h-full w-full flex items-center justify-center">
-        <PokerTable
-          gameState={gameState}
-          currentUserId={currentUserId}
-          playerNames={undefined}
-          isLocalGame={false}
-          isHeadsUp={isHeadsUp}
-        />
-      </div>
-
-      {/* Action Popup */}
-      <ActionPopup
-        gameState={gameState}
-        currentUserId={currentUserId}
-        onAction={handleAction}
-        isLocalGame={false}
-      />
-    </div>
+    </>
   );
 }

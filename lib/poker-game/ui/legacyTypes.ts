@@ -25,7 +25,12 @@ export interface Player {
   folded: boolean;
   allIn: boolean;
   isBot?: boolean;
+  leaving?: boolean;
   playerHandType?: string; // Current best hand type (e.g., "Pair", "Flush")
+  disconnected?: boolean; // Ghost state - player disconnected but might return
+  left?: boolean; // Player has left the game (quit)
+  isGhost?: boolean; // Alias for disconnected (for clarity)
+  disconnectTimestamp?: number; // Timestamp when player disconnected (for countdown)
 }
 
 // ActionValidation (same structure)

@@ -33,12 +33,20 @@ export function PlayPageContent() {
         // Query active or starting games where user is a player
         const { data: games } = await supabase
           .from('games')
-          .select('id, player_ids, players')
+          .select('id, player_ids, players, left_players')
           .in('status', ['active', 'starting'])
 
         if (games && games.length > 0) {
           // Check if user is in any of these games
           const userInGame = games.some((g) => {
+            const leftPlayers = Array.isArray(g.left_players)
+              ? g.left_players.map((id: any) => String(id))
+              : []
+
+            if (leftPlayers.includes(String(user.id))) {
+              return false
+            }
+
             // First check player_ids array (indexed, most efficient)
             if (g.player_ids && Array.isArray(g.player_ids)) {
               if (g.player_ids.some((id: any) => String(id) === String(user.id))) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -186,11 +186,44 @@ export function ActionPopup({
     }
   }, [isMyTurn, queuedAction, chipsToCall, chipsToCallWhenQueued, onAction]);
 
-  // Clear queued action when round changes
+  // Track previous phase and hand number to detect resets
+  const prevPhaseRef = useRef<string | null>(null);
+  const prevHandNumberRef = useRef<number | null>(null);
+
+  // CRITICAL: Clear queued actions when phase changes OR hand number increments
+  // This prevents stale queued actions from executing after a hand reset
+  // (e.g., if player leaves and hand resets from Flop → Preflop)
   useEffect(() => {
-    setQueuedAction(null);
-    setChipsToCallWhenQueued(null);
-  }, [gameState?.currentRound]);
+    if (!gameState) return;
+
+    const currentPhase = gameState.currentRound;
+    const currentHandNumber = gameState.handNumber;
+
+    // Detect phase change (including reversals like Flop → Preflop)
+    const phaseChanged =
+      prevPhaseRef.current !== null &&
+      prevPhaseRef.current !== currentPhase;
+
+    // Detect hand number increment (new hand started)
+    const handIncremented =
+      prevHandNumberRef.current !== null &&
+      currentHandNumber > prevHandNumberRef.current;
+
+    // Clear queued actions if phase changed OR hand incremented
+    if (phaseChanged || handIncremented) {
+      console.log(
+        "[ActionPopup] Clearing queued action due to:",
+        phaseChanged ? `phase change (${prevPhaseRef.current} → ${currentPhase})` : "",
+        handIncremented ? `hand increment (${prevHandNumberRef.current} → ${currentHandNumber})` : ""
+      );
+      setQueuedAction(null);
+      setChipsToCallWhenQueued(null);
+    }
+
+    // Update refs for next comparison
+    prevPhaseRef.current = currentPhase;
+    prevHandNumberRef.current = currentHandNumber;
+  }, [gameState?.currentRound, gameState?.handNumber]);
 
   // Show popup conditions
   const shouldShow = useMemo(() => {
