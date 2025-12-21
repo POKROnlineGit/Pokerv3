@@ -16,6 +16,21 @@ export class LocalGameManager {
     this.engine = new TexasHoldemEngine('local-game-1', variant);
     this.setupPlayers(heroId);
 
+    // Send initial state (empty table) so UI can mount and render
+    const initialUiState = this.engine.getPlayerContext(this.currentHeroId);
+    this.updateUI(initialUiState);
+
+    // Delay Initial Deal: Give UI 500ms to mount and render empty table before cards appear
+    // This ensures entry animations can trigger properly
+    console.log('[LocalGame] Initializing game...');
+    setTimeout(() => {
+      this.startGame();
+    }, 500);
+  }
+
+  private startGame() {
+    if (this.isDestroyed) return;
+    
     console.log('[LocalGame] Starting game...');
     const result = this.engine.executeTransition('preflop');
     this.processResult(result);
@@ -34,14 +49,11 @@ export class LocalGameManager {
     const players = this.engine.config.maxPlayers === 2 ? playersData.slice(0, 2) : playersData;
     this.engine.addPlayers(players);
 
-    // CRITICAL FIX: Match Backend Case Sensitivity ('ACTIVE')
     this.engine.context.players.forEach(p => {
-        p.status = 'ACTIVE'; // Changed from 'active' to 'ACTIVE'
+        p.status = 'ACTIVE';
         p.folded = false;
         p.left = false;
         p.chips = 1000;
-        
-        // Ensure everyone is 'online' so the engine counts them
         p.isOffline = false;
     });
     
@@ -70,50 +82,54 @@ export class LocalGameManager {
   private processResult(result: any) {
     if (this.isDestroyed) return;
 
-    this.engine.context = result.state;
+    // Force Context Refresh: Explicitly overwrite context with result.state if it exists
+    // This ensures we have the latest state from the engine
+    if (result.state) {
+      this.engine.context = result.state;
+    }
+    
+    // Use the engine's context directly for mapping (live object, not snapshot)
     const ctx = this.engine.context;
 
-    // --- DIAGNOSTIC PROBE START ---
-    console.group('[LocalGame Diagnostic]');
-    console.log('1. Global Seats (Raw):', { 
-        dealer: ctx.dealerSeat, 
-        sb: ctx.sbSeat, 
-        bb: ctx.bbSeat, 
-        typeOfSB: typeof ctx.sbSeat 
-    });
-    
-    console.log('2. Pots (Raw):', JSON.stringify(ctx.pots));
-
-    const playerOne = ctx.players.find((p: any) => p.seat === 1);
-    console.log('3. Player 1 Data (Raw):', {
-        id: playerOne?.id,
-        seat: playerOne?.seat,
-        betThisRound: playerOne?.betThisRound,
-        chips: playerOne?.chips,
-        holeCards: playerOne?.holeCards
-    });
-    console.groupEnd();
-    // --- DIAGNOSTIC PROBE END ---
-
-    // 1. Base UI State (Revert to getPlayerContext to fix Hole Cards)
-    // This method handles the card masking logic correctly for us.
     const uiState = this.engine.getPlayerContext(this.currentHeroId); 
-    
-    // 2. SAFE PATCHING (The Fix for NaN)
-    // We use (val || 0) to ensure undefined/null becomes 0 instead of NaN
+
+    // SAFE PATCHING
     uiState.dealerSeat = ctx.dealerSeat || 0;
     uiState.sbSeat = ctx.sbSeat || 0;
     uiState.bbSeat = ctx.bbSeat || 0;
 
-    // 3. Patch Players
+    // PLAYER DATA MAPPING
     if (uiState.players) {
         uiState.players.forEach((p: any) => {
-            // Fix Bets: Ensure strictly a number
-            p.bet = p.betThisRound || 0;
-            p.chips = p.chips || 0;
+            // FIX: Force Number conversion for seat matching
+            const rawPlayer = ctx.players.find((raw: any) => Number(raw.seat) === Number(p.seat));
             
-            // Fix Icons: Safe comparison
-            // We cast to Number() just in case, but rely on the safe defaults above
+            if (rawPlayer) {
+                // Use currentBet directly (matches engine schema)
+                const betAmount = typeof rawPlayer.currentBet === 'number' ? rawPlayer.currentBet : 0;
+                
+                // Set currentBet (primary field matching engine)
+                p.currentBet = betAmount;
+                
+                // Also set aliases for compatibility
+                p.bet = betAmount;
+                p.wager = betAmount;
+                p.betAmount = betAmount;
+
+                // Fix Chip Deduction: Use raw chips directly (engine already has correct stack remaining)
+                // Remove any logic that subtracts bet from chips - engine handles this
+                p.chips = rawPlayer.chips || 0;
+                
+                p.isOffline = false; // Force online
+            } else {
+                console.warn('[LocalGame] Could not map UI player to Raw player:', p.seat);
+                // Set all bet fields to 0 for missing players
+                p.currentBet = 0;
+                p.bet = 0;
+                p.wager = 0;
+                p.betAmount = 0;
+            }
+
             const pSeat = Number(p.seat);
             p.isDealer = (pSeat === Number(uiState.dealerSeat));
             p.isSb = (pSeat === Number(uiState.sbSeat));
@@ -121,25 +137,65 @@ export class LocalGameManager {
         });
     }
 
-    // 4. Fix Pots (Safe Parsing)
+    // POT MAPPING FIX
+    // Universal Pot Formatting: Handle both singular and array formats
+    let totalPot = 0;
+    
     if (Array.isArray(uiState.pots)) {
         uiState.pots = uiState.pots.map((pot: any) => {
-            // Handle raw number case
-            if (typeof pot === 'number') return { amount: pot, contributors: [] };
-            
-            // Handle object case safely
-            return {
-                amount: pot.amount || 0,
-                contributors: pot.contributors || []
-            };
+            let amount = 0;
+            let contributors: string[] = [];
+
+            // Extract Amount safely - explicitly cast to prevent NaN
+            if (typeof pot === 'number') {
+                amount = Number(pot || 0);
+            } else if (typeof pot === 'object' && pot !== null) {
+                // Explicitly cast: pot.amount || pot || 0
+                amount = Number(pot.amount || pot || 0);
+                contributors = pot.contributors || pot.eligiblePlayers || [];
+            }
+
+            // Ensure amount is never NaN
+            if (isNaN(amount)) {
+                amount = 0;
+            }
+
+            // Accumulate total pot
+            totalPot += amount;
+
+            // Fallback for empty contributors
+            if (contributors.length === 0 && amount > 0) {
+                contributors = ctx.players
+                    .filter((p: any) => !p.folded && p.status === 'ACTIVE')
+                    .map((p: any) => p.id);
+            }
+
+            // Return object with BOTH 'amount' and 'value' to handle property naming mismatches
+            return { amount, value: amount, contributors };
         });
     } else {
-        uiState.pots = [{ amount: 0, contributors: [] }];
+        uiState.pots = [{ amount: 0, value: 0, contributors: [] }];
     }
 
-    this.updateUI(uiState);
+    // Assign singular pot properties to root state object
+    uiState.pot = totalPot;
+    uiState.totalPot = totalPot;
 
-    // 5. Handle Effects
+    // Map Game Constraints: Ensure minRaise, highBet, and blinds are available to UI
+    uiState.minRaise = ctx.minRaise || ctx.bigBlind || 0;
+    // Calculate highBet from players if not directly available (engine uses _getCurrentBet())
+    const calculatedHighBet = ctx.highBet || ctx.currentBet || 
+      (ctx.players?.length > 0 ? Math.max(...ctx.players.map((p: any) => p.currentBet || 0), 0) : 0);
+    uiState.highBet = calculatedHighBet;
+    uiState.bigBlind = ctx.bigBlind || ctx.config?.bigBlind || 0;
+    uiState.smallBlind = ctx.smallBlind || ctx.config?.smallBlind || 0;
+
+    // Map Round & Phase: Ensure currentRound, currentPhase, and handNumber are available to UI
+    uiState.currentRound = ctx.currentRound || ctx.phase || 'preflop';
+    uiState.currentPhase = ctx.currentPhase || ctx.phase || 'active';
+    uiState.handNumber = ctx.handNumber || 1;
+
+    this.updateUI(uiState);
 
     if (result.effects) {
       result.effects.forEach((effect: any) => {
@@ -165,7 +221,7 @@ export class LocalGameManager {
         }
       });
     }
-    
+
     this.checkBotTurn();
   }
 
@@ -191,15 +247,19 @@ export class LocalGameManager {
      if (this.isDestroyed) return;
 
      const ctx = this.engine.context;
-     const currentBet = Math.max(...ctx.players.map((p: any) => p.currentBet));
-     const toCall = currentBet - actor.currentBet;
+     const currentBet = Math.max(...ctx.players.map((p: any) => (p.currentBet || 0)));
+     const actorBet = actor.currentBet || 0;
+     const toCall = currentBet - actorBet;
      
      let actionType = 'fold';
      let amount = 0;
 
+     const actorChips = actor.chips || 0;
+
+     // Simple Bot Logic
      if (toCall === 0) {
          actionType = 'check';
-     } else if (toCall < actor.chips) {
+     } else if (toCall <= actorChips) {
          actionType = 'call';
          amount = toCall;
      } else {

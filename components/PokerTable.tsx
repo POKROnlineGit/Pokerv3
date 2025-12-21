@@ -2,15 +2,14 @@
 
 import { useEffect, useState, useRef } from "react";
 import { GameState, Player } from "@/lib/types/poker";
-import { Card as CardType } from "@/lib/poker-game/engine/core/types";
+import { Card as CardType, getNextActivePlayer } from "@/lib/utils/pokerUtils";
 import { Card } from "@/components/Card";
 import { cn } from "@/lib/utils";
-import { getNextActivePlayer } from "@/lib/poker-game/engine/utils/seatUtils";
 import { useDebugMode } from "@/lib/hooks/useDebugMode";
 import { motion } from "framer-motion";
 
 interface PokerTableProps {
-  gameState: GameState & { 
+  gameState: GameState & {
     left_players?: string[]; // Server may send left_players array
     currentPhase?: string; // Actual phase from server (may be "waiting")
   };
@@ -89,7 +88,10 @@ export function PokerTable({
     const updateTimer = () => {
       const now = Date.now();
       const remaining = Math.max(0, turnTimer.deadline - now);
-      const percent = Math.max(0, Math.min(100, (remaining / turnTimer.duration) * 100));
+      const percent = Math.max(
+        0,
+        Math.min(100, (remaining / turnTimer.duration) * 100)
+      );
 
       setRemainingTime(remaining);
       setProgressPercent(percent);
@@ -147,6 +149,7 @@ export function PokerTable({
   const isCurrentPlayer = (player: Player) => {
     return (
       player.id === currentUserId &&
+      gameState.currentActorSeat !== null &&
       gameState.currentActorSeat > 0 &&
       gameState.currentActorSeat === player.seat
     );
@@ -154,19 +157,22 @@ export function PokerTable({
 
   const isCurrentActor = (player: Player) => {
     return (
+      gameState.currentActorSeat !== null &&
       gameState.currentActorSeat > 0 &&
       gameState.currentActorSeat === player.seat
     );
   };
 
   const isShowdown = gameState.currentRound === "showdown";
-  
+
   // Check if we're in waiting phase (opponent disconnected)
   const isWaitingPhase = gameState.currentPhase === "waiting";
-  const activePlayers = gameState.players.filter(p => !p.folded && p.chips > 0);
+  const activePlayers = gameState.players.filter(
+    (p) => !p.folded && p.chips > 0
+  );
   const activePlayerCount = activePlayers.length;
   const isWaitingForOpponent = isWaitingPhase && activePlayerCount < 2;
-  
+
   // Determine if this is a Heads-Up game (exactly 2 active players)
   const isHeadsUpGame = activePlayerCount === 2;
 
@@ -180,10 +186,11 @@ export function PokerTable({
           <div>
             SB: Seat {gameState.sbSeat} | BB: Seat {gameState.bbSeat}
           </div>
-          <div>Actor: Seat {gameState.currentActorSeat}</div>
+          <div>Actor: Seat {gameState.currentActorSeat ?? "N/A"}</div>
           <div>
             Next: Seat{" "}
             {(() => {
+              if (gameState.currentActorSeat === null) return "N/A";
               const nextPlayer = getNextActivePlayer(
                 gameState.currentActorSeat,
                 gameState.players.map((p) => ({
@@ -191,7 +198,7 @@ export function PokerTable({
                   seat: p.seat,
                   name: p.name,
                   chips: p.chips,
-                  currentBet: p.betThisRound,
+                  currentBet: p.currentBet,
                   totalBet: p.totalBet,
                   holeCards: p.holeCards as CardType[], // Cast string[] to Card[] for debug display
                   folded: p.folded,
@@ -255,12 +262,20 @@ export function PokerTable({
             // Only animate if this card is in the runout cards array
             const isRunoutCard = runoutCards.includes(card);
             const runoutIndex = runoutCards.indexOf(card);
-            
+
             return (
               <motion.div
                 key={`${card}-${i}`}
-                initial={isRunoutCard && isRunningOut ? { y: -80, rotate: -180, opacity: 0 } : false}
-                animate={isRunoutCard && isRunningOut ? { y: 0, rotate: 0, opacity: 1 } : {}}
+                initial={
+                  isRunoutCard && isRunningOut
+                    ? { y: -80, rotate: -180, opacity: 0 }
+                    : false
+                }
+                animate={
+                  isRunoutCard && isRunningOut
+                    ? { y: 0, rotate: 0, opacity: 1 }
+                    : {}
+                }
                 transition={
                   isRunoutCard && isRunningOut
                     ? {
@@ -272,10 +287,7 @@ export function PokerTable({
                     : {}
                 }
               >
-                <Card
-                  card={card as CardType}
-                  size={isHeadsUp ? "md" : "sm"}
-                />
+                <Card card={card as CardType} size={isHeadsUp ? "md" : "sm"} />
               </motion.div>
             );
           })}
@@ -329,28 +341,18 @@ export function PokerTable({
         const isActor = player && isCurrentActor(player);
         const isFolded = player?.folded;
         const isDealer = player?.seat === gameState.buttonSeat;
-        
-        // Heads-Up (2-player) logic: Button is SB, other player is BB
-        // Standard ring-game logic: Use sbSeat and bbSeat from gameState
-        let isSmallBlind: boolean;
-        let isBigBlind: boolean;
-        
-        if (isHeadsUpGame) {
-          // Heads-Up: Button is SB, other player is BB
-          isSmallBlind = isDealer;
-          isBigBlind = !isDealer && player !== undefined;
-        } else {
-          // Standard ring-game logic
-          isSmallBlind = player?.seat === gameState.sbSeat;
-          isBigBlind = player?.seat === gameState.bbSeat;
-        }
-        
+
+        // Always trust the server's authoritative state for blinds
+        const isSmallBlind = player?.seat === gameState.sbSeat;
+        const isBigBlind = player?.seat === gameState.bbSeat;
+
         // Check if player has left (in left_players array from server OR left status)
         // This takes precedence over other states for visual feedback
-        const hasLeftFromServer = player?.id && gameState.left_players
-          ? gameState.left_players.includes(player.id)
-          : false;
-        
+        const hasLeftFromServer =
+          player?.id && gameState.left_players
+            ? gameState.left_players.includes(player.id)
+            : false;
+
         // Check if player is disconnected (ghost state) or left
         const isDisconnected = player?.disconnected || player?.isGhost || false;
         const hasLeft = player?.left || hasLeftFromServer;
@@ -369,7 +371,7 @@ export function PokerTable({
                     SITTING OUT
                   </div>
                 )}
-                
+
                 {/* Show "Leaving After Hand" if player is leaving but hasn't left yet */}
                 {player.leaving && !hasLeft && (
                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-3 py-1 rounded-full text-xs font-bold animate-pulse z-40">
@@ -403,14 +405,23 @@ export function PokerTable({
                     isDisconnected && !hasLeft && "border-blue-600/50"
                   )}
                   style={{
-                    filter: isDisconnected && !hasLeft ? "grayscale(100%)" : undefined,
+                    filter:
+                      isDisconnected && !hasLeft
+                        ? "grayscale(100%)"
+                        : undefined,
                   }}
                 >
                   {/* Name */}
-                  <div className={cn(
-                    "text-sm font-semibold truncate mb-1",
-                    hasLeft ? "text-gray-400" : isDisconnected ? "text-blue-300" : "text-white"
-                  )}>
+                  <div
+                    className={cn(
+                      "text-sm font-semibold truncate mb-1",
+                      hasLeft
+                        ? "text-gray-400"
+                        : isDisconnected
+                        ? "text-blue-300"
+                        : "text-white"
+                    )}
+                  >
                     {player.id === currentUserId
                       ? player.name || "You"
                       : playerNames?.[player.id] ||
@@ -418,25 +429,29 @@ export function PokerTable({
                         `Player ${seat}`}
                     {hasLeft && " (Left)"}
                   </div>
-                  
+
                   {/* Disconnected indicator (Reconnecting...) - Lower z-index to not block board */}
-                  {isDisconnected && !hasLeft && (() => {
-                    const endTime = playerDisconnectTimers[player.id];
-                    const now = Date.now();
-                    const secondsRemaining = endTime ? Math.max(0, Math.ceil((endTime - now) / 1000)) : null;
-                    
-                    return (
-                      <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full z-25 flex items-center gap-1">
-                        <span className="animate-pulse">🔄</span>
-                        <span>
-                          {secondsRemaining !== null && secondsRemaining > 0
-                            ? `Reconnecting... ${secondsRemaining}s`
-                            : "Reconnecting..."}
-                        </span>
-                      </div>
-                    );
-                  })()}
-                  
+                  {isDisconnected &&
+                    !hasLeft &&
+                    (() => {
+                      const endTime = playerDisconnectTimers[player.id];
+                      const now = Date.now();
+                      const secondsRemaining = endTime
+                        ? Math.max(0, Math.ceil((endTime - now) / 1000))
+                        : null;
+
+                      return (
+                        <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full z-25 flex items-center gap-1">
+                          <span className="animate-pulse">🔄</span>
+                          <span>
+                            {secondsRemaining !== null && secondsRemaining > 0
+                              ? `Reconnecting... ${secondsRemaining}s`
+                              : "Reconnecting..."}
+                          </span>
+                        </div>
+                      );
+                    })()}
+
                   {/* Left indicator - Lower z-index to not block board during runout */}
                   {hasLeft && (
                     <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-gray-700 text-white text-[10px] px-2 py-0.5 rounded-full z-25">
@@ -481,28 +496,30 @@ export function PokerTable({
                   </div>
 
                   {/* Bet - show bet amount prominently */}
-                  {player.betThisRound > 0 && (
+                  {player.currentBet > 0 && (
                     <div className="text-xs text-yellow-400 font-bold mt-1 bg-yellow-400/20 px-2 py-1 rounded">
-                      Bet: ${player.betThisRound}
+                      Bet: ${player.currentBet}
                     </div>
                   )}
 
                   {/* Turn Timer - Progress Bar at bottom of player box */}
-                  {turnTimer?.activeSeat === player.seat && remainingTime !== null && remainingTime > 0 && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700/50 overflow-hidden rounded-b-xl z-5">
-                      <div
-                        className={cn(
-                          "h-full transition-all duration-100 ease-linear",
-                          progressPercent > 50
-                            ? "bg-green-500"
-                            : progressPercent > 25
-                            ? "bg-yellow-500"
-                            : "bg-red-500"
-                        )}
-                        style={{ width: `${progressPercent}%` }}
-                      />
-                    </div>
-                  )}
+                  {turnTimer?.activeSeat === player.seat &&
+                    remainingTime !== null &&
+                    remainingTime > 0 && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700/50 overflow-hidden rounded-b-xl z-5">
+                        <div
+                          className={cn(
+                            "h-full transition-all duration-100 ease-linear",
+                            progressPercent > 50
+                              ? "bg-green-500"
+                              : progressPercent > 25
+                              ? "bg-yellow-500"
+                              : "bg-red-500"
+                          )}
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
+                    )}
 
                   {/* Dealer button - small white circle with "D" - High z-index to appear above border and timer bar */}
                   {isDealer && (
@@ -541,10 +558,11 @@ export function PokerTable({
                         : isLocalGame
                         ? player.isBot
                         : player.id !== currentUserId;
-                      
+
                       // If disconnected and action was FOLD, animate fold
-                      const shouldAnimateFold = isDisconnected && player.folded && !isShowdown;
-                      
+                      const shouldAnimateFold =
+                        isDisconnected && player.folded && !isShowdown;
+
                       return (
                         <motion.div
                           key={`${card}-${i}`}

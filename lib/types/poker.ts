@@ -1,7 +1,7 @@
 export type ActionType = "fold" | "check" | "call" | "bet" | "raise" | "allin";
 
-// Re-export Card type from engine (if needed by components)
-export type { Card } from "@/lib/poker-game/engine/core/types";
+// Re-export Card type from utils (if needed by components)
+export type { Card } from "@/lib/utils/pokerUtils";
 
 export interface ActionValidation {
   valid: boolean;
@@ -15,7 +15,7 @@ export interface Player {
   name: string;
   seat: number;
   chips: number;
-  betThisRound: number;
+  currentBet: number; // Matches engine schema
   totalBet: number;
   holeCards: string[];
   folded: boolean;
@@ -25,7 +25,7 @@ export interface Player {
   playerHandType?: string;
 
   // UI-Specific Injected Fields (Fixes missing buttons/bets)
-  bet?: number; // Visual bet amount
+  bet?: number; // Visual bet amount (alias for currentBet)
   isDealer?: boolean; // Visual dealer button
   isSb?: boolean; // Visual SB button
   isBb?: boolean; // Visual BB button
@@ -78,6 +78,10 @@ export interface GameState {
     bigBlind: number;
     turnTimer: number;
   };
+  // Game constraint fields (needed by ActionPopup)
+  bigBlind?: number;
+  smallBlind?: number;
+  highBet?: number;
   // Frontend-specific fields
   left_players?: string[];
   currentPhase?: string; // Actual phase from server (may be "waiting")

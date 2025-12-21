@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PokerTable } from "@/components/PokerTable";
 import { ActionPopup } from "@/components/ActionPopup";
@@ -24,6 +24,12 @@ export default function LocalGamePage() {
   const { gameState, heroId, startLocalGame, leaveLocalGame, playerAction, newGame } = useLocalGameStore();
   const hasInitialized = useRef(false);
 
+  // Add Animation State: Track runout cards and animation flag
+  const [runoutCards, setRunoutCards] = useState<string[]>([]);
+  const [isRunningOut, setIsRunningOut] = useState(false);
+  // Add Visual Buffer: Isolate visual cards from immediate store updates
+  const [visualCommunityCards, setVisualCommunityCards] = useState<string[]>([]);
+
   useEffect(() => {
     if (!hasInitialized.current) {
         startLocalGame();
@@ -31,8 +37,69 @@ export default function LocalGamePage() {
     }
   }, [startLocalGame]);
 
+  // Create Centralized Adapter: Apply all fixes once, use for both components
+  // CRITICAL: This hook must be called BEFORE any early returns to maintain hook order
+  const adaptedGameState = useMemo(() => {
+    if (!gameState) return null;
+    return {
+      ...gameState,
+      // Ensure global numbers
+      pot: gameState.pot || gameState.totalPot || 0,
+      dealerSeat: gameState.dealerSeat || 0,
+      // Fix Players Array: Use currentBet directly (matches engine schema)
+      players: (gameState.players || []).map((p: any) => ({
+        ...p,
+        currentBet: p.currentBet || 0,
+        chips: Number(p.chips || 0),
+      })),
+      // Explicit Prop Adapter: Ensure all expected properties are present
+      sidePots: gameState.sidePots || (gameState.pots?.slice(1) || []), // Map pots array to sidePots (skip first pot as main pot)
+      communityCards: gameState.communityCards || gameState.board || [], // Handle board vs communityCards
+      buttonSeat: gameState.buttonSeat || gameState.dealerSeat || 0, // Map dealerSeat to buttonSeat
+      sbSeat: gameState.sbSeat || 0,
+      bbSeat: gameState.bbSeat || 0,
+      currentActorSeat: gameState.currentActorSeat || null,
+      // Map Phase Fields: Provide safe defaults if manager briefly sends null during transitions
+      currentRound: gameState.currentRound || 'preflop',
+      currentPhase: gameState.currentPhase || 'active',
+      handNumber: gameState.handNumber || 1,
+    };
+  }, [gameState]);
+
+  // Synchronize State Updates: Manage visual buffer and animation flags simultaneously
+  useEffect(() => {
+    const currentCards = adaptedGameState?.communityCards || [];
+    
+    // Initialize visual cards if empty (first render)
+    if (visualCommunityCards.length === 0 && currentCards.length > 0) {
+      setVisualCommunityCards(currentCards);
+      return;
+    }
+    
+    // 1. Detect strictly new cards
+    const newCards = currentCards.filter((card: string) => !visualCommunityCards.includes(card));
+
+    if (newCards.length > 0) {
+      // 2. Set animation flags AND update visual cards simultaneously
+      setRunoutCards(newCards);
+      setIsRunningOut(true);
+      setVisualCommunityCards(currentCards); // Update the table now
+
+      // 3. Cleanup after animation (1s)
+      const timer = setTimeout(() => {
+        setIsRunningOut(false);
+        setRunoutCards([]);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (currentCards.length < visualCommunityCards.length) {
+      // Handle reset (new game)
+      setVisualCommunityCards(currentCards);
+    }
+  }, [adaptedGameState?.communityCards, visualCommunityCards]);
+
   // CRITICAL FIX: Do not render table until we have a valid Game ID and Hero ID match
   // This prevents the 'human-player' mismatch bug.
+  // NOTE: This early return must come AFTER all hooks to maintain hook order
   if (!gameState || !heroId) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-900 text-white">
@@ -40,6 +107,21 @@ export default function LocalGamePage() {
       </div>
     );
   }
+
+  // Debug Props: Log what we're receiving from the Manager before rendering
+  console.log("[LocalGame View] Passing to Table:", { 
+    pot: adaptedGameState?.pot || gameState?.pot || gameState?.totalPot, 
+    pots: adaptedGameState?.pots,
+    sidePots: adaptedGameState?.sidePots,
+    players: adaptedGameState?.players?.length || 0,
+    communityCards: adaptedGameState?.communityCards?.length || 0,
+    buttonSeat: adaptedGameState?.buttonSeat,
+    dealerSeat: adaptedGameState?.dealerSeat,
+    sbSeat: adaptedGameState?.sbSeat,
+    bbSeat: adaptedGameState?.bbSeat,
+    currentActorSeat: adaptedGameState?.currentActorSeat,
+    currentRound: adaptedGameState?.currentRound
+  });
 
   const handleAction = (action: ActionType, amount?: number) => {
     if (!gameState || !heroId) return;
@@ -80,17 +162,22 @@ export default function LocalGamePage() {
       {/* Table container - centered vertically and horizontally */}
       <div className="h-full w-full flex items-center justify-center">
         <PokerTable
-          gameState={gameState}
+          gameState={{
+            ...adaptedGameState!,
+            communityCards: visualCommunityCards, // Pass visual buffer instead of immediate store cards
+          }}
           currentUserId={heroId} // Pass the EXACT UUID from store
           playerNames={BOT_NAMES}
           isLocalGame={true}
           isHeadsUp={false}
+          runoutCards={runoutCards}
+          isRunningOut={isRunningOut}
         />
       </div>
 
       {/* Action Popup */}
       <ActionPopup
-        gameState={gameState}
+        gameState={adaptedGameState}
         currentUserId={heroId} // Pass the EXACT UUID from store
         onAction={handleAction}
         isLocalGame={true}

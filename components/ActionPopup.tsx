@@ -47,10 +47,10 @@ export function ActionPopup({
 
     // Calculate max bet from all players (more reliable than betsThisRound array)
     const maxBet = gameState.players
-      ? Math.max(...gameState.players.map((p) => p.betThisRound || 0), 0)
+      ? Math.max(...gameState.players.map((p) => p.currentBet || 0), 0)
       : 0;
 
-    const myBet = currentPlayer.betThisRound || 0;
+    const myBet = currentPlayer.currentBet || 0;
     return Math.max(0, maxBet - myBet);
   }, [gameState, currentPlayer]);
 
@@ -63,12 +63,15 @@ export function ActionPopup({
   const hasSomeoneActed = useMemo(() => {
     if (!gameState || !gameState.players) return false;
     // Check if any player has bet more than 0
-    return gameState.players.some((p) => (p.betThisRound || 0) > 0);
+    return gameState.players.some((p) => (p.currentBet || 0) > 0);
   }, [gameState]);
 
-  // Get min raise amount
+  // Get min raise amount with improved fallback
   const minRaise = useMemo(() => {
-    return gameState?.minRaise || 0;
+    if (gameState?.minRaise && gameState.minRaise > 0) return gameState.minRaise;
+    // Fallback: Min raise is usually at least 1 BB
+    const bbPlayer = gameState?.players?.find((p: any) => p.seat === gameState?.bbSeat);
+    return bbPlayer?.currentBet || gameState?.bigBlind || 2;
   }, [gameState]);
 
   // Get player stack
