@@ -1,6 +1,6 @@
 import { TexasHoldemEngine } from '@backend/game/engine/TexasHoldemEngine';
 import { EffectType } from '@backend/game/constants/types';
-import { makeDecision } from '@backend/game/bots/botStrategies';
+import { makeDecision } from '@backend/game/bots/botStrategies.js';
 
 export class LocalGameManager {
   public engine: TexasHoldemEngine;
