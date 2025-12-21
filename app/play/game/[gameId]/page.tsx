@@ -40,6 +40,11 @@ export default function GamePage() {
     Record<string, number>
   >({}); // Track disconnect countdowns per player
   const [forceHideActions, setForceHideActions] = useState(false); // Force hide action controls
+  const [turnTimer, setTurnTimer] = useState<{
+    deadline: number;
+    duration: number;
+    activeSeat: number;
+  } | null>(null); // Turn timer data from turn_timer_started event
   const timeoutIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const prevPhaseRef = useRef<string | null>(null); // Track previous phase for disconnect detection
   const runoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -48,6 +53,24 @@ export default function GamePage() {
   const handRunoutRef = useRef<boolean>(false); // Track if HAND_RUNOUT received
   const supabase = createClientComponentClient();
   const { toast } = useToast();
+
+  // Debug: Log turnTimer state changes
+  useEffect(() => {
+    console.log("[Game] ⏱️ turnTimer state changed:", {
+      hasTimer: !!turnTimer,
+      activeSeat: turnTimer?.activeSeat,
+      deadline: turnTimer?.deadline,
+      duration: turnTimer?.duration,
+      deadlineDate: turnTimer?.deadline
+        ? new Date(turnTimer.deadline).toISOString()
+        : null,
+      currentTime: Date.now(),
+      currentTimeDate: new Date().toISOString(),
+      timeUntilDeadline: turnTimer?.deadline
+        ? turnTimer.deadline - Date.now()
+        : null,
+    });
+  }, [turnTimer]);
 
   // Redirect local games to the local game page
   useEffect(() => {
@@ -212,6 +235,108 @@ export default function GamePage() {
         if (mounted) {
           console.log("[Game] 📊 Game state received:", state);
 
+          // Clear turn timer ONLY if currentActorSeat changed to a DIFFERENT seat
+          // Guard clause: Only clear if new currentActorSeat does NOT match turnTimer.activeSeat
+          // This prevents race condition where gameState arrives after turn_timer_started
+          // and accidentally clears the timer for the correct active seat
+          setTurnTimer((prevTimer) => {
+            console.log("[Game] ⏱️ gameState handler - checking timer:", {
+              hasPrevTimer: !!prevTimer,
+              prevTimerActiveSeat: prevTimer?.activeSeat,
+              newCurrentActorSeat: state.currentActorSeat,
+              seatsMatch: prevTimer?.activeSeat === state.currentActorSeat,
+            });
+
+            // Only clear timer if:
+            // 1. There is an existing timer (prevTimer exists)
+            // 2. The new currentActorSeat is DIFFERENT from the timer's activeSeat
+            if (prevTimer && state.currentActorSeat !== prevTimer.activeSeat) {
+              console.log(
+                "[Game] ⏱️ Turn changed - clearing timer",
+                prevTimer.activeSeat,
+                "->",
+                state.currentActorSeat
+              );
+              return null;
+            }
+
+            // Keep existing timer if:
+            // - No timer exists (prevTimer is null)
+            // - Timer's activeSeat matches new currentActorSeat (race condition protection)
+            if (prevTimer) {
+              console.log(
+                "[Game] ⏱️ Keeping timer - seats match or no timer to clear",
+                prevTimer.activeSeat,
+                "===",
+                state.currentActorSeat
+              );
+            }
+            return prevTimer;
+          });
+
+          // VERIFICATION: Log turn order in Heads-Up games
+          if (isHeadsUp) {
+            const buttonPlayer = state.players.find(
+              (p) => p.seat === state.buttonSeat
+            );
+            const bbPlayer = state.players.find((p) => p.seat === state.bbSeat);
+            const currentActor = state.players.find(
+              (p) => p.seat === state.currentActorSeat
+            );
+
+            // Preflop: Dealer (Button) should act first
+            if (state.currentRound === "preflop") {
+              console.log(
+                "[Game] 🎯 PREFLOP TURN ORDER VERIFICATION (Heads-Up):",
+                {
+                  buttonSeat: state.buttonSeat,
+                  buttonPlayer:
+                    buttonPlayer?.name || `Seat ${state.buttonSeat}`,
+                  bbSeat: state.bbSeat,
+                  bbPlayer: bbPlayer?.name || `Seat ${state.bbSeat}`,
+                  currentActorSeat: state.currentActorSeat,
+                  currentActor:
+                    currentActor?.name || `Seat ${state.currentActorSeat}`,
+                  expectedFirstActor: "Dealer (Button)",
+                  isCorrect:
+                    state.currentActorSeat === state.buttonSeat &&
+                    state.currentActorSeat !== state.bbSeat,
+                  status:
+                    state.currentActorSeat === state.buttonSeat &&
+                    state.currentActorSeat !== state.bbSeat
+                      ? "✅ CORRECT - Dealer (Button) acts first"
+                      : "❌ INCORRECT - Big Blind acts first (backend fix failed)",
+                }
+              );
+            }
+
+            // Flop: Big Blind (Non-Dealer) should act first
+            if (state.currentRound === "flop") {
+              console.log(
+                "[Game] 🎯 POST-FLOP TURN ORDER VERIFICATION (Heads-Up):",
+                {
+                  buttonSeat: state.buttonSeat,
+                  buttonPlayer:
+                    buttonPlayer?.name || `Seat ${state.buttonSeat}`,
+                  bbSeat: state.bbSeat,
+                  bbPlayer: bbPlayer?.name || `Seat ${state.bbSeat}`,
+                  currentActorSeat: state.currentActorSeat,
+                  currentActor:
+                    currentActor?.name || `Seat ${state.currentActorSeat}`,
+                  expectedFirstActor: "Big Blind (non-button)",
+                  isCorrect:
+                    state.currentActorSeat === state.bbSeat &&
+                    state.currentActorSeat !== state.buttonSeat,
+                  status:
+                    state.currentActorSeat === state.bbSeat &&
+                    state.currentActorSeat !== state.buttonSeat
+                      ? "✅ CORRECT - Big Blind acts first"
+                      : "❌ INCORRECT - Button acts first (backend fix failed)",
+                }
+              );
+            }
+          }
+
           // Reset force hide flag if we get a new hand (handNumber changed)
           if (gameState && state.handNumber !== gameState.handNumber) {
             console.log(
@@ -220,6 +345,23 @@ export default function GamePage() {
             gameEndedRef.current = false;
             handRunoutRef.current = false;
             setForceHideActions(false);
+          }
+
+          // Reset force hide flag when new round state arrives (after DEAL_STREET)
+          // This allows action controls to show again for the new betting round
+          // Only reset if game hasn't ended and we're not in a runout
+          if (!gameEndedRef.current && !handRunoutRef.current) {
+            // Check if we're entering a new betting round (Flop, Turn, or River)
+            const newRound = state.currentRound || (state as any).currentPhase;
+            const isBettingRound = [
+              "flop",
+              "turn",
+              "river",
+              "preflop",
+            ].includes(newRound);
+            if (isBettingRound) {
+              setForceHideActions(false);
+            }
           }
 
           // CRITICAL: Fully replace local state on every gameState event
@@ -658,8 +800,61 @@ export default function GamePage() {
         });
       });
 
-      // 4. DEAL_STREET: Handle rapid-fire street dealing during auto-runouts
-      // REMOVED CLIENT-SIDE TIMING - Rely entirely on server events (2s intervals from backend)
+      // 4. TURN_TIMER_STARTED: Handle turn countdown timer
+      socket.on(
+        "turn_timer_started",
+        (data: { deadline: number; duration: number; activeSeat: number }) => {
+          if (!mounted) {
+            console.log(
+              "[Game] ⏱️ Turn timer started - component not mounted, ignoring"
+            );
+            return;
+          }
+
+          const now = Date.now();
+          const timeUntilDeadline = data.deadline - now;
+
+          console.log("[Game] ⏱️ Turn timer started:", data);
+          console.log("[Game] ⏱️ Timer data breakdown:", {
+            deadline: data.deadline,
+            deadlineDate: new Date(data.deadline).toISOString(),
+            duration: data.duration,
+            durationSeconds: data.duration / 1000,
+            activeSeat: data.activeSeat,
+            currentTime: now,
+            currentTimeDate: new Date(now).toISOString(),
+            timeUntilDeadline,
+            timeUntilDeadlineSeconds: Math.ceil(timeUntilDeadline / 1000),
+            isDeadlineInPast: timeUntilDeadline < 0,
+            isDeadlineValid:
+              timeUntilDeadline > 0 && timeUntilDeadline <= data.duration * 2,
+          });
+
+          // Validate deadline is not in the past
+          if (timeUntilDeadline < 0) {
+            console.error("[Game] ⏱️ ERROR: Timer deadline is in the past!", {
+              deadline: data.deadline,
+              now,
+              difference: timeUntilDeadline,
+              deadlineDate: new Date(data.deadline).toISOString(),
+              nowDate: new Date(now).toISOString(),
+            });
+          }
+
+          const timerData = {
+            deadline: data.deadline,
+            duration: data.duration,
+            activeSeat: data.activeSeat,
+          };
+
+          console.log("[Game] ⏱️ Setting turn timer state:", timerData);
+          setTurnTimer(timerData);
+          console.log("[Game] ⏱️ Turn timer state set");
+        }
+      );
+
+      // 5. DEAL_STREET: Handle street dealing during normal gameplay and runouts
+      // Backend now explicitly emits DEAL_STREET during normal transitions (Flop/Turn/River)
       socket.on(
         "DEAL_STREET",
         (data: {
@@ -670,6 +865,34 @@ export default function GamePage() {
           if (!mounted) return;
 
           console.log("[Game] 🃏 Deal street:", data);
+          console.log("[Game] 🃏 DEAL_STREET event received:", {
+            round: data.round,
+            cardsCount: data.cards?.length || 0,
+            communityCardsCount: data.communityCards?.length || 0,
+            communityCards: data.communityCards,
+          });
+
+          // CRITICAL: Force hide action controls and clear any stale betting UI
+          // This ensures that when new cards arrive (Flop/Turn/River), any stale
+          // action controls from the previous round are wiped clean before the new
+          // round's state arrives. Fixes "Action not handled" state sync issues.
+          console.log(
+            "[Game] 🧹 DEAL_STREET received - clearing action controls for new round"
+          );
+          setForceHideActions(true);
+
+          // Set animation flags for newly dealt cards
+          // Cards in data.cards are the NEW cards being dealt (for animation)
+          // data.communityCards is the complete board state
+          const newCards = data.cards || [];
+          if (newCards.length > 0) {
+            console.log(
+              "[Game] 🎬 Setting animation flags for new cards:",
+              newCards
+            );
+            setIsRunningOut(true);
+            setRunoutCards(newCards);
+          }
 
           // Update board state immediately - server controls timing (2s intervals)
           setGameState((prevState) => {
@@ -688,6 +911,21 @@ export default function GamePage() {
                   : prevState.currentRound,
             };
           });
+
+          // Clear animation flags after animation completes (cards have animated)
+          // Use a timeout to allow animation to play (staggered delays: 0.3s per card)
+          // Clear any existing timeout first
+          if (runoutTimeoutRef.current) {
+            clearTimeout(runoutTimeoutRef.current);
+          }
+          const animationDuration = newCards.length * 300 + 500; // 300ms per card + 500ms buffer
+          runoutTimeoutRef.current = setTimeout(() => {
+            if (!mounted) return;
+            console.log("[Game] 🎬 Clearing animation flags after deal");
+            setIsRunningOut(false);
+            setRunoutCards([]);
+            runoutTimeoutRef.current = null;
+          }, animationDuration);
         }
       );
 
@@ -695,7 +933,12 @@ export default function GamePage() {
       // Listen specifically for 'GAME_FINISHED' event (backend sends this exact string)
       socket.on(
         "GAME_FINISHED",
-        (data: { reason?: string; message?: string; payload?: any }) => {
+        (data: {
+          reason?: string;
+          message?: string;
+          payload?: any;
+          winnerId?: string | null;
+        }) => {
           if (!mounted) return;
 
           // DEBUG: Log the event payload
@@ -719,11 +962,24 @@ export default function GamePage() {
             data.message ||
             data.payload?.message ||
             "GAME_FINISHED";
-          const message =
-            data.message ||
-            data.reason ||
-            data.payload?.message ||
-            "The game has ended.";
+
+          // Handle specific reason: ALL_PLAYERS_LEFT
+          let message: string;
+          if (
+            reason === "ALL_PLAYERS_LEFT" ||
+            reason?.includes("ALL_PLAYERS_LEFT")
+          ) {
+            message = "Game Ended. All players have left.";
+          } else {
+            message =
+              data.message ||
+              data.reason ||
+              data.payload?.message ||
+              "The game has ended.";
+          }
+
+          // Safety: Don't try to display winner if winnerId is null (e.g., ALL_PLAYERS_LEFT)
+          // The message above already handles this case
 
           console.log("[Game] 🏁 Setting game finished state:", {
             reason,
@@ -869,6 +1125,7 @@ export default function GamePage() {
         socket.off("PLAYER_STATUS_UPDATE");
         socket.off("HAND_RUNOUT");
         socket.off("SEAT_VACATED");
+        socket.off("turn_timer_started");
         socket.off("DEAL_STREET");
         socket.off("GAME_FINISHED");
         socket.off("GAME_ENDED");
@@ -930,6 +1187,9 @@ export default function GamePage() {
               gameFinished?.reason?.includes("opponent") ||
               gameFinished?.reason?.includes("Opponent")
                 ? "Game Complete! No opponents remaining."
+                : gameFinished?.reason === "ALL_PLAYERS_LEFT" ||
+                  gameFinished?.reason?.includes("ALL_PLAYERS_LEFT")
+                ? "Game Ended. All players have left."
                 : gameFinished?.reason === "NOT_ENOUGH_PLAYERS"
                 ? "The game has ended because there are not enough players to continue."
                 : gameFinished?.reason || "The game has ended."}
@@ -1006,20 +1266,31 @@ export default function GamePage() {
 
           {/* Table container - centered vertically and horizontally */}
           <div className="h-full w-full flex items-center justify-center">
-            <PokerTable
-              gameState={gameState}
-              currentUserId={currentUserId}
-              playerNames={undefined}
-              isLocalGame={false}
-              isHeadsUp={isHeadsUp}
-              runoutCards={runoutCards}
-              isRunningOut={isRunningOut}
-              playerDisconnectTimers={playerDisconnectTimers}
-            />
+            {(() => {
+              console.log("[Game] ⏱️ Rendering PokerTable with turnTimer:", {
+                hasTimer: !!turnTimer,
+                activeSeat: turnTimer?.activeSeat,
+                deadline: turnTimer?.deadline,
+                duration: turnTimer?.duration,
+              });
+              return (
+                <PokerTable
+                  gameState={gameState}
+                  currentUserId={currentUserId}
+                  playerNames={undefined}
+                  isLocalGame={false}
+                  isHeadsUp={isHeadsUp}
+                  runoutCards={runoutCards}
+                  isRunningOut={isRunningOut}
+                  playerDisconnectTimers={playerDisconnectTimers}
+                  turnTimer={turnTimer}
+                />
+              );
+            })()}
           </div>
 
-          {/* Action Popup - Disabled if game finished */}
-          {!gameFinished && (
+          {/* Action Popup - Disabled if game finished or force hidden */}
+          {!gameFinished && !forceHideActions && (
             <ActionPopup
               gameState={gameState}
               currentUserId={currentUserId}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState, useRef } from "react";
 import { GameState, Player } from "@/lib/poker-game/ui/legacyTypes";
 import { Card as CardType } from "@/lib/poker-game/engine/core/types";
 import { Card } from "@/components/Card";
@@ -21,6 +22,11 @@ interface PokerTableProps {
   runoutCards?: string[]; // Cards being animated for runout
   isRunningOut?: boolean; // Flag for runout animation
   playerDisconnectTimers?: Record<string, number>; // Disconnect countdown timers per player
+  turnTimer?: {
+    deadline: number;
+    duration: number;
+    activeSeat: number;
+  } | null; // Turn timer data from turn_timer_started event
 }
 
 // Calculate seat positions using sin/cos for equal spacing
@@ -59,8 +65,53 @@ export function PokerTable({
   runoutCards = [],
   isRunningOut = false,
   playerDisconnectTimers = {},
+  turnTimer = null,
 }: PokerTableProps) {
   const { isEnabled: debugMode } = useDebugMode();
+
+  // Turn timer state
+  const [remainingTime, setRemainingTime] = useState<number | null>(null);
+  const [progressPercent, setProgressPercent] = useState<number>(0);
+  const animationFrameRef = useRef<number | null>(null);
+
+  // Update timer progress
+  useEffect(() => {
+    if (!turnTimer) {
+      setRemainingTime(null);
+      setProgressPercent(0);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      return;
+    }
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, turnTimer.deadline - now);
+      const percent = Math.max(0, Math.min(100, (remaining / turnTimer.duration) * 100));
+
+      setRemainingTime(remaining);
+      setProgressPercent(percent);
+
+      if (remaining > 0) {
+        animationFrameRef.current = requestAnimationFrame(updateTimer);
+      } else {
+        setRemainingTime(0);
+        setProgressPercent(0);
+        animationFrameRef.current = null;
+      }
+    };
+
+    updateTimer();
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [turnTimer]);
 
   // Dynamic seat count based on game type
   const NUM_SEATS = isHeadsUp ? 2 : 6;
@@ -113,7 +164,11 @@ export function PokerTable({
   // Check if we're in waiting phase (opponent disconnected)
   const isWaitingPhase = gameState.currentPhase === "waiting";
   const activePlayers = gameState.players.filter(p => !p.folded && p.chips > 0);
-  const isWaitingForOpponent = isWaitingPhase && activePlayers.length < 2;
+  const activePlayerCount = activePlayers.length;
+  const isWaitingForOpponent = isWaitingPhase && activePlayerCount < 2;
+  
+  // Determine if this is a Heads-Up game (exactly 2 active players)
+  const isHeadsUpGame = activePlayerCount === 2;
 
   return (
     <div className="relative w-full max-w-4xl mx-auto aspect-[5/3]">
@@ -274,8 +329,21 @@ export function PokerTable({
         const isActor = player && isCurrentActor(player);
         const isFolded = player?.folded;
         const isDealer = player?.seat === gameState.buttonSeat;
-        const isSmallBlind = player?.seat === gameState.sbSeat;
-        const isBigBlind = player?.seat === gameState.bbSeat;
+        
+        // Heads-Up (2-player) logic: Button is SB, other player is BB
+        // Standard ring-game logic: Use sbSeat and bbSeat from gameState
+        let isSmallBlind: boolean;
+        let isBigBlind: boolean;
+        
+        if (isHeadsUpGame) {
+          // Heads-Up: Button is SB, other player is BB
+          isSmallBlind = isDealer;
+          isBigBlind = !isDealer && player !== undefined;
+        } else {
+          // Standard ring-game logic
+          isSmallBlind = player?.seat === gameState.sbSeat;
+          isBigBlind = player?.seat === gameState.bbSeat;
+        }
         
         // Check if player has left (in left_players array from server OR left status)
         // This takes precedence over other states for visual feedback
@@ -419,23 +487,43 @@ export function PokerTable({
                     </div>
                   )}
 
-                  {/* Dealer button - small white circle with "D" */}
+                  {/* Turn Timer - Progress Bar at bottom of player box */}
+                  {turnTimer?.activeSeat === player.seat && remainingTime !== null && remainingTime > 0 && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700/50 overflow-hidden rounded-b-xl z-5">
+                      <div
+                        className={cn(
+                          "h-full transition-all duration-100 ease-linear",
+                          progressPercent > 50
+                            ? "bg-green-500"
+                            : progressPercent > 25
+                            ? "bg-yellow-500"
+                            : "bg-red-500"
+                        )}
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Dealer button - small white circle with "D" - High z-index to appear above border and timer bar */}
                   {isDealer && (
-                    <div className="absolute -top-3 -left-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg z-30">
+                    <div className="absolute -top-3 -left-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg z-50">
                       <span className="text-black text-xs font-bold">D</span>
                     </div>
                   )}
 
-                  {/* Small blind indicator */}
+                  {/* Small blind indicator - High z-index to appear above border and timer bar */}
+                  {/* In Heads-Up, Button is SB but we only show dealer badge, not SB badge */}
+                  {/* In ring games, show SB badge only if not dealer */}
                   {isSmallBlind && !isDealer && (
-                    <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-bold text-[10px]">
+                    <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-bold text-[10px] z-50">
                       SB
                     </div>
                   )}
 
-                  {/* Big blind indicator */}
+                  {/* Big blind indicator - High z-index to appear above border and timer bar */}
+                  {/* Show BB badge if player is BB and not dealer */}
                   {isBigBlind && !isDealer && (
-                    <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold text-[10px]">
+                    <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold text-[10px] z-50">
                       BB
                     </div>
                   )}

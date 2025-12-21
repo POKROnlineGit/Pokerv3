@@ -189,6 +189,7 @@ export function ActionPopup({
   // Track previous phase and hand number to detect resets
   const prevPhaseRef = useRef<string | null>(null);
   const prevHandNumberRef = useRef<number | null>(null);
+  const prevActorSeatRef = useRef<number | null>(null);
 
   // CRITICAL: Clear queued actions when phase changes OR hand number increments
   // This prevents stale queued actions from executing after a hand reset
@@ -225,12 +226,108 @@ export function ActionPopup({
     prevHandNumberRef.current = currentHandNumber;
   }, [gameState?.currentRound, gameState?.handNumber]);
 
+  // CRITICAL: Clear queued actions when currentActorSeat changes
+  // This ensures stale queued actions don't fire incorrectly when the turn advances
+  // (e.g., if "Auto-Check" was enabled and turn cycles back to player)
+  useEffect(() => {
+    if (!gameState || !currentPlayer) return;
+
+    const currentActorSeat = gameState.currentActorSeat;
+    const isNowMyTurn = currentActorSeat === currentPlayer.seat;
+
+    // If currentActorSeat changed and it's NOT currently the player's turn
+    // Clear any queued actions to prevent stale queues from firing
+    if (
+      prevActorSeatRef.current !== null &&
+      currentActorSeat !== prevActorSeatRef.current &&
+      !isNowMyTurn &&
+      queuedAction
+    ) {
+      console.log(
+        "[ActionPopup] Clearing queued action - turn advanced (not player's turn)",
+        {
+          previousActorSeat: prevActorSeatRef.current,
+          currentActorSeat,
+          queuedAction,
+        }
+      );
+      setQueuedAction(null);
+      setChipsToCallWhenQueued(null);
+    }
+
+    // Update ref for next comparison
+    prevActorSeatRef.current = currentActorSeat;
+  }, [gameState?.currentActorSeat, currentPlayer, queuedAction]);
+
   // Show popup conditions
   const shouldShow = useMemo(() => {
     if (!isInHand || !gameState) return false;
 
     // Show if it's my turn
-    if (isMyTurn) return true;
+    if (isMyTurn) {
+      // VERIFICATION: Log when action controls appear in Heads-Up games
+      const isButton = currentPlayer?.seat === gameState.buttonSeat;
+      const isBB = currentPlayer?.seat === gameState.bbSeat;
+
+      // Preflop: Dealer (Button) should see action controls first
+      if (gameState.currentRound === "preflop") {
+        const buttonPlayer = gameState.players.find(
+          (p) => p.seat === gameState.buttonSeat
+        );
+        const bbPlayer = gameState.players.find(
+          (p) => p.seat === gameState.bbSeat
+        );
+
+        console.log(
+          "[ActionPopup] 🎯 PREFLOP ACTION CONTROLS VERIFICATION (Heads-Up):",
+          {
+            currentRound: gameState.currentRound,
+            currentPlayerSeat: currentPlayer?.seat,
+            currentPlayerName: currentPlayer?.name,
+            isButton: isButton,
+            isBB: isBB,
+            buttonSeat: gameState.buttonSeat,
+            bbSeat: gameState.bbSeat,
+            currentActorSeat: gameState.currentActorSeat,
+            status: isButton
+              ? "✅ CORRECT - Dealer (Button) sees action controls first"
+              : isBB
+              ? "❌ INCORRECT - Big Blind sees action controls first (backend fix failed)"
+              : "⚠️ UNEXPECTED - Neither Button nor BB",
+          }
+        );
+      }
+
+      // Flop: Big Blind (Non-Dealer) should see action controls first
+      if (gameState.currentRound === "flop") {
+        const buttonPlayer = gameState.players.find(
+          (p) => p.seat === gameState.buttonSeat
+        );
+        const bbPlayer = gameState.players.find(
+          (p) => p.seat === gameState.bbSeat
+        );
+
+        console.log(
+          "[ActionPopup] 🎯 POST-FLOP ACTION CONTROLS VERIFICATION (Heads-Up):",
+          {
+            currentRound: gameState.currentRound,
+            currentPlayerSeat: currentPlayer?.seat,
+            currentPlayerName: currentPlayer?.name,
+            isButton: isButton,
+            isBB: isBB,
+            buttonSeat: gameState.buttonSeat,
+            bbSeat: gameState.bbSeat,
+            currentActorSeat: gameState.currentActorSeat,
+            status: isBB
+              ? "✅ CORRECT - Big Blind sees action controls first"
+              : isButton
+              ? "❌ INCORRECT - Button sees action controls first (backend fix failed)"
+              : "⚠️ UNEXPECTED - Neither Button nor BB",
+          }
+        );
+      }
+      return true;
+    }
 
     // Show pre-emptively if not my turn but I'm still in the hand
     // Only show if we're in a betting round (not waiting, showdown, or complete)
