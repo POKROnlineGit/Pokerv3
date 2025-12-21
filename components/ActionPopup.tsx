@@ -4,8 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { GameState } from "@/lib/poker-game/ui/legacyTypes";
-import { ActionType } from "@/lib/poker-game/engine/core/types";
+import { GameState, ActionType } from "@/lib/types/poker";
 import { cn } from "@/lib/utils";
 
 interface ActionPopupProps {

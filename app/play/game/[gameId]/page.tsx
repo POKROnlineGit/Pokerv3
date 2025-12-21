@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { PokerTable } from "@/components/PokerTable";
 import { ActionPopup } from "@/components/ActionPopup";
 import { LeaveGameButton } from "@/components/LeaveGameButton";
-import { GameState, ActionType } from "@/lib/poker-game/ui/legacyTypes";
+import { GameState, ActionType } from "@/lib/types/poker";
 import { getSocket, disconnectSocket } from "@/lib/socketClient";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 import { AlertCircle, Wifi, WifiOff } from "lucide-react";
@@ -1060,12 +1060,13 @@ export default function GamePage() {
             typeof state.buttonSeat === "number" ? state.buttonSeat : 1,
           sbSeat: typeof state.sbSeat === "number" ? state.sbSeat : 1,
           bbSeat: typeof state.bbSeat === "number" ? state.bbSeat : 2,
-          currentRound:
-            state.currentRound || (state as any).currentPhase || "preflop",
+          currentRound: (state.currentRound ||
+            (state as any).currentPhase ||
+            "preflop") as "preflop" | "flop" | "turn" | "river" | "showdown",
           currentActorSeat:
             typeof state.currentActorSeat === "number"
               ? state.currentActorSeat
-              : 0,
+              : null,
           minRaise: typeof state.minRaise === "number" ? state.minRaise : 2,
           lastRaise: typeof state.lastRaise === "number" ? state.lastRaise : 0,
           betsThisRound: Array.isArray(state.betsThisRound)
@@ -1073,7 +1074,7 @@ export default function GamePage() {
             : [],
           handNumber:
             typeof state.handNumber === "number" ? state.handNumber : 0,
-        };
+        } as GameState;
 
         setGameState(normalizedState);
 

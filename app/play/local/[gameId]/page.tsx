@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PokerTable } from "@/components/PokerTable";
 import { ActionPopup } from "@/components/ActionPopup";
-import { GameState, ActionType } from "@/lib/poker-game/ui/legacyTypes";
-import { gameContextToUI } from "@/lib/poker-game/ui/adapters";
+import { GameState, ActionType } from "@/lib/types/poker";
 import { useLocalGameStore } from "@/lib/stores/useLocalGameStore";
 import { Button } from "@/components/ui/button";
 
@@ -27,7 +26,7 @@ export default function LocalGamePage() {
 
   // Local game store
   const {
-    gameContext: localGameContext,
+    gameState: localGameState,
     startLocalGame,
     playerAction: localPlayerAction,
     leaveLocalGame,
@@ -36,25 +35,26 @@ export default function LocalGamePage() {
 
   // Initialize local game if needed
   useEffect(() => {
-    if (!localGameContext) {
+    if (!localGameState) {
       startLocalGame();
     }
-  }, [localGameContext, startLocalGame]);
+  }, [localGameState, startLocalGame]);
 
   // Subscribe to local game state changes
   useEffect(() => {
-    if (localGameContext) {
-      setGameState(gameContextToUI(localGameContext));
+    if (localGameState) {
+      // LocalGameManager already returns UI-friendly state via getPlayerContext
+      setGameState(localGameState as GameState);
     }
 
     const unsubscribe = useLocalGameStore.subscribe((state) => {
-      if (state.gameContext) {
-        setGameState(gameContextToUI(state.gameContext));
+      if (state.gameState) {
+        setGameState(state.gameState as GameState);
       }
     });
 
     return unsubscribe;
-  }, [localGameContext]);
+  }, [localGameState]);
 
   const handleAction = (action: ActionType, amount?: number) => {
     if (!gameState || !currentUserId) return;

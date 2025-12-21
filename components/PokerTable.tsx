@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { GameState, Player } from "@/lib/poker-game/ui/legacyTypes";
+import { GameState, Player } from "@/lib/types/poker";
 import { Card as CardType } from "@/lib/poker-game/engine/core/types";
 import { Card } from "@/components/Card";
 import { cn } from "@/lib/utils";

@@ -1,0 +1,3 @@
+[submodule "shared-backend"]
+	path = shared-backend
+	url = https://github.com/POKROnlineGit/Pokerv3Server.git
