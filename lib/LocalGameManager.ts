@@ -1,5 +1,6 @@
 import { TexasHoldemEngine } from '@backend/game/engine/TexasHoldemEngine';
 import { EffectType } from '@backend/game/constants/types';
+import { makeDecision } from '@backend/game/bots/botStrategies';
 
 export class LocalGameManager {
   public engine: TexasHoldemEngine;
@@ -247,31 +248,19 @@ export class LocalGameManager {
      if (this.isDestroyed) return;
 
      const ctx = this.engine.context;
-     const currentBet = Math.max(...ctx.players.map((p: any) => (p.currentBet || 0)));
-     const actorBet = actor.currentBet || 0;
-     const toCall = currentBet - actorBet;
      
-     let actionType = 'fold';
-     let amount = 0;
-
-     const actorChips = actor.chips || 0;
-
-     // Simple Bot Logic
-     if (toCall === 0) {
-         actionType = 'check';
-     } else if (toCall <= actorChips) {
-         actionType = 'call';
-         amount = toCall;
-     } else {
-         actionType = 'fold';
-     }
-
-     const action = {
-         type: actionType,
-         seat: actor.seat,
-         amount: amount,
-         gameId: this.engine.gameId
-     };
+     // Use backend bot strategies - assign different strategies to different bots
+     const botStrategies = ['aggressive', 'balanced', 'tight', 'loose', 'calling'];
+     const botIdStr = actor.id.replace('bot-', '');
+     const botIndex = parseInt(botIdStr) - 1; // bot-1 -> index 0, bot-2 -> index 1, etc.
+     const strategy = botStrategies[botIndex % botStrategies.length];
+     
+     const botProfile = { strategy };
+     
+     // Use the same decision-making logic as the backend
+     const action = makeDecision(ctx, actor, botProfile);
+     action.seat = actor.seat;
+     action.gameId = this.engine.gameId;
      
      const result = this.engine.processAction(action);
      this.processResult(result);
