@@ -50,22 +50,25 @@ export class LocalGameManager {
     const players = this.engine.config.maxPlayers === 2 ? playersData.slice(0, 2) : playersData;
     this.engine.addPlayers(players);
 
-    this.engine.context.players.forEach(p => {
-        p.status = 'ACTIVE';
-        p.folded = false;
-        p.left = false;
-        p.chips = 1000;
-        p.isOffline = false;
-    });
+    const ctx = this.engine.context as any;
+    if (ctx.players) {
+        ctx.players.forEach((p: any) => {
+            p.status = 'ACTIVE';
+            p.folded = false;
+            p.left = false;
+            p.chips = 1000;
+            p.isOffline = false;
+        });
+    }
     
-    if (!this.engine.context.left_players) this.engine.context.left_players = [];
+    if (!ctx.left_players) ctx.left_players = [];
   }
 
   public handleAction(actionType: string, amount?: number) {
     if (this.isDestroyed) return;
 
-    const context = this.engine.context;
-    const player = context.players.find((p: any) => p.id === this.currentHeroId);
+    const context = this.engine.context as any;
+    const player = context.players?.find((p: any) => p.id === this.currentHeroId);
     if (!player) return;
 
     const action = {
@@ -90,9 +93,9 @@ export class LocalGameManager {
     }
     
     // Use the engine's context directly for mapping (live object, not snapshot)
-    const ctx = this.engine.context;
+    const ctx = this.engine.context as any;
 
-    const uiState = this.engine.getPlayerContext(this.currentHeroId); 
+    const uiState = this.engine.getPlayerContext(this.currentHeroId) as any; 
 
     // SAFE PATCHING
     uiState.dealerSeat = ctx.dealerSeat || 0;
@@ -229,11 +232,11 @@ export class LocalGameManager {
   private checkBotTurn() {
     if (this.isDestroyed) return;
 
-    const ctx = this.engine.context;
+    const ctx = this.engine.context as any;
     if (ctx.status !== 'active' && ctx.status !== 'waiting') return;
     if (ctx.currentPhase === 'showdown' || ctx.currentPhase === 'complete') return;
 
-    const actor = ctx.players.find((p: any) => p.seat === ctx.currentActorSeat);
+    const actor = ctx.players?.find((p: any) => p.seat === ctx.currentActorSeat);
     if (actor && actor.isBot) {
         if (this.botTimeout) clearTimeout(this.botTimeout);
         
@@ -247,7 +250,7 @@ export class LocalGameManager {
   private executeBotMove(actor: any) {
      if (this.isDestroyed) return;
 
-     const ctx = this.engine.context;
+     const ctx = this.engine.context as any;
      
      // Use backend bot strategies - assign different strategies to different bots
      const botStrategies = ['aggressive', 'balanced', 'tight', 'loose', 'calling'];
