@@ -212,6 +212,12 @@ export default function GamePage() {
       // Listen for game state
       socket.on("gameState", (state: GameState) => {
         if (mounted) {
+          // LOG ENTIRE GAMESTATE: Print full state object from server
+          console.log(
+            "[Game] 📊 Full gameState from server:",
+            JSON.stringify(state, null, 2)
+          );
+
           // Clear turn timer if action is no longer being awaited
           // When a new gameState arrives, it means the previous action has been processed
           // If there's an active timer, clear it unless the timer is still valid (same seat still acting)
@@ -859,6 +865,12 @@ export default function GamePage() {
       // Listen for SYNC_GAME response (after reconnection)
       socket.on("SYNC_GAME", (state: GameState) => {
         if (!mounted) return;
+
+        // LOG ENTIRE GAMESTATE: Print full state object from SYNC_GAME
+        console.log(
+          "[Game] 🔄 Full gameState from SYNC_GAME:",
+          JSON.stringify(state, null, 2)
+        );
 
         // Clear turn timer if action is no longer being awaited (same logic as gameState)
         setTurnTimer((prevTimer) => {
