@@ -22,42 +22,30 @@ export class LocalGameManager {
   }
 
   private setupPlayers(heroId: string) {
-    // 1. Create Players (Let engine assign seats naturally to prevent conflicts)
     const playersData = [
-      { id: heroId, name: 'You', isBot: false, chips: 1000 },
-      { id: 'bot-1', name: 'Bot 1', isBot: true, chips: 1000 },
-      { id: 'bot-2', name: 'Bot 2', isBot: true, chips: 1000 },
-      { id: 'bot-3', name: 'Bot 3', isBot: true, chips: 1000 },
-      { id: 'bot-4', name: 'Bot 4', isBot: true, chips: 1000 },
-      { id: 'bot-5', name: 'Bot 5', isBot: true, chips: 1000 },
+      { id: heroId, name: 'You', isBot: false, chips: 1000, seat: 1 },
+      { id: 'bot-1', name: 'Bot 1', isBot: true, chips: 1000, seat: 2 },
+      { id: 'bot-2', name: 'Bot 2', isBot: true, chips: 1000, seat: 3 },
+      { id: 'bot-3', name: 'Bot 3', isBot: true, chips: 1000, seat: 4 },
+      { id: 'bot-4', name: 'Bot 4', isBot: true, chips: 1000, seat: 5 },
+      { id: 'bot-5', name: 'Bot 5', isBot: true, chips: 1000, seat: 6 },
     ];
     
     const players = this.engine.config.maxPlayers === 2 ? playersData.slice(0, 2) : playersData;
     this.engine.addPlayers(players);
 
-    // 2. FORCE VALID STATUS (Critical Fix)
-    // The engine defaults to 'sitting_out' or 'offline' without a socket.
-    // We must manually override these flags so the engine counts them as 'activePlayers'.
-    this.engine.context.players.forEach((p, index) => {
-        p.status = 'active';
+    // CRITICAL FIX: Match Backend Case Sensitivity ('ACTIVE')
+    this.engine.context.players.forEach(p => {
+        p.status = 'ACTIVE'; // Changed from 'active' to 'ACTIVE'
         p.folded = false;
-        p.allIn = false;
         p.left = false;
-        p.isOffline = false; // Fixes 'activePlayers=0' bug
         p.chips = 1000;
-        p.turnBet = 0;
-        p.roundBet = 0;
-        // Ensure 1-based seating if engine used 0-based
-        // (Optional safety check, but engine usually handles this)
-        if (p.seat === undefined) p.seat = index + 1;
+        
+        // Ensure everyone is 'online' so the engine counts them
+        p.isOffline = false;
     });
     
-    // Initialize left_players to prevent crashes
-    if (!this.engine.context.left_players) {
-        this.engine.context.left_players = [];
-    }
-    
-    console.log('[LocalGame] Players Setup Complete. Status forced to Active.');
+    if (!this.engine.context.left_players) this.engine.context.left_players = [];
   }
 
   public handleAction(actionType: string, amount?: number) {
@@ -83,17 +71,75 @@ export class LocalGameManager {
     if (this.isDestroyed) return;
 
     this.engine.context = result.state;
+    const ctx = this.engine.context;
+
+    // --- DIAGNOSTIC PROBE START ---
+    console.group('[LocalGame Diagnostic]');
+    console.log('1. Global Seats (Raw):', { 
+        dealer: ctx.dealerSeat, 
+        sb: ctx.sbSeat, 
+        bb: ctx.bbSeat, 
+        typeOfSB: typeof ctx.sbSeat 
+    });
     
-    // 1. Get Player View
+    console.log('2. Pots (Raw):', JSON.stringify(ctx.pots));
+
+    const playerOne = ctx.players.find((p: any) => p.seat === 1);
+    console.log('3. Player 1 Data (Raw):', {
+        id: playerOne?.id,
+        seat: playerOne?.seat,
+        betThisRound: playerOne?.betThisRound,
+        chips: playerOne?.chips,
+        holeCards: playerOne?.holeCards
+    });
+    console.groupEnd();
+    // --- DIAGNOSTIC PROBE END ---
+
+    // 1. Base UI State (Revert to getPlayerContext to fix Hole Cards)
+    // This method handles the card masking logic correctly for us.
     const uiState = this.engine.getPlayerContext(this.currentHeroId); 
     
-    // 2. INJECT MISSING BLIND DATA (Fixes missing icons)
-    // The engine context has these, but getPlayerContext might not pass them through.
-    uiState.sbSeat = this.engine.context.sbSeat;
-    uiState.bbSeat = this.engine.context.bbSeat;
-    uiState.dealerSeat = this.engine.context.dealerSeat;
+    // 2. SAFE PATCHING (The Fix for NaN)
+    // We use (val || 0) to ensure undefined/null becomes 0 instead of NaN
+    uiState.dealerSeat = ctx.dealerSeat || 0;
+    uiState.sbSeat = ctx.sbSeat || 0;
+    uiState.bbSeat = ctx.bbSeat || 0;
+
+    // 3. Patch Players
+    if (uiState.players) {
+        uiState.players.forEach((p: any) => {
+            // Fix Bets: Ensure strictly a number
+            p.bet = p.betThisRound || 0;
+            p.chips = p.chips || 0;
+            
+            // Fix Icons: Safe comparison
+            // We cast to Number() just in case, but rely on the safe defaults above
+            const pSeat = Number(p.seat);
+            p.isDealer = (pSeat === Number(uiState.dealerSeat));
+            p.isSb = (pSeat === Number(uiState.sbSeat));
+            p.isBb = (pSeat === Number(uiState.bbSeat));
+        });
+    }
+
+    // 4. Fix Pots (Safe Parsing)
+    if (Array.isArray(uiState.pots)) {
+        uiState.pots = uiState.pots.map((pot: any) => {
+            // Handle raw number case
+            if (typeof pot === 'number') return { amount: pot, contributors: [] };
+            
+            // Handle object case safely
+            return {
+                amount: pot.amount || 0,
+                contributors: pot.contributors || []
+            };
+        });
+    } else {
+        uiState.pots = [{ amount: 0, contributors: [] }];
+    }
 
     this.updateUI(uiState);
+
+    // 5. Handle Effects
 
     if (result.effects) {
       result.effects.forEach((effect: any) => {
@@ -101,7 +147,6 @@ export class LocalGameManager {
 
         switch (effect.type) {
           case EffectType.SCHEDULE_TRANSITION:
-            console.log(`[LocalGame] Transition scheduled: ${effect.targetPhase} in ${effect.delayMs}ms`);
             const timer = setTimeout(() => {
               if (this.isDestroyed) return;
               const nextRes = this.engine.executeTransition(effect.targetPhase);

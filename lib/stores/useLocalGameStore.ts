@@ -21,24 +21,23 @@ export const useLocalGameStore = create<LocalGameStore>((set, get) => ({
   heroId: null,
 
   startLocalGame: (variant = 'six_max') => {
-    // Cleanup existing game if any
+    // 1. Cleanup old game
     const { manager } = get();
-    if (manager) {
-      manager.cleanup();
-    }
+    if (manager) manager.cleanup();
 
-    const heroId = uuidv4();
+    // 2. Generate Hero ID ONCE
+    const newHeroId = uuidv4(); 
     
-    // Initialize Manager with callback to update this store
-    // The manager runs the shared backend engine locally
-    const newManager = new LocalGameManager(variant, heroId, (state) => {
+    // 3. Initialize Manager with this ID
+    const newManager = new LocalGameManager(variant, newHeroId, (state) => {
+      // Callback: Update store whenever engine changes
       set({ gameState: state });
     });
 
+    // 4. Set Store State explicitly with the ID we just created
     set({ 
       manager: newManager, 
-      heroId: heroId,
-      // gameState will be set immediately by the manager's constructor callback
+      heroId: newHeroId, 
     });
   },
 
@@ -51,9 +50,7 @@ export const useLocalGameStore = create<LocalGameStore>((set, get) => ({
 
   leaveLocalGame: () => {
     const { manager } = get();
-    if (manager) {
-      manager.cleanup();
-    }
+    if (manager) manager.cleanup();
     set({ manager: null, gameState: null, heroId: null });
   },
 

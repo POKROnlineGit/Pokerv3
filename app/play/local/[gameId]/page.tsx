@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PokerTable } from "@/components/PokerTable";
 import { ActionPopup } from "@/components/ActionPopup";
@@ -21,62 +21,39 @@ export default function LocalGamePage() {
   const router = useRouter();
   const gameId = params.gameId as string;
 
-  const [gameState, setGameState] = useState<GameState | null>(null);
-  const [currentUserId] = useState<string>("human-player");
+  const { gameState, heroId, startLocalGame, leaveLocalGame, playerAction, newGame } = useLocalGameStore();
+  const hasInitialized = useRef(false);
 
-  // Local game store
-  const {
-    gameState: localGameState,
-    startLocalGame,
-    playerAction: localPlayerAction,
-    leaveLocalGame,
-    newGame: startNewLocalGame,
-  } = useLocalGameStore();
-
-  // Initialize local game if needed
   useEffect(() => {
-    if (!localGameState) {
-      startLocalGame();
+    if (!hasInitialized.current) {
+        startLocalGame();
+        hasInitialized.current = true;
     }
-  }, [localGameState, startLocalGame]);
+  }, [startLocalGame]);
 
-  // Subscribe to local game state changes
-  useEffect(() => {
-    if (localGameState) {
-      // LocalGameManager already returns UI-friendly state via getPlayerContext
-      setGameState(localGameState as GameState);
-    }
-
-    const unsubscribe = useLocalGameStore.subscribe((state) => {
-      if (state.gameState) {
-        setGameState(state.gameState as GameState);
-      }
-    });
-
-    return unsubscribe;
-  }, [localGameState]);
+  // CRITICAL FIX: Do not render table until we have a valid Game ID and Hero ID match
+  // This prevents the 'human-player' mismatch bug.
+  if (!gameState || !heroId) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-900 text-white">
+        <div className="text-xl">Initializing Game Engine...</div>
+      </div>
+    );
+  }
 
   const handleAction = (action: ActionType, amount?: number) => {
-    if (!gameState || !currentUserId) return;
-    localPlayerAction(action, amount);
+    if (!gameState || !heroId) return;
+    playerAction(action, amount);
   };
 
   const handleNewGame = () => {
-    startNewLocalGame();
+    newGame();
   };
 
   const handleLeaveGame = () => {
     leaveLocalGame();
     router.push("/play");
   };
-
-  if (!gameState || !currentUserId) {
-    return (
-      <div className="container mx-auto px-4 py-8 flex items-center justify-center min-h-[60vh]">
-        <div>Starting local game...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="relative h-screen overflow-hidden bg-poker-felt">
@@ -104,7 +81,7 @@ export default function LocalGamePage() {
       <div className="h-full w-full flex items-center justify-center">
         <PokerTable
           gameState={gameState}
-          currentUserId={currentUserId}
+          currentUserId={heroId} // Pass the EXACT UUID from store
           playerNames={BOT_NAMES}
           isLocalGame={true}
           isHeadsUp={false}
@@ -114,13 +91,10 @@ export default function LocalGamePage() {
       {/* Action Popup */}
       <ActionPopup
         gameState={gameState}
-        currentUserId={currentUserId}
+        currentUserId={heroId} // Pass the EXACT UUID from store
         onAction={handleAction}
         isLocalGame={true}
       />
     </div>
   );
 }
-
-
-
