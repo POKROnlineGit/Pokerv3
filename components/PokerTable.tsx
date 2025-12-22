@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useLayoutEffect } from "react";
 import { GameState, Player } from "@/lib/types/poker";
 import { Card as CardType, getNextActivePlayer } from "@/lib/utils/pokerUtils";
 import { Card } from "@/components/Card";
@@ -68,6 +68,75 @@ export function PokerTable({
 }: PokerTableProps) {
   const { isEnabled: debugMode } = useDebugMode();
 
+  // Track cards that should be hidden (pending animation) - updated synchronously
+  const [pendingCards, setPendingCards] = useState<string[]>([]);
+  const prevCardsRef = useRef<string[]>([]);
+
+  // Use useLayoutEffect to detect new cards synchronously before paint
+  // This prevents the flash by hiding cards before they're painted
+  useLayoutEffect(() => {
+    const currentCards = gameState.communityCards || [];
+    const prevCards = prevCardsRef.current;
+
+    // Detect new cards
+    const newCards = currentCards.filter(
+      (card: string) => !prevCards.includes(card)
+    );
+
+    if (newCards.length > 0) {
+      // Immediately hide new cards (synchronously, before paint)
+      setPendingCards((prev) => [...new Set([...prev, ...newCards])]);
+      prevCardsRef.current = currentCards;
+    } else if (currentCards.length < prevCards.length) {
+      // Cards were reset (new hand)
+      setPendingCards([]);
+      prevCardsRef.current = currentCards;
+    } else {
+      prevCardsRef.current = currentCards;
+    }
+  }, [gameState.communityCards]);
+
+  // Remove cards from pending when they start animating
+  useEffect(() => {
+    if (isRunningOut && runoutCards.length > 0) {
+      // Cards are now animating, remove them from pending
+      setPendingCards((prev) =>
+        prev.filter((card) => !runoutCards.includes(card))
+      );
+    }
+  }, [isRunningOut, runoutCards, isLocalGame]);
+
+  // Cards that should be hidden: pending cards OR cards in runoutCards but not animating yet
+  const cardsToHide = isLocalGame
+    ? [
+        ...new Set([
+          ...pendingCards,
+          ...runoutCards.filter((card) => !isRunningOut),
+        ]),
+      ]
+    : runoutCards.filter((card) => !isRunningOut);
+
+  // Debug: Log animation props for local games
+  useEffect(() => {
+    if (isLocalGame) {
+      console.log("[PokerTable] Animation props:", {
+        runoutCards,
+        isRunningOut,
+        communityCards: gameState.communityCards,
+        runoutCardsLength: runoutCards.length,
+        pendingCards,
+        cardsToHide,
+      });
+    }
+  }, [
+    runoutCards,
+    isRunningOut,
+    isLocalGame,
+    gameState.communityCards,
+    pendingCards,
+    cardsToHide,
+  ]);
+
   // Turn timer state - use ref to track current timer to avoid stale closures
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -77,9 +146,7 @@ export function PokerTable({
   const [betIndicators, setBetIndicators] = useState<
     Record<number, { amount: number; animating: boolean }>
   >({});
-  const prevBetsRef = useRef<Record<number, number>>({});
   const prevHoleCardsRef = useRef<Record<number, string[]>>({});
-  const prevRoundRef = useRef<string>(gameState.currentRound || "preflop");
 
   // Update timer progress - use setInterval for smoother, more reliable updates
   useEffect(() => {
@@ -194,50 +261,8 @@ export function PokerTable({
   // Check if we're in waiting phase (opponent disconnected)
   const isWaitingPhase = gameState.currentPhase === "waiting";
 
-  // Track bet changes and animate bet indicators
-  // Simply reflect gameState.players[].currentBet - no complex logic
+  // Track bet indicators and community card animations - directly from gameState
   useEffect(() => {
-    const currentRound = gameState.currentRound || "preflop";
-    const prevRound = prevRoundRef.current || "preflop";
-    const roundChanged = currentRound !== prevRound;
-
-    // Log gameState when round changes
-    if (roundChanged) {
-      const playersWithBets = gameState.players
-        .filter((p) => (p.currentBet || 0) > 0)
-        .map((p) => ({
-          seat: p.seat,
-          id: p.id,
-          name: p.name || p.id,
-          currentBet: p.currentBet,
-          chips: p.chips,
-          folded: p.folded,
-          isSb: p.seat === gameState.sbSeat,
-          isBb: p.seat === gameState.bbSeat,
-        }));
-
-      console.log("[PokerTable] Round changed:", {
-        from: prevRound,
-        to: currentRound,
-        handNumber: gameState.handNumber,
-        sbSeat: gameState.sbSeat,
-        bbSeat: gameState.bbSeat,
-        smallBlind: gameState.smallBlind,
-        bigBlind: gameState.bigBlind,
-        playersWithBets:
-          playersWithBets.length > 0
-            ? playersWithBets
-            : "NONE (all bets should be 0)",
-        allPlayers: gameState.players.map((p) => ({
-          seat: p.seat,
-          name: p.name || p.id,
-          currentBet: p.currentBet,
-          chips: p.chips,
-          folded: p.folded,
-        })),
-      });
-    }
-
     // Track hole cards for animation detection
     const currentHoleCards: Record<number, string[]> = {};
     gameState.players.forEach((player) => {
@@ -247,7 +272,7 @@ export function PokerTable({
     });
     prevHoleCardsRef.current = currentHoleCards;
 
-    // Build indicators directly from current gameState
+    // Build indicators directly from gameState - that's it
     const newIndicators: Record<
       number,
       { amount: number; animating: boolean }
@@ -255,44 +280,15 @@ export function PokerTable({
 
     gameState.players.forEach((player) => {
       const currentBet = player.currentBet || 0;
-      // Only show bet indicators for active (non-folded) players
-      // Folded players may have stale currentBet values from previous rounds
-      if (currentBet > 0 && !player.folded) {
-        const prevBet = prevBetsRef.current[player.seat] || 0;
-        const prevIndicator = betIndicators[player.seat];
-
-        if (currentBet > prevBet) {
-          // Bet increased - trigger animation
-          newIndicators[player.seat] = { amount: currentBet, animating: true };
-          setTimeout(() => {
-            setBetIndicators((current) => ({
-              ...current,
-              [player.seat]: { amount: currentBet, animating: false },
-            }));
-          }, 800);
-        } else if (prevIndicator && prevIndicator.amount === currentBet) {
-          // Bet unchanged - keep existing state
-          newIndicators[player.seat] = prevIndicator;
-        } else {
-          // New or changed bet - show without animation
-          newIndicators[player.seat] = { amount: currentBet, animating: false };
-        }
+      // Show bet indicators for any player with a bet - gameState handles the logic
+      if (currentBet > 0) {
+        newIndicators[player.seat] = { amount: currentBet, animating: false };
       }
     });
 
-    // Update indicators to match gameState
+    // Update indicators to match gameState exactly
     setBetIndicators(newIndicators);
-
-    // Update prevBetsRef for animation detection
-    const currentBets: Record<number, number> = {};
-    gameState.players.forEach((player) => {
-      if (player.currentBet > 0) {
-        currentBets[player.seat] = player.currentBet;
-      }
-    });
-    prevBetsRef.current = currentBets;
-    prevRoundRef.current = currentRound;
-  }, [gameState]);
+  }, [gameState, isLocalGame]);
   const activePlayers = gameState.players.filter(
     (p) => !p.folded && p.chips > 0
   );
@@ -391,22 +387,47 @@ export function PokerTable({
         {/* Community cards area - centered, larger for heads-up - Higher z-index to appear above player status indicators */}
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex gap-2 z-30">
           {gameState.communityCards.map((card, i) => {
-            // Only animate if this card is in the runout cards array
+            // Check if card should be hidden/animated
+            // For local games: hide if in runoutCards OR newly detected this render
+            // For online games: only hide if in runoutCards (server controls timing)
+            const shouldHide = isLocalGame
+              ? cardsToHide.includes(card)
+              : runoutCards.includes(card);
             const isRunoutCard = runoutCards.includes(card);
             const runoutIndex = runoutCards.indexOf(card);
 
+            // Debug logging for local games
+            if (isLocalGame && isRunoutCard && isRunningOut) {
+              console.log(
+                "[PokerTable] Animating card:",
+                card,
+                "runoutIndex:",
+                runoutIndex,
+                "runoutCards:",
+                runoutCards,
+                "isRunningOut:",
+                isRunningOut
+              );
+            }
+
             return (
               <motion.div
-                key={`${card}-${i}-${gameState.handNumber || 0}`}
-                initial={
+                key={`${card}-${i}-${gameState.handNumber || 0}-${
                   isRunoutCard && isRunningOut
-                    ? { y: -80, rotate: -180, opacity: 0 }
-                    : false
+                    ? runoutCards.join(",")
+                    : "static"
+                }`}
+                initial={
+                  // Hide immediately if card should be hidden (prevents flash)
+                  shouldHide ? { y: -80, rotate: -180, opacity: 0 } : false
                 }
                 animate={
+                  // Only animate if card is in runoutCards AND animation is running
                   isRunoutCard && isRunningOut
                     ? { y: 0, rotate: 0, opacity: 1 }
-                    : {}
+                    : shouldHide
+                    ? { y: -80, rotate: -180, opacity: 0 } // Keep hidden if should be hidden
+                    : { y: 0, rotate: 0, opacity: 1 } // Normal state
                 }
                 transition={
                   isRunoutCard && isRunningOut
@@ -567,13 +588,6 @@ export function PokerTable({
               </div>
             ) : (
               <>
-                {/* Show "Sitting Out" if player has left (from server state) */}
-                {hasLeft && (
-                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-600 text-white px-3 py-1 rounded-full text-xs font-bold z-40">
-                    SITTING OUT
-                  </div>
-                )}
-
                 {/* Show "Leaving After Hand" if player is leaving but hasn't left yet */}
                 {player.leaving && !hasLeft && (
                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-3 py-1 rounded-full text-xs font-bold animate-pulse z-40">

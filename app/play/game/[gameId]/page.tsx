@@ -31,8 +31,6 @@ export default function GamePage() {
   const [timeoutSeconds, setTimeoutSeconds] = useState<number | null>(null);
   const [isHeadsUp, setIsHeadsUp] = useState(false);
   const [gameStatus, setGameStatus] = useState<string | null>(null);
-  const [runoutCards, setRunoutCards] = useState<string[]>([]); // Cards to animate for runout
-  const [isRunningOut, setIsRunningOut] = useState(false); // Flag for runout animation
   const [gameFinished, setGameFinished] = useState<{ reason: string } | null>(
     null
   ); // Game finished modal
@@ -45,9 +43,13 @@ export default function GamePage() {
     duration: number;
     activeSeat: number;
   } | null>(null); // Turn timer data from turn_timer_started event
+  // Animation state for community cards
+  const [runoutCards, setRunoutCards] = useState<string[]>([]);
+  const [isRunningOut, setIsRunningOut] = useState(false);
+  const prevCommunityCardsRef = useRef<string[]>([]);
+  const runoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const prevPhaseRef = useRef<string | null>(null); // Track previous phase for disconnect detection
-  const runoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const disconnectTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const gameEndedRef = useRef<boolean>(false); // Track if GAME_FINISHED received
   const handRunoutRef = useRef<boolean>(false); // Track if HAND_RUNOUT received
@@ -632,11 +634,27 @@ export default function GamePage() {
           setForceHideActions(true);
           handRunoutRef.current = true; // Mark that runout has occurred
 
-          // Set runout flag for visual animation
-          setIsRunningOut(true);
-          setRunoutCards(data.runoutCards || []);
+          // Set animation state for runout cards
+          const runoutCardsList = data.runoutCards || [];
+          if (runoutCardsList.length > 0) {
+            setIsRunningOut(true);
+            setRunoutCards(runoutCardsList);
+            
+            // Clear animation flags after animation completes
+            if (runoutTimeoutRef.current) {
+              clearTimeout(runoutTimeoutRef.current);
+            }
+            const animationDuration = runoutCardsList.length * 300 + 500;
+            runoutTimeoutRef.current = setTimeout(() => {
+              if (!mounted) return;
+              setIsRunningOut(false);
+              setRunoutCards([]);
+              runoutTimeoutRef.current = null;
+            }, animationDuration);
+          }
 
           // Update board state immediately - server controls timing via DEAL_STREET events
+          // PokerTable will detect new cards and animate them automatically
           // We just need to show the final board state
           const finalBoard = data.board || [];
           setGameState((prevState) => {
@@ -659,12 +677,6 @@ export default function GamePage() {
             };
           });
 
-          // Clear runout flags after a brief moment (for visual feedback)
-          setTimeout(() => {
-            if (!mounted) return;
-            setIsRunningOut(false);
-            setRunoutCards([]);
-          }, 1000);
         }
       );
 
@@ -742,10 +754,10 @@ export default function GamePage() {
           // round's state arrives. Fixes "Action not handled" state sync issues.
           setForceHideActions(true);
 
-          // Set animation flags for newly dealt cards
-          // Cards in data.cards are the NEW cards being dealt (for animation)
-          // data.communityCards is the complete board state
+          // Get new cards from the data
           const newCards = data.cards || [];
+          
+          // Set animation flags
           if (newCards.length > 0) {
             setIsRunningOut(true);
             setRunoutCards(newCards);
@@ -988,6 +1000,9 @@ export default function GamePage() {
       if (timeoutIntervalRef.current) {
         clearInterval(timeoutIntervalRef.current);
       }
+      if (runoutTimeoutRef.current) {
+        clearTimeout(runoutTimeoutRef.current);
+      }
       if (gamesChannel) {
         gamesChannel.unsubscribe();
       }
@@ -1012,9 +1027,6 @@ export default function GamePage() {
       }
 
       // Clear all timeouts
-      if (runoutTimeoutRef.current) {
-        clearTimeout(runoutTimeoutRef.current);
-      }
       if (disconnectTimerIntervalRef.current) {
         clearInterval(disconnectTimerIntervalRef.current);
       }

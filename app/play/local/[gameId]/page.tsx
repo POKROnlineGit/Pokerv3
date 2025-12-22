@@ -23,12 +23,13 @@ export default function LocalGamePage() {
 
   const { gameState, heroId, startLocalGame, leaveLocalGame, playerAction, newGame } = useLocalGameStore();
   const hasInitialized = useRef(false);
-
-  // Add Animation State: Track runout cards and animation flag
+  
+  // Animation state - same system as online game
   const [runoutCards, setRunoutCards] = useState<string[]>([]);
   const [isRunningOut, setIsRunningOut] = useState(false);
-  // Add Visual Buffer: Isolate visual cards from immediate store updates
-  const [visualCommunityCards, setVisualCommunityCards] = useState<string[]>([]);
+  const prevCommunityCardsRef = useRef<string[]>([]);
+  const runoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
 
   useEffect(() => {
     if (!hasInitialized.current) {
@@ -66,36 +67,70 @@ export default function LocalGamePage() {
     };
   }, [gameState]);
 
-  // Synchronize State Updates: Manage visual buffer and animation flags simultaneously
+  // Detect new community cards and trigger animations - same system as online game
   useEffect(() => {
-    const currentCards = adaptedGameState?.communityCards || [];
+    if (!gameState) return;
     
-    // Initialize visual cards if empty (first render)
-    if (visualCommunityCards.length === 0 && currentCards.length > 0) {
-      setVisualCommunityCards(currentCards);
+    const currentCards = gameState.communityCards || gameState.board || [];
+    const prevCards = prevCommunityCardsRef.current;
+    
+    // Only process if we have cards and they've actually changed
+    if (currentCards.length === 0 && prevCards.length === 0) {
+      return; // Both empty, no change
+    }
+    
+    // Handle reset case (new hand - cards went from some to none, or hand number changed)
+    if (currentCards.length < prevCards.length) {
+      // Cards were reset (new hand started)
+      prevCommunityCardsRef.current = currentCards;
+      setIsRunningOut(false);
+      setRunoutCards([]);
+      if (runoutTimeoutRef.current) {
+        clearTimeout(runoutTimeoutRef.current);
+        runoutTimeoutRef.current = null;
+      }
       return;
     }
     
-    // 1. Detect strictly new cards
-    const newCards = currentCards.filter((card: string) => !visualCommunityCards.includes(card));
-
+    // Detect new cards by comparing arrays
+    const newCards = currentCards.filter(
+      (card: string) => !prevCards.includes(card)
+    );
+    
     if (newCards.length > 0) {
-      // 2. Set animation flags AND update visual cards simultaneously
+      console.log('[LocalGame] New cards detected:', newCards, 'Previous:', prevCards, 'Current:', currentCards);
+      
+      // Clear any existing timeout
+      if (runoutTimeoutRef.current) {
+        clearTimeout(runoutTimeoutRef.current);
+      }
+      
+      // Set animation flags
       setRunoutCards(newCards);
       setIsRunningOut(true);
-      setVisualCommunityCards(currentCards); // Update the table now
-
-      // 3. Cleanup after animation (1s)
-      const timer = setTimeout(() => {
+      
+      // Update ref AFTER setting animation state (but before timeout)
+      prevCommunityCardsRef.current = currentCards;
+      
+      // Clear animation flags after animation completes
+      const animationDuration = newCards.length * 300 + 500;
+      runoutTimeoutRef.current = setTimeout(() => {
         setIsRunningOut(false);
         setRunoutCards([]);
-      }, 1000);
-      return () => clearTimeout(timer);
-    } else if (currentCards.length < visualCommunityCards.length) {
-      // Handle reset (new game)
-      setVisualCommunityCards(currentCards);
+        runoutTimeoutRef.current = null;
+      }, animationDuration);
+    } else if (currentCards.length === prevCards.length) {
+      // Same number of cards, but might be different cards (shouldn't happen, but handle it)
+      // Just update the ref
+      prevCommunityCardsRef.current = currentCards;
     }
-  }, [adaptedGameState?.communityCards, visualCommunityCards]);
+    
+    return () => {
+      if (runoutTimeoutRef.current) {
+        clearTimeout(runoutTimeoutRef.current);
+      }
+    };
+  }, [gameState?.communityCards, gameState?.board, gameState?.handNumber]);
 
   // CRITICAL FIX: Do not render table until we have a valid Game ID and Hero ID match
   // This prevents the 'human-player' mismatch bug.
@@ -162,10 +197,7 @@ export default function LocalGamePage() {
       {/* Table container - centered vertically and horizontally */}
       <div className="h-full w-full flex items-center justify-center">
         <PokerTable
-          gameState={{
-            ...adaptedGameState!,
-            communityCards: visualCommunityCards, // Pass visual buffer instead of immediate store cards
-          }}
+          gameState={adaptedGameState!}
           currentUserId={heroId} // Pass the EXACT UUID from store
           playerNames={BOT_NAMES}
           isLocalGame={true}
