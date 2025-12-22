@@ -810,16 +810,10 @@ export function PokerTable({
                   const isNewRound =
                     prevCards.length === 0 && currentCards.length > 0;
 
-                  // Calculate card angle once per seat (stable across renders)
-                  const seatIndex = SEAT_POSITIONS.findIndex(
-                    (pos, idx) => getSeatForPosition(idx) === player.seat
-                  );
-                  const angleInterval = (2 * Math.PI) / NUM_SEATS;
-                  const angle = angleInterval * seatIndex + Math.PI / 2;
-                  const baseCardAngle = Math.cos(angle) * 15;
-                  // Pre-calculate final angles for each card (stable values)
-                  const card1Angle = baseCardAngle - 2;
-                  const card2Angle = baseCardAngle + 2;
+                  // Calculate card angles - cards should be vertical with slight fan between them
+                  // No outward skew based on position, just a small fan (one card slightly left, one slightly right)
+                  const card1Angle = -2; // Slight left tilt
+                  const card2Angle = 2; // Slight right tilt
 
                   return (
                     <div
@@ -844,7 +838,7 @@ export function PokerTable({
                                 ? {
                                     y: 40,
                                     opacity: 0,
-                                    rotate: baseCardAngle,
+                                    rotate: i === 0 ? card1Angle : card2Angle,
                                   }
                                 : false
                             }
