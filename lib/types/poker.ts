@@ -1,4 +1,11 @@
-export type ActionType = "fold" | "check" | "call" | "bet" | "raise" | "allin";
+export type ActionType =
+  | "fold"
+  | "check"
+  | "call"
+  | "bet"
+  | "raise"
+  | "allin"
+  | "reveal";
 
 // Re-export Card type from utils (if needed by components)
 export type { Card } from "@/lib/utils/pokerUtils";
@@ -17,12 +24,13 @@ export interface Player {
   chips: number;
   currentBet: number; // Matches engine schema
   totalBet: number;
-  holeCards: string[];
+  holeCards: (string | "HIDDEN" | null)[]; // Can contain card strings, "HIDDEN", or null
   folded: boolean;
   allIn: boolean;
   isBot?: boolean;
   leaving?: boolean;
   playerHandType?: string;
+  revealedIndices?: number[]; // Array of card indices that have been revealed during showdown
 
   // UI-Specific Injected Fields (Fixes missing buttons/bets)
   bet?: number; // Visual bet amount (alias for currentBet)
@@ -66,7 +74,7 @@ export interface GameState {
   bbSeat: number;
   actionDeadline?: number | null;
   minRaise: number;
-  lastRaise: number;
+  lastRaiseAmount?: number; // Amount of the last raise (on top, not total bet). For opening bets, this equals the bet amount.
   betsThisRound: number[];
   currentRound: "preflop" | "flop" | "turn" | "river" | "showdown";
   handNumber: number;

@@ -350,6 +350,7 @@ export default function GamePage() {
                   isBot: Boolean(p.isBot),
                   leaving: Boolean(p.leaving),
                   playerHandType: p.playerHandType,
+                  revealedIndices: Array.isArray(p?.revealedIndices) ? p.revealedIndices : [],
                   // Preserve disconnected/ghost state from previous state if not explicitly updated
                   disconnected: p.disconnected ?? false,
                   left: p.left ?? false,
@@ -400,8 +401,8 @@ export default function GamePage() {
                 ? state.currentActorSeat
                 : 0,
             minRaise: typeof state.minRaise === "number" ? state.minRaise : 2,
-            lastRaise:
-              typeof state.lastRaise === "number" ? state.lastRaise : 0,
+            lastRaiseAmount:
+              typeof state.lastRaiseAmount === "number" ? state.lastRaiseAmount : undefined,
             betsThisRound: Array.isArray(state.betsThisRound)
               ? state.betsThisRound
               : [],
@@ -912,6 +913,7 @@ export default function GamePage() {
                 isBot: Boolean(p.isBot),
                 leaving: Boolean(p.leaving),
                 playerHandType: p.playerHandType,
+                revealedIndices: Array.isArray(p.revealedIndices) ? p.revealedIndices : [],
                 disconnected: false, // Clear disconnect status on sync
                 left: false,
                 isGhost: false,
@@ -936,7 +938,8 @@ export default function GamePage() {
               ? state.currentActorSeat
               : null,
           minRaise: typeof state.minRaise === "number" ? state.minRaise : 2,
-          lastRaise: typeof state.lastRaise === "number" ? state.lastRaise : 0,
+          lastRaiseAmount:
+            typeof state.lastRaiseAmount === "number" ? state.lastRaiseAmount : undefined,
           betsThisRound: Array.isArray(state.betsThisRound)
             ? state.betsThisRound
             : [],
@@ -1085,6 +1088,34 @@ export default function GamePage() {
     socket.emit("action", payload);
   };
 
+  const handleRevealCard = (cardIndex: number) => {
+    if (!gameState || !currentUserId) return;
+    
+    // Only allow revealing during showdown
+    if (gameState.currentRound !== "showdown") {
+      console.warn("[Game] ⚠️ Cannot reveal cards outside of showdown");
+      return;
+    }
+
+    const socket = getSocket();
+    const player = gameState.players.find((p) => p.id === currentUserId);
+
+    if (!player) {
+      console.error("[Game] ❌ Cannot reveal card - player not found");
+      return;
+    }
+
+    // Emit reveal action
+    const payload = {
+      gameId,
+      type: "reveal",
+      index: cardIndex,
+      seat: player.seat,
+    };
+
+    socket.emit("action", payload);
+  };
+
   return (
     <>
       {/* Game Finished Modal - RENDERED AT TOP LEVEL to persist when table state changes */}
@@ -1199,6 +1230,7 @@ export default function GamePage() {
               isRunningOut={isRunningOut}
               playerDisconnectTimers={playerDisconnectTimers}
               turnTimer={turnTimer}
+              onRevealCard={handleRevealCard}
             />
           </div>
 
@@ -1208,6 +1240,7 @@ export default function GamePage() {
               gameState={gameState}
               currentUserId={currentUserId}
               onAction={handleAction}
+              onRevealCard={handleRevealCard}
               isLocalGame={false}
             />
           )}

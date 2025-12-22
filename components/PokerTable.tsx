@@ -15,6 +15,7 @@ interface PokerTableProps {
   };
   currentUserId: string;
   onAction?: () => void;
+  onRevealCard?: (cardIndex: number) => void; // Callback for revealing a card during showdown
   playerNames?: Record<string, string>;
   isLocalGame?: boolean;
   isHeadsUp?: boolean;
@@ -58,6 +59,7 @@ export function PokerTable({
   gameState,
   currentUserId,
   onAction,
+  onRevealCard,
   playerNames,
   isLocalGame = false,
   isHeadsUp = false,
@@ -264,10 +266,18 @@ export function PokerTable({
   // Track bet indicators and community card animations - directly from gameState
   useEffect(() => {
     // Track hole cards for animation detection
+    // Update AFTER render to ensure isNewRound detection works correctly
     const currentHoleCards: Record<number, string[]> = {};
     gameState.players.forEach((player) => {
       if (player.holeCards && player.holeCards.length > 0) {
-        currentHoleCards[player.seat] = [...player.holeCards];
+        // Filter out null values and HIDDEN, convert to string array
+        // Only track actual card values for animation detection
+        currentHoleCards[player.seat] = player.holeCards.filter(
+          (c): c is string => c !== null && c !== "HIDDEN"
+        ) as string[];
+      } else {
+        // Clear tracking for this seat if no cards
+        currentHoleCards[player.seat] = [];
       }
     });
     prevHoleCardsRef.current = currentHoleCards;
@@ -412,11 +422,7 @@ export function PokerTable({
 
             return (
               <motion.div
-                key={`${card}-${i}-${gameState.handNumber || 0}-${
-                  isRunoutCard && isRunningOut
-                    ? runoutCards.join(",")
-                    : "static"
-                }`}
+                key={`community-${card}-${i}-${gameState.handNumber || 0}`}
                 initial={
                   // Hide immediately if card should be hidden (prevents flash)
                   shouldHide ? { y: -80, rotate: -180, opacity: 0 } : false
@@ -762,91 +768,121 @@ export function PokerTable({
                 </div>
 
                 {/* Hole cards - positioned above the player box, angled outward */}
-                {player.holeCards &&
-                  player.holeCards.length > 0 &&
-                  (() => {
-                    const showFaceDown = isShowdown
-                      ? false
-                      : isLocalGame
-                      ? player.isBot
-                      : player.id !== currentUserId;
+                {(() => {
+                  const isHero = player.id === currentUserId;
+                  const isShowdown = gameState.currentRound === "showdown";
 
-                    const shouldAnimateFold =
-                      isDisconnected && player.folded && !isShowdown;
+                  // Handle empty arrays: if folded player has empty holeCards, render two HIDDEN placeholders
+                  const cardsToRender =
+                    player.holeCards && player.holeCards.length > 0
+                      ? player.holeCards
+                      : player.folded
+                      ? ["HIDDEN", "HIDDEN"] // Default to two HIDDEN cards for folded players
+                      : []; // Don't render if no cards and not folded
 
-                    const prevCards =
-                      prevHoleCardsRef.current[player.seat] || [];
-                    const currentCards = player.holeCards || [];
-                    const cardsChanged =
-                      prevCards.length === 0 ||
-                      currentCards.length === 0 ||
-                      prevCards.join(",") !== currentCards.join(",");
-                    const isNewRound = cardsChanged;
+                  // Don't render if no cards to show
+                  if (cardsToRender.length === 0) {
+                    return null;
+                  }
 
-                    const seatIndex = SEAT_POSITIONS.findIndex(
-                      (pos, idx) => getSeatForPosition(idx) === player.seat
-                    );
-                    const angleInterval = (2 * Math.PI) / NUM_SEATS;
-                    const angle = angleInterval * seatIndex + Math.PI / 2;
-                    const cardAngle = Math.cos(angle) * 15;
+                  // Determine card visibility:
+                  // - For hero: always show actual cards (engine sends real cards)
+                  // - For others: show "HIDDEN" if card is not revealed, or actual card if revealed
+                  // - In showdown: cards may be partially revealed
+                  const shouldShowFaceDown = (card: string | null) => {
+                    if (isHero) return false; // Hero always sees their own cards
+                    if (isShowdown) {
+                      // In showdown, if card is "HIDDEN" or null, show back
+                      return card === "HIDDEN" || card === null;
+                    }
+                    // Before showdown, hide all non-hero cards
+                    return !isLocalGame || player.isBot;
+                  };
 
-                    return (
-                      <div
-                        className="absolute left-1/2 transform -translate-x-1/2 flex z-0 bottom-full"
-                        style={{
-                          gap: "-1rem",
-                          marginBottom: "-2.8rem", // Overlap player box by 40% (card height ~7rem * 0.4 = 2.8rem)
-                        }}
-                      >
-                        {player.holeCards.map((card, i) => {
-                          return (
-                            <motion.div
-                              key={`${card}-${i}-${gameState.handNumber || 0}-${
-                                gameState.currentRound || "preflop"
-                              }`}
-                              initial={
-                                isNewRound && !shouldAnimateFold
-                                  ? {
-                                      y: 40,
-                                      opacity: 0,
-                                      rotate: cardAngle,
-                                    }
-                                  : false
-                              }
-                              animate={
-                                shouldAnimateFold
-                                  ? {
-                                      rotate: -90,
-                                      y: 20,
-                                      opacity: 0.3,
-                                    }
-                                  : {
-                                      y: 0,
-                                      opacity: 1,
-                                      rotate: cardAngle + (i === 0 ? -2 : 2), // Slight fan effect
-                                    }
-                              }
-                              transition={{
-                                type: "spring",
-                                stiffness: 300,
-                                damping: 25,
-                                delay:
-                                  isNewRound && !shouldAnimateFold
-                                    ? i * 0.15
-                                    : i * 0.1,
-                              }}
-                              style={{ transform: "scale(1.1)" }}
-                            >
-                              <Card
-                                card={card as CardType}
-                                faceDown={showFaceDown}
-                              />
-                            </motion.div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
+                  // Check if cards are new (for animation trigger)
+                  // Compare current cards with previous cards to detect new cards
+                  const prevCards = prevHoleCardsRef.current[player.seat] || [];
+                  const currentCards = (player.holeCards || []).filter(
+                    (c): c is string => c !== null && c !== "HIDDEN"
+                  );
+                  // Only animate if this is the first time we see cards for this player
+                  // (prev was empty, now has cards)
+                  const isNewRound =
+                    prevCards.length === 0 && currentCards.length > 0;
+
+                  // Calculate card angle once per seat (stable across renders)
+                  const seatIndex = SEAT_POSITIONS.findIndex(
+                    (pos, idx) => getSeatForPosition(idx) === player.seat
+                  );
+                  const angleInterval = (2 * Math.PI) / NUM_SEATS;
+                  const angle = angleInterval * seatIndex + Math.PI / 2;
+                  const baseCardAngle = Math.cos(angle) * 15;
+                  // Pre-calculate final angles for each card (stable values)
+                  const card1Angle = baseCardAngle - 2;
+                  const card2Angle = baseCardAngle + 2;
+
+                  return (
+                    <div
+                      className="absolute left-1/2 transform -translate-x-1/2 flex z-0 bottom-full"
+                      style={{
+                        gap: "-1rem",
+                        marginBottom: "-2.8rem", // Overlap player box by 40% (card height ~7rem * 0.4 = 2.8rem)
+                      }}
+                    >
+                      {cardsToRender.map((card, i) => {
+                        const cardValue =
+                          card === "HIDDEN" || card === null ? "HIDDEN" : card;
+                        const showBack = shouldShowFaceDown(card);
+
+                        return (
+                          <motion.div
+                            key={`hole-${player.seat}-${cardValue}-${i}-${
+                              gameState.handNumber || 0
+                            }`}
+                            initial={
+                              isNewRound
+                                ? {
+                                    y: 40,
+                                    opacity: 0,
+                                    rotate: baseCardAngle,
+                                  }
+                                : false
+                            }
+                            animate={{
+                              y: 0,
+                              opacity: 1,
+                              rotate: i === 0 ? card1Angle : card2Angle,
+                            }}
+                            transition={
+                              isNewRound
+                                ? {
+                                    type: "spring",
+                                    stiffness: 300,
+                                    damping: 25,
+                                    delay: i * 0.15,
+                                  }
+                                : undefined // No transition when not new - prevents animation restart
+                            }
+                            className={cn(
+                              // Match player box styling: opacity-50 when folded, grayscale only when left
+                              (player.folded ||
+                                player.left ||
+                                player.disconnected) &&
+                                "opacity-50",
+                              player.left && "grayscale"
+                            )}
+                            style={{ transform: "scale(1.1)" }}
+                          >
+                            <Card
+                              card={cardValue as CardType | "HIDDEN"}
+                              faceDown={showBack}
+                            />
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </>
             )}
           </div>
