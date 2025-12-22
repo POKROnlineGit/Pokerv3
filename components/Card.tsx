@@ -4,30 +4,25 @@ import { Card as CardType } from '@/lib/types/poker'
 interface CardProps {
   card: CardType
   className?: string
-  size?: 'sm' | 'md' | 'lg'
   faceDown?: boolean
 }
 
-const sizeMap = {
-  sm: { width: 60, height: 84 },
-  md: { width: 80, height: 112 },
-  lg: { width: 100, height: 140 }
-}
+// Fixed card dimensions - all cards use the same size (in rem)
+const CARD_WIDTH = 5 // 5rem = 80px
+const CARD_HEIGHT = 7 // 7rem = 112px
 
-export function Card({ card, className = '', size = 'md', faceDown = false }: CardProps) {
-  const dimensions = sizeMap[size]
-  
+export function Card({ card, className = '', faceDown = false }: CardProps) {
   return (
     <div 
       className={`relative bg-white rounded-lg p-1 shadow-sm ${className}`} 
-      style={{ width: dimensions.width, height: dimensions.height }}
+      style={{ width: `${CARD_WIDTH}rem`, height: `${CARD_HEIGHT}rem` }}
     >
       {faceDown ? (
         <Image
           src="/cards/back.png"
           alt="Card back"
-          width={dimensions.width - 8}
-          height={dimensions.height - 8}
+          width={CARD_WIDTH * 16 - 8}
+          height={CARD_HEIGHT * 16 - 8}
           className="object-contain rounded-md"
           style={{ width: '100%', height: '100%' }}
           priority
@@ -36,8 +31,8 @@ export function Card({ card, className = '', size = 'md', faceDown = false }: Ca
         <Image
           src={`/cards/${card}.png`}
           alt={card}
-          width={dimensions.width - 8}
-          height={dimensions.height - 8}
+          width={CARD_WIDTH * 16 - 8}
+          height={CARD_HEIGHT * 16 - 8}
           className="object-contain rounded-md"
           style={{ width: '100%', height: '100%' }}
           priority

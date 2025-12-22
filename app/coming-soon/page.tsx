@@ -123,7 +123,7 @@ export default function ComingSoonPage() {
             transition={{ type: "spring", stiffness: 100, damping: 15 }}
             className="text-7xl md:text-9xl font-bold text-white mb-6 drop-shadow-2xl"
             style={{
-              textShadow: '0 0 40px rgba(154, 31, 64, 0.8), 0 0 80px rgba(154, 31, 64, 0.5), 0 0 120px rgba(154, 31, 64, 0.3)',
+              textShadow: '0 0 2.5rem rgba(154, 31, 64, 0.8), 0 0 5rem rgba(154, 31, 64, 0.5), 0 0 7.5rem rgba(154, 31, 64, 0.3)',
             }}
           >
             PokerOnline
@@ -157,7 +157,7 @@ export default function ComingSoonPage() {
               onClick={handleDeveloperLogin}
               className="bg-[#9A1F40] hover:bg-[#7A1A30] text-white px-8 py-6 text-lg font-semibold rounded-xl shadow-2xl transition-all duration-300"
               style={{
-                boxShadow: '0 10px 40px rgba(154, 31, 64, 0.4), 0 0 20px rgba(154, 31, 64, 0.2)',
+                boxShadow: '0 0.625rem 2.5rem rgba(154, 31, 64, 0.4), 0 0 1.25rem rgba(154, 31, 64, 0.2)',
               }}
             >
               Developer Login

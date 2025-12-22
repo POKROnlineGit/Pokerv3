@@ -124,7 +124,7 @@ export default function HomePage() {
             transition={{ type: "spring", stiffness: 100, damping: 15 }}
             className="text-7xl md:text-9xl font-bold text-white mb-6 drop-shadow-2xl"
             style={{
-              textShadow: '0 0 40px rgba(154, 31, 64, 0.8), 0 0 80px rgba(154, 31, 64, 0.5)',
+              textShadow: '0 0 2.5rem rgba(154, 31, 64, 0.8), 0 0 5rem rgba(154, 31, 64, 0.5)',
             }}
           >
             PokerOnline

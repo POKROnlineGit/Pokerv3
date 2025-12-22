@@ -28,7 +28,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`px-4 py-3 rounded-lg shadow-lg animate-in slide-in-from-top-5 min-w-[300px] ${
+            className={`px-4 py-3 rounded-lg shadow-lg animate-in slide-in-from-top-5 min-w-[18.75rem] ${
               toast.variant === 'destructive'
                 ? 'bg-destructive text-destructive-foreground'
                 : 'bg-background border text-foreground'

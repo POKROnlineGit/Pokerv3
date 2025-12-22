@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
 import { GameState, ActionType } from "@/lib/types/poker";
 import { cn } from "@/lib/utils";
 
@@ -14,574 +15,456 @@ interface ActionPopupProps {
   isLocalGame?: boolean;
 }
 
+type QueuedAction = "fold" | "check" | "call" | null;
+
 export function ActionPopup({
   gameState,
   currentUserId,
   onAction,
   isLocalGame = false,
 }: ActionPopupProps) {
-  const [betAmount, setBetAmount] = useState(0);
+  const [queuedAction, setQueuedAction] = useState<QueuedAction>(null);
   const [raiseAmount, setRaiseAmount] = useState(0);
-  const [queuedAction, setQueuedAction] = useState<ActionType | null>(null);
+  const [showRaiseMenu, setShowRaiseMenu] = useState(false);
+  const prevHandNumberRef = useRef<number | null>(null);
+  const prevChipsToCallRef = useRef<number | null>(null);
+  const prevRoundRef = useRef<string | null>(null);
 
-  // Find current player
-  const currentPlayer = useMemo(() => {
+  // Find hero (current player)
+  const hero = useMemo(() => {
     if (!gameState || !currentUserId) return null;
     return gameState.players.find((p) => p.id === currentUserId);
   }, [gameState, currentUserId]);
 
-  // Check if player is in hand
-  const isInHand = useMemo(() => {
-    return currentPlayer && !currentPlayer.folded && currentPlayer.chips > 0;
-  }, [currentPlayer]);
+  // Check if player is in game and not LEFT
+  const isPlayerInGame = useMemo(() => {
+    if (!gameState || !currentUserId) return false;
+    const player = gameState.players.find((p) => p.id === currentUserId);
+    if (!player) return false;
+
+    // Check if player has LEFT status
+    const hasLeft =
+      player.left || gameState.left_players?.includes(currentUserId) || false;
+    return !hasLeft;
+  }, [gameState, currentUserId]);
 
   // Check if it's player's turn
   const isMyTurn = useMemo(() => {
-    if (!gameState || !currentPlayer) return false;
-    return gameState.currentActorSeat === currentPlayer.seat;
-  }, [gameState, currentPlayer]);
+    if (!gameState || !hero) return false;
+    return gameState.currentActorSeat === hero.seat;
+  }, [gameState, hero]);
+
+  // Calculate highest bet
+  const highestBet = useMemo(() => {
+    if (!gameState?.players) return 0;
+    return Math.max(...gameState.players.map((p) => p.currentBet || 0), 0);
+  }, [gameState]);
 
   // Calculate chips to call
   const chipsToCall = useMemo(() => {
-    if (!gameState || !currentPlayer) return 0;
+    if (!hero) return 0;
+    return Math.max(0, highestBet - (hero.currentBet || 0));
+  }, [hero, highestBet]);
 
-    // Calculate max bet from all players (more reliable than betsThisRound array)
-    const maxBet = gameState.players
-      ? Math.max(...gameState.players.map((p) => p.currentBet || 0), 0)
-      : 0;
-
-    const myBet = currentPlayer.currentBet || 0;
-    return Math.max(0, maxBet - myBet);
-  }, [gameState, currentPlayer]);
-
-  // Check if can check
+  // Check if can check (no bet to call)
   const canCheck = useMemo(() => {
     return chipsToCall === 0;
   }, [chipsToCall]);
 
-  // Check if someone has bet/raised this round
-  const hasSomeoneActed = useMemo(() => {
-    if (!gameState || !gameState.players) return false;
-    // Check if any player has bet more than 0
-    return gameState.players.some((p) => (p.currentBet || 0) > 0);
+  // Calculate pot size (main pot + side pots + current bets)
+  const totalPot = useMemo(() => {
+    if (!gameState) return 0;
+    const mainPot = gameState.pot || 0;
+    const sidePotTotal =
+      gameState.sidePots?.reduce((sum, pot) => sum + (pot?.amount || 0), 0) ||
+      0;
+    const currentBetsTotal =
+      gameState.players?.reduce((sum, p) => sum + (p.currentBet || 0), 0) || 0;
+    return mainPot + sidePotTotal + currentBetsTotal;
   }, [gameState]);
 
-  // Get min raise amount with improved fallback
-  const minRaise = useMemo(() => {
-    if (gameState?.minRaise && gameState.minRaise > 0) return gameState.minRaise;
-    // Fallback: Min raise is usually at least 1 BB
-    const bbPlayer = gameState?.players?.find((p: any) => p.seat === gameState?.bbSeat);
-    return bbPlayer?.currentBet || gameState?.bigBlind || 2;
+  // Get big blind amount
+  const bigBlind = useMemo(() => {
+    if (gameState?.bigBlind) return gameState.bigBlind;
+    if (gameState?.config?.bigBlind) return gameState.config.bigBlind;
+    // Fallback: find BB player's bet
+    if (gameState?.bbSeat) {
+      const bbPlayer = gameState.players.find(
+        (p) => p.seat === gameState.bbSeat
+      );
+      return bbPlayer?.currentBet || 2;
+    }
+    return 2;
   }, [gameState]);
 
-  // Get player stack
-  const myStack = useMemo(() => {
-    return currentPlayer?.chips || 0;
-  }, [currentPlayer]);
+  // Calculate min/max raise amounts
+  const raiseLimits = useMemo(() => {
+    if (!hero || !gameState) return { min: 0, max: 0 };
 
-  // Calculate bet/raise limits
-  const betLimits = useMemo(() => {
-    if (!currentPlayer || !gameState)
-      return { min: 0, max: 0, canBet: false, canRaise: false };
+    const minRaise = Math.max(gameState.minRaise || bigBlind * 2, bigBlind * 2);
+    const maxRaise = hero.chips;
 
-    // Ensure minRaise is at least 2 (big blind fallback if not provided)
-    const effectiveMinRaise = minRaise > 0 ? minRaise : 2;
+    return { min: minRaise, max: maxRaise };
+  }, [hero, gameState, bigBlind]);
 
-    if (canCheck) {
-      // Can bet (no one has bet yet)
-      const canBet = myStack >= effectiveMinRaise;
-      return {
-        min: effectiveMinRaise,
-        max: myStack,
-        canBet,
-        canRaise: false,
-      };
-    } else {
-      // Can raise (someone has bet, need to call first, then raise)
-      const remainingChips = myStack - chipsToCall;
-      const canRaise = remainingChips >= effectiveMinRaise;
-      return {
-        min: effectiveMinRaise,
-        max: Math.max(0, remainingChips),
-        canBet: false,
-        canRaise,
-      };
-    }
-  }, [canCheck, minRaise, myStack, chipsToCall, currentPlayer, gameState]);
-
-  // Initialize bet/raise amounts
+  // Initialize raise amount to min when raise menu opens
   useEffect(() => {
-    if (canCheck && betLimits.min > 0) {
-      setBetAmount(betLimits.min);
-    } else if (!canCheck && betLimits.min > 0) {
-      setRaiseAmount(betLimits.min);
+    if (showRaiseMenu && raiseLimits.min > 0) {
+      setRaiseAmount(raiseLimits.min);
     }
-  }, [canCheck, betLimits.min]);
+  }, [showRaiseMenu, raiseLimits.min]);
 
-  // Reset amounts when turn changes
-  useEffect(() => {
-    setBetAmount(0);
-    setRaiseAmount(0);
-  }, [isMyTurn]);
-
-  // Track chipsToCall when action was queued to detect raises
-  const [chipsToCallWhenQueued, setChipsToCallWhenQueued] = useState<
-    number | null
-  >(null);
-
-  // When action is queued, store the current chipsToCall
-  useEffect(() => {
-    if (queuedAction === "check" || queuedAction === "call") {
-      setChipsToCallWhenQueued(chipsToCall);
-    } else if (queuedAction === null || queuedAction === "fold") {
-      setChipsToCallWhenQueued(null);
-    }
-  }, [queuedAction, chipsToCall]);
-
-  // If a raise occurs after queuing check/call, automatically change to fold
-  // This must run BEFORE the auto-execute effect
-  useEffect(() => {
-    if (queuedAction && (queuedAction === "check" || queuedAction === "call")) {
-      // If queued check and someone bet (chipsToCall > 0), change to fold
-      if (queuedAction === "check" && chipsToCall > 0) {
-        setQueuedAction("fold");
-        setChipsToCallWhenQueued(null);
-        return;
-      }
-
-      // If chipsToCall increased from when it was queued (someone raised), change to fold
-      if (
-        chipsToCallWhenQueued !== null &&
-        chipsToCall > chipsToCallWhenQueued
-      ) {
-        setQueuedAction("fold");
-        setChipsToCallWhenQueued(null);
-      }
-    }
-  }, [chipsToCall, chipsToCallWhenQueued, queuedAction]);
-
-  // Auto-execute queued action when it becomes player's turn
-  // Validate the action before executing to prevent invalid actions
+  // Auto-execute queued action when turn arrives
   useEffect(() => {
     if (isMyTurn && queuedAction) {
-      // Validate the action is still valid before executing
-      let actionToExecute = queuedAction;
-
-      // If queued check but chipsToCall > 0, must fold instead (safety check)
-      if (queuedAction === "check" && chipsToCall > 0) {
-        actionToExecute = "fold";
-      }
-      // If queued call but chipsToCall increased significantly, fold instead
-      // (This is a safety check - the conversion should have happened above)
-      else if (
-        queuedAction === "call" &&
-        chipsToCallWhenQueued !== null &&
-        chipsToCall > chipsToCallWhenQueued
-      ) {
-        actionToExecute = "fold";
+      // Execute the queued action
+      if (queuedAction === "fold") {
+        onAction("fold");
+      } else if (queuedAction === "check") {
+        onAction("check");
+      } else if (queuedAction === "call") {
+        onAction("call", highestBet);
       }
 
-      // Execute the validated action
-      onAction(actionToExecute);
+      // Clear queue after execution
       setQueuedAction(null);
-      setChipsToCallWhenQueued(null);
+      setShowRaiseMenu(false);
     }
-  }, [isMyTurn, queuedAction, chipsToCall, chipsToCallWhenQueued, onAction]);
+  }, [isMyTurn, queuedAction, onAction, highestBet]);
 
-  // Track previous phase and hand number to detect resets
-  const prevPhaseRef = useRef<string | null>(null);
-  const prevHandNumberRef = useRef<number | null>(null);
-  const prevActorSeatRef = useRef<number | null>(null);
-
-  // CRITICAL: Clear queued actions when phase changes OR hand number increments
-  // This prevents stale queued actions from executing after a hand reset
-  // (e.g., if player leaves and hand resets from Flop → Preflop)
+  // Safety cleanup: Clear queue on hand number change
   useEffect(() => {
     if (!gameState) return;
 
-    const currentPhase = gameState.currentRound;
     const currentHandNumber = gameState.handNumber;
 
-    // Detect phase change (including reversals like Flop → Preflop)
-    const phaseChanged =
-      prevPhaseRef.current !== null &&
-      prevPhaseRef.current !== currentPhase;
-
-    // Detect hand number increment (new hand started)
-    const handIncremented =
-      prevHandNumberRef.current !== null &&
-      currentHandNumber > prevHandNumberRef.current;
-
-    // Clear queued actions if phase changed OR hand incremented
-    if (phaseChanged || handIncremented) {
-      console.log(
-        "[ActionPopup] Clearing queued action due to:",
-        phaseChanged ? `phase change (${prevPhaseRef.current} → ${currentPhase})` : "",
-        handIncremented ? `hand increment (${prevHandNumberRef.current} → ${currentHandNumber})` : ""
-      );
-      setQueuedAction(null);
-      setChipsToCallWhenQueued(null);
-    }
-
-    // Update refs for next comparison
-    prevPhaseRef.current = currentPhase;
-    prevHandNumberRef.current = currentHandNumber;
-  }, [gameState?.currentRound, gameState?.handNumber]);
-
-  // CRITICAL: Clear queued actions when currentActorSeat changes
-  // This ensures stale queued actions don't fire incorrectly when the turn advances
-  // (e.g., if "Auto-Check" was enabled and turn cycles back to player)
-  useEffect(() => {
-    if (!gameState || !currentPlayer) return;
-
-    const currentActorSeat = gameState.currentActorSeat;
-    const isNowMyTurn = currentActorSeat === currentPlayer.seat;
-
-    // If currentActorSeat changed and it's NOT currently the player's turn
-    // Clear any queued actions to prevent stale queues from firing
     if (
-      prevActorSeatRef.current !== null &&
-      currentActorSeat !== prevActorSeatRef.current &&
-      !isNowMyTurn &&
-      queuedAction
+      prevHandNumberRef.current !== null &&
+      currentHandNumber !== prevHandNumberRef.current
     ) {
-      console.log(
-        "[ActionPopup] Clearing queued action - turn advanced (not player's turn)",
-        {
-          previousActorSeat: prevActorSeatRef.current,
-          currentActorSeat,
-          queuedAction,
-        }
-      );
       setQueuedAction(null);
-      setChipsToCallWhenQueued(null);
+      setShowRaiseMenu(false);
+      // Reset chipsToCall reference for new hand
+      prevChipsToCallRef.current = null;
     }
 
-    // Update ref for next comparison
-    prevActorSeatRef.current = currentActorSeat;
-  }, [gameState?.currentActorSeat, currentPlayer, queuedAction]);
+    prevHandNumberRef.current = currentHandNumber;
+  }, [gameState?.handNumber]);
 
-  // Show popup conditions
-  const shouldShow = useMemo(() => {
-    if (!isInHand || !gameState) return false;
+  // Reset chipsToCall reference when betting round changes (new street)
+  useEffect(() => {
+    if (!gameState) return;
 
-    // Show if it's my turn
-    if (isMyTurn) {
-      // VERIFICATION: Log when action controls appear in Heads-Up games
-      const isButton = currentPlayer?.seat === gameState.buttonSeat;
-      const isBB = currentPlayer?.seat === gameState.bbSeat;
+    const currentRound = gameState.currentRound;
 
-      // Preflop: Dealer (Button) should see action controls first
-      if (gameState.currentRound === "preflop") {
-        const buttonPlayer = gameState.players.find(
-          (p) => p.seat === gameState.buttonSeat
-        );
-        const bbPlayer = gameState.players.find(
-          (p) => p.seat === gameState.bbSeat
-        );
-
-        console.log(
-          "[ActionPopup] 🎯 PREFLOP ACTION CONTROLS VERIFICATION (Heads-Up):",
-          {
-            currentRound: gameState.currentRound,
-            currentPlayerSeat: currentPlayer?.seat,
-            currentPlayerName: currentPlayer?.name,
-            isButton: isButton,
-            isBB: isBB,
-            buttonSeat: gameState.buttonSeat,
-            bbSeat: gameState.bbSeat,
-            currentActorSeat: gameState.currentActorSeat,
-            status: isButton
-              ? "✅ CORRECT - Dealer (Button) sees action controls first"
-              : isBB
-              ? "❌ INCORRECT - Big Blind sees action controls first (backend fix failed)"
-              : "⚠️ UNEXPECTED - Neither Button nor BB",
-          }
-        );
-      }
-
-      // Flop: Big Blind (Non-Dealer) should see action controls first
-      if (gameState.currentRound === "flop") {
-        const buttonPlayer = gameState.players.find(
-          (p) => p.seat === gameState.buttonSeat
-        );
-        const bbPlayer = gameState.players.find(
-          (p) => p.seat === gameState.bbSeat
-        );
-
-        console.log(
-          "[ActionPopup] 🎯 POST-FLOP ACTION CONTROLS VERIFICATION (Heads-Up):",
-          {
-            currentRound: gameState.currentRound,
-            currentPlayerSeat: currentPlayer?.seat,
-            currentPlayerName: currentPlayer?.name,
-            isButton: isButton,
-            isBB: isBB,
-            buttonSeat: gameState.buttonSeat,
-            bbSeat: gameState.bbSeat,
-            currentActorSeat: gameState.currentActorSeat,
-            status: isBB
-              ? "✅ CORRECT - Big Blind sees action controls first"
-              : isButton
-              ? "❌ INCORRECT - Button sees action controls first (backend fix failed)"
-              : "⚠️ UNEXPECTED - Neither Button nor BB",
-          }
-        );
-      }
-      return true;
+    if (
+      prevRoundRef.current !== null &&
+      prevRoundRef.current !== currentRound &&
+      ["preflop", "flop", "turn", "river"].includes(currentRound)
+    ) {
+      // New betting round started - reset chipsToCall reference
+      prevChipsToCallRef.current = null;
     }
 
-    // Show pre-emptively if not my turn but I'm still in the hand
-    // Only show if we're in a betting round (not waiting, showdown, or complete)
-    const isBettingRound = ["preflop", "flop", "turn", "river"].includes(
-      gameState.currentRound
-    );
-    return isBettingRound;
-  }, [isInHand, isMyTurn, gameState]);
+    prevRoundRef.current = currentRound;
+  }, [gameState?.currentRound]);
 
+  // Safety cleanup: Clear queue if player leaves hand
+  useEffect(() => {
+    if (!isPlayerInGame || !hero || hero.folded || hero.chips === 0) {
+      setQueuedAction(null);
+      setShowRaiseMenu(false);
+    }
+  }, [isPlayerInGame, hero]);
+
+  // Clear queued call/check when there's a raise (chipsToCall increases)
+  useEffect(() => {
+    if (!gameState || !hero) return;
+
+    const currentChipsToCall = chipsToCall;
+
+    // Only clear queue if chipsToCall increased (someone raised)
+    if (
+      prevChipsToCallRef.current !== null &&
+      currentChipsToCall > prevChipsToCallRef.current &&
+      queuedAction &&
+      (queuedAction === "call" || queuedAction === "check")
+    ) {
+      // Someone raised - clear queued call/check (should fold instead)
+      console.log("[ActionPopup] Clearing queued action due to raise", {
+        previousChipsToCall: prevChipsToCallRef.current,
+        currentChipsToCall,
+        queuedAction,
+      });
+      setQueuedAction(null);
+    }
+
+    prevChipsToCallRef.current = currentChipsToCall;
+  }, [chipsToCall, gameState, hero, queuedAction]);
+
+  // Hide component if player not in game or no game state
+  if (!gameState || !isPlayerInGame || !hero) {
+    return null;
+  }
+
+  // Handle button clicks
   const handleFold = () => {
-    onAction("fold");
+    if (isMyTurn) {
+      onAction("fold");
+    } else {
+      // Toggle queue
+      setQueuedAction(queuedAction === "fold" ? null : "fold");
+    }
   };
 
   const handleCheck = () => {
-    onAction("check");
+    if (isMyTurn) {
+      onAction("check");
+    } else {
+      // Toggle queue
+      setQueuedAction(queuedAction === "check" ? null : "check");
+    }
   };
 
   const handleCall = () => {
-    onAction("call");
-  };
-
-  const handleBet = () => {
-    if (betAmount >= betLimits.min && betAmount <= betLimits.max) {
-      onAction("bet", betAmount);
+    if (isMyTurn) {
+      onAction("call", highestBet);
+    } else {
+      // Toggle queue
+      setQueuedAction(queuedAction === "call" ? null : "call");
     }
   };
 
   const handleRaise = () => {
-    const totalRaise = chipsToCall + raiseAmount;
-    if (raiseAmount >= betLimits.min && totalRaise <= myStack) {
-      onAction("raise", raiseAmount);
+    if (isMyTurn) {
+      // Toggle raise menu
+      setShowRaiseMenu(!showRaiseMenu);
+    }
+    // Do nothing if not player's turn (cannot queue raise)
+  };
+
+  const handleRaiseSubmit = () => {
+    if (!hero) return;
+    if (raiseAmount >= raiseLimits.min && raiseAmount <= raiseLimits.max) {
+      // Determine action type: "bet" if can check (no bet to call), "raise" otherwise
+      const actionType: ActionType = canCheck ? "bet" : "raise";
+      // For bet: amount is the bet amount itself
+      // For raise: amount is total bet amount (chipsToCall + raiseAmount)
+      const totalAmount = canCheck ? raiseAmount : chipsToCall + raiseAmount;
+      onAction(actionType, totalAmount);
+      setShowRaiseMenu(false);
+      setRaiseAmount(raiseLimits.min);
     }
   };
 
-  const handleAllIn = () => {
-    onAction("allin");
+  const handleQuickSize = (multiplier: number, isAllIn: boolean = false) => {
+    if (!hero) return;
+
+    if (isAllIn) {
+      // All-In: raise amount is remaining chips after call
+      const allInRaise = Math.max(0, hero.chips - chipsToCall);
+      setRaiseAmount(Math.floor(allInRaise));
+    } else {
+      const potSize = totalPot * multiplier;
+      const totalAmount = chipsToCall + potSize;
+      const clampedAmount = Math.min(totalAmount, hero.chips);
+      const raiseOnTop = Math.max(raiseLimits.min, clampedAmount - chipsToCall);
+      setRaiseAmount(Math.floor(raiseOnTop));
+    }
   };
 
-  if (!shouldShow) return null;
+  // Determine button states
+  const foldQueued = queuedAction === "fold";
+  const checkQueued = queuedAction === "check";
+  const callQueued = queuedAction === "call";
+  const checkDisabled = !canCheck && !isMyTurn;
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 20, opacity: 0 }}
-        transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className={cn(
-          "fixed bottom-4 right-4 z-50",
-          "w-auto min-w-[200px] max-w-[280px]"
-        )}
-      >
-        <div
-          className={cn(
-            "bg-[#1a1a1a] border rounded-xl shadow-xl p-3",
-            "backdrop-blur-sm",
-            isMyTurn
-              ? "border-[#9A1F40] shadow-[0_0_20px_rgba(154,31,64,0.4)]"
-              : "border-gray-600 opacity-80"
-          )}
-        >
-          {/* Header - only show when it's player's turn */}
-          {isMyTurn && (
-            <div className="text-center mb-2">
-              <h3 className="text-sm font-semibold text-white">Your Turn</h3>
-            </div>
-          )}
-
-          {/* Queued action indicator */}
-          {queuedAction && !isMyTurn && (
-            <div className="mb-2 p-2 bg-[#9A1F40]/20 border border-[#9A1F40]/50 rounded text-center">
-              <p className="text-xs text-[#9A1F40] font-medium">
-                Queued:{" "}
-                {queuedAction === "check"
-                  ? "Check"
-                  : queuedAction === "call"
-                  ? `Call ($${chipsToCall})`
-                  : "Fold"}
-              </p>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          {isMyTurn ? (
-            <>
-              {/* Fold and Check/Call buttons */}
-              <div className="flex gap-2 mb-2">
-                <Button
-                  onClick={handleFold}
-                  variant="destructive"
-                  className="flex-1 h-9 text-sm font-medium bg-red-600 hover:bg-red-700"
-                >
-                  Fold
-                </Button>
-                {canCheck ? (
-                  <Button
-                    onClick={handleCheck}
-                    variant="outline"
-                    className="flex-1 h-9 text-sm font-medium border border-white text-white hover:bg-white hover:text-black"
-                  >
-                    Check
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleCall}
-                    variant="outline"
-                    className="flex-1 h-9 text-sm font-medium border border-white text-white hover:bg-white hover:text-black"
-                  >
-                    Call ${chipsToCall}
-                  </Button>
-                )}
+    <div className="fixed bottom-6 right-6 z-50">
+      {/* Raise Menu (expanded above buttons) */}
+      <AnimatePresence>
+        {showRaiseMenu && isMyTurn && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="mb-4 bg-[#1a1a1a] border border-[#9A1F40] rounded-xl shadow-xl p-4 min-w-[20rem]"
+          >
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="text-center">
+                <h3 className="text-sm font-semibold text-white mb-1">
+                  Raise Amount
+                </h3>
+                <p className="text-xs text-gray-400">
+                  Total: ${chipsToCall + raiseAmount}
+                </p>
               </div>
 
-              {/* Bet/Raise section */}
-              {canCheck && betLimits.canBet ? (
-                // Bet section
-                <div className="space-y-2 mb-2">
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-300">Bet</span>
-                      <span className="text-sm font-bold text-white">
-                        ${betAmount}
-                      </span>
-                    </div>
-                    <Slider
-                      value={[betAmount]}
-                      onValueChange={([value]) => setBetAmount(value)}
-                      min={betLimits.min}
-                      max={betLimits.max}
-                      step={1}
-                      className="w-full"
-                    />
-                    <div className="flex justify-between text-[10px] text-gray-400">
-                      <span>${betLimits.min}</span>
-                      <span>${betLimits.max}</span>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={handleBet}
-                    disabled={
-                      betAmount < betLimits.min || betAmount > betLimits.max
-                    }
-                    className="w-full h-9 text-sm font-medium bg-[#9A1F40] hover:bg-[#7a182f] text-white"
-                  >
-                    Bet ${betAmount}
-                  </Button>
+              {/* Slider */}
+              <div className="space-y-2">
+                <Slider
+                  value={[raiseAmount]}
+                  onValueChange={([value]) => {
+                    const intValue = Math.floor(value);
+                    const clamped = Math.max(
+                      raiseLimits.min,
+                      Math.min(raiseLimits.max, intValue)
+                    );
+                    setRaiseAmount(clamped);
+                  }}
+                  min={raiseLimits.min}
+                  max={raiseLimits.max}
+                  step={1}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-[0.625rem] text-gray-400">
+                  <span>${raiseLimits.min}</span>
+                  <span>${raiseLimits.max}</span>
                 </div>
-              ) : !canCheck && betLimits.canRaise ? (
-                // Raise section
-                <div className="space-y-2 mb-2">
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-300">Raise</span>
-                      <span className="text-sm font-bold text-white">
-                        ${raiseAmount}
-                      </span>
-                    </div>
-                    <Slider
-                      value={[raiseAmount]}
-                      onValueChange={([value]) => setRaiseAmount(value)}
-                      min={betLimits.min}
-                      max={betLimits.max}
-                      step={1}
-                      className="w-full"
-                    />
-                    <div className="flex justify-between text-[10px] text-gray-400">
-                      <span>${betLimits.min}</span>
-                      <span>${betLimits.max}</span>
-                    </div>
-                    <div className="text-[10px] text-gray-500 text-center">
-                      Total: ${chipsToCall + raiseAmount}
-                    </div>
-                  </div>
-                  <Button
-                    onClick={handleRaise}
-                    disabled={
-                      raiseAmount < betLimits.min ||
-                      chipsToCall + raiseAmount > myStack
-                    }
-                    className="w-full h-9 text-sm font-medium bg-[#9A1F40] hover:bg-[#7a182f] text-white"
-                  >
-                    Raise ${raiseAmount}
-                  </Button>
-                </div>
-              ) : null}
+              </div>
 
-              {/* All-in button */}
-              {myStack > 0 && (
-                <Button
-                  onClick={handleAllIn}
-                  className="w-full h-9 text-sm font-medium bg-red-600 hover:bg-red-700 text-white"
-                >
-                  All-In ${myStack}
-                </Button>
-              )}
-            </>
-          ) : (
-            // Pre-emptive actions (not my turn yet) - single button
-            <div>
-              {canCheck ? (
-                <Button
-                  onClick={() => {
-                    // If already queued (check or fold), clear it. Otherwise queue check
-                    if (queuedAction === "check" || queuedAction === "fold") {
-                      setQueuedAction(null);
-                    } else {
-                      setQueuedAction("check");
-                    }
+              {/* Numeric Input */}
+              <div className="space-y-1">
+                <Input
+                  type="number"
+                  value={raiseAmount}
+                  onChange={(e) => {
+                    const value = Math.floor(Number(e.target.value));
+                    const clamped = Math.max(
+                      raiseLimits.min,
+                      Math.min(raiseLimits.max, value)
+                    );
+                    setRaiseAmount(clamped);
                   }}
-                  variant="outline"
-                  className={cn(
-                    "w-full h-9 text-sm font-medium border",
-                    queuedAction === "check" || queuedAction === "fold"
-                      ? "border-[#9A1F40] bg-[#9A1F40]/20 text-[#9A1F40]"
-                      : "border-gray-500 text-gray-300 hover:bg-gray-700"
-                  )}
-                >
-                  {queuedAction === "check"
-                    ? "✓ Check/Fold"
-                    : queuedAction === "fold"
-                    ? "✓ Fold (raised)"
-                    : "Check/Fold"}
-                </Button>
-              ) : (
+                  min={raiseLimits.min}
+                  max={raiseLimits.max}
+                  className="w-full bg-[#2a2a2a] border-gray-600 text-white text-center"
+                />
+              </div>
+
+              {/* Quick-Size Buttons */}
+              <div className="grid grid-cols-4 gap-2">
                 <Button
-                  onClick={() => {
-                    // If already queued (call or fold), clear it. Otherwise queue call
-                    if (queuedAction === "call" || queuedAction === "fold") {
-                      setQueuedAction(null);
-                    } else {
-                      setQueuedAction("call");
-                    }
-                  }}
+                  onClick={() => handleQuickSize(0.5)}
                   variant="outline"
-                  className={cn(
-                    "w-full h-9 text-sm font-medium border",
-                    queuedAction === "call" || queuedAction === "fold"
-                      ? "border-[#9A1F40] bg-[#9A1F40]/20 text-[#9A1F40]"
-                      : "border-gray-500 text-gray-300 hover:bg-gray-700"
-                  )}
+                  size="sm"
+                  className="text-xs h-8 bg-[#2a2a2a] border-gray-600 text-gray-300 hover:bg-gray-700"
                 >
-                  {queuedAction === "call"
-                    ? `✓ Call/Fold ($${chipsToCall})`
-                    : queuedAction === "fold"
-                    ? "✓ Fold (raised)"
-                    : `Call/Fold ($${chipsToCall})`}
+                  1/2 Pot
                 </Button>
-              )}
+                <Button
+                  onClick={() => handleQuickSize(0.75)}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-8 bg-[#2a2a2a] border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  3/4 Pot
+                </Button>
+                <Button
+                  onClick={() => handleQuickSize(1)}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-8 bg-[#2a2a2a] border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  Pot
+                </Button>
+                <Button
+                  onClick={() => handleQuickSize(1, true)}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-8 bg-red-600 border-red-600 text-white hover:bg-red-700"
+                >
+                  All-In
+                </Button>
+              </div>
+
+              {/* Submit Button */}
+              <Button
+                onClick={handleRaiseSubmit}
+                disabled={
+                  raiseAmount < raiseLimits.min || raiseAmount > raiseLimits.max
+                }
+                className="w-full h-9 bg-[#9A1F40] hover:bg-[#7a182f] text-white"
+              >
+                Raise ${raiseAmount}
+              </Button>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Action Buttons - Horizontal Layout (Right to Left: Call, Raise, Check, Fold) */}
+      <div className="flex items-center gap-2 flex-row-reverse">
+        {/* Fold Button (rightmost) */}
+        <Button
+          onClick={handleFold}
+          disabled={isMyTurn && showRaiseMenu}
+          className={cn(
+            "h-12 px-6 text-sm font-medium transition-all",
+            foldQueued
+              ? "bg-red-600 border-2 border-red-600 text-white shadow-lg"
+              : isMyTurn
+              ? "bg-red-600 border-2 border-red-600 text-white hover:bg-red-700"
+              : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
           )}
-        </div>
-      </motion.div>
-    </AnimatePresence>
+        >
+          {foldQueued ? "✓ Fold" : "Fold"}
+        </Button>
+
+        {/* Check Button */}
+        <Button
+          onClick={handleCheck}
+          disabled={checkDisabled || (isMyTurn && showRaiseMenu)}
+          className={cn(
+            "h-12 px-6 text-sm font-medium transition-all",
+            checkQueued
+              ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
+              : isMyTurn && canCheck
+              ? "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
+              : canCheck && !isMyTurn
+              ? "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
+              : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 opacity-60 cursor-not-allowed"
+          )}
+        >
+          {checkQueued ? "✓ Check" : "Check"}
+        </Button>
+
+        {/* Raise Button */}
+        <Button
+          onClick={handleRaise}
+          disabled={!isMyTurn || hero.chips < raiseLimits.min}
+          className={cn(
+            "h-12 px-6 text-sm font-medium transition-all",
+            isMyTurn && showRaiseMenu
+              ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
+              : isMyTurn
+              ? "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
+              : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 opacity-30 cursor-not-allowed"
+          )}
+        >
+          Raise
+        </Button>
+
+        {/* Call Button (leftmost, conditional) */}
+        {highestBet > (hero.currentBet || 0) && (
+          <Button
+            onClick={handleCall}
+            disabled={isMyTurn && showRaiseMenu}
+            className={cn(
+              "h-12 px-6 text-sm font-medium transition-all",
+              callQueued
+                ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
+                : isMyTurn
+                ? "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
+                : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
+            )}
+          >
+            {callQueued ? "✓ Call" : `Call $${chipsToCall}`}
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }

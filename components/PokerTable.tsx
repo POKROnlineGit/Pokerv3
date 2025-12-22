@@ -68,58 +68,84 @@ export function PokerTable({
 }: PokerTableProps) {
   const { isEnabled: debugMode } = useDebugMode();
 
-  // Turn timer state
-  const [remainingTime, setRemainingTime] = useState<number | null>(null);
+  // Turn timer state - use ref to track current timer to avoid stale closures
   const [progressPercent, setProgressPercent] = useState<number>(0);
-  const animationFrameRef = useRef<number | null>(null);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const currentTimerRef = useRef<typeof turnTimer>(null);
 
-  // Update timer progress
+  // Track bets for animation and display
+  const [betIndicators, setBetIndicators] = useState<
+    Record<number, { amount: number; animating: boolean }>
+  >({});
+  const prevBetsRef = useRef<Record<number, number>>({});
+  const prevHoleCardsRef = useRef<Record<number, string[]>>({});
+  const prevRoundRef = useRef<string>(gameState.currentRound || "preflop");
+
+  // Update timer progress - use setInterval for smoother, more reliable updates
   useEffect(() => {
+    // Clear any existing interval
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+
+    // Reset progress if no timer
     if (!turnTimer) {
-      setRemainingTime(null);
       setProgressPercent(0);
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
+      currentTimerRef.current = null;
       return;
     }
 
-    const updateTimer = () => {
+    // Store current timer in ref to avoid stale closures
+    currentTimerRef.current = turnTimer;
+
+    // Calculate progress function
+    const calculateProgress = () => {
+      const timer = currentTimerRef.current;
+      if (!timer) {
+        setProgressPercent(0);
+        return;
+      }
+
       const now = Date.now();
-      const remaining = Math.max(0, turnTimer.deadline - now);
+      const remaining = Math.max(0, timer.deadline - now);
       const percent = Math.max(
         0,
-        Math.min(100, (remaining / turnTimer.duration) * 100)
+        Math.min(100, (remaining / timer.duration) * 100)
       );
 
-      setRemainingTime(remaining);
       setProgressPercent(percent);
 
-      if (remaining > 0) {
-        animationFrameRef.current = requestAnimationFrame(updateTimer);
-      } else {
-        setRemainingTime(0);
+      // Stop if timer expired
+      if (remaining <= 0) {
         setProgressPercent(0);
-        animationFrameRef.current = null;
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
       }
     };
 
-    updateTimer();
+    // Calculate immediately
+    calculateProgress();
+
+    // Update every 16ms for smooth animation (~60fps)
+    timerIntervalRef.current = setInterval(calculateProgress, 16);
 
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
       }
     };
-  }, [turnTimer]);
+  }, [turnTimer?.deadline, turnTimer?.duration, turnTimer?.activeSeat]);
 
   // Dynamic seat count based on game type
   const NUM_SEATS = isHeadsUp ? 2 : 6;
   // Use same radius for both heads-up and 6-max for consistency
-  const radiusX = 48;
-  const radiusY = 42;
+  // Seats positioned so only ~20% of seat overlaps table edge
+  const radiusX = 70; // Increased significantly to move seats further out
+  const radiusY = 62; // Increased significantly to move seats further out
 
   // Find the current user's seat to position them at the bottom
   const currentUserSeat = gameState.players.find(
@@ -167,6 +193,106 @@ export function PokerTable({
 
   // Check if we're in waiting phase (opponent disconnected)
   const isWaitingPhase = gameState.currentPhase === "waiting";
+
+  // Track bet changes and animate bet indicators
+  // Simply reflect gameState.players[].currentBet - no complex logic
+  useEffect(() => {
+    const currentRound = gameState.currentRound || "preflop";
+    const prevRound = prevRoundRef.current || "preflop";
+    const roundChanged = currentRound !== prevRound;
+
+    // Log gameState when round changes
+    if (roundChanged) {
+      const playersWithBets = gameState.players
+        .filter((p) => (p.currentBet || 0) > 0)
+        .map((p) => ({
+          seat: p.seat,
+          id: p.id,
+          name: p.name || p.id,
+          currentBet: p.currentBet,
+          chips: p.chips,
+          folded: p.folded,
+          isSb: p.seat === gameState.sbSeat,
+          isBb: p.seat === gameState.bbSeat,
+        }));
+
+      console.log("[PokerTable] Round changed:", {
+        from: prevRound,
+        to: currentRound,
+        handNumber: gameState.handNumber,
+        sbSeat: gameState.sbSeat,
+        bbSeat: gameState.bbSeat,
+        smallBlind: gameState.smallBlind,
+        bigBlind: gameState.bigBlind,
+        playersWithBets:
+          playersWithBets.length > 0
+            ? playersWithBets
+            : "NONE (all bets should be 0)",
+        allPlayers: gameState.players.map((p) => ({
+          seat: p.seat,
+          name: p.name || p.id,
+          currentBet: p.currentBet,
+          chips: p.chips,
+          folded: p.folded,
+        })),
+      });
+    }
+
+    // Track hole cards for animation detection
+    const currentHoleCards: Record<number, string[]> = {};
+    gameState.players.forEach((player) => {
+      if (player.holeCards && player.holeCards.length > 0) {
+        currentHoleCards[player.seat] = [...player.holeCards];
+      }
+    });
+    prevHoleCardsRef.current = currentHoleCards;
+
+    // Build indicators directly from current gameState
+    const newIndicators: Record<
+      number,
+      { amount: number; animating: boolean }
+    > = {};
+
+    gameState.players.forEach((player) => {
+      const currentBet = player.currentBet || 0;
+      // Only show bet indicators for active (non-folded) players
+      // Folded players may have stale currentBet values from previous rounds
+      if (currentBet > 0 && !player.folded) {
+        const prevBet = prevBetsRef.current[player.seat] || 0;
+        const prevIndicator = betIndicators[player.seat];
+
+        if (currentBet > prevBet) {
+          // Bet increased - trigger animation
+          newIndicators[player.seat] = { amount: currentBet, animating: true };
+          setTimeout(() => {
+            setBetIndicators((current) => ({
+              ...current,
+              [player.seat]: { amount: currentBet, animating: false },
+            }));
+          }, 800);
+        } else if (prevIndicator && prevIndicator.amount === currentBet) {
+          // Bet unchanged - keep existing state
+          newIndicators[player.seat] = prevIndicator;
+        } else {
+          // New or changed bet - show without animation
+          newIndicators[player.seat] = { amount: currentBet, animating: false };
+        }
+      }
+    });
+
+    // Update indicators to match gameState
+    setBetIndicators(newIndicators);
+
+    // Update prevBetsRef for animation detection
+    const currentBets: Record<number, number> = {};
+    gameState.players.forEach((player) => {
+      if (player.currentBet > 0) {
+        currentBets[player.seat] = player.currentBet;
+      }
+    });
+    prevBetsRef.current = currentBets;
+    prevRoundRef.current = currentRound;
+  }, [gameState]);
   const activePlayers = gameState.players.filter(
     (p) => !p.folded && p.chips > 0
   );
@@ -177,7 +303,13 @@ export function PokerTable({
   const isHeadsUpGame = activePlayerCount === 2;
 
   return (
-    <div className="relative w-full max-w-4xl mx-auto aspect-[5/3]">
+    <div
+      className="relative mx-auto aspect-[5/3]"
+      style={{
+        width: "min(80vw, calc(80vh * 5 / 3), 45rem)",
+        maxWidth: "45rem",
+      }}
+    >
       {/* Debug overlay (super user + debug mode only) */}
       {debugMode && (
         <div className="absolute top-4 left-4 bg-black/90 text-white p-4 rounded-lg text-xs font-mono z-50 border-2 border-yellow-500">
@@ -253,7 +385,7 @@ export function PokerTable({
         style={{
           background: "radial-gradient(circle at center, #7f1d1d, #4c0000)",
           borderRadius: "50% / 25%",
-          border: "12px solid #8b4513",
+          border: "0.75rem solid #8b4513",
         }}
       >
         {/* Community cards area - centered, larger for heads-up - Higher z-index to appear above player status indicators */}
@@ -265,7 +397,7 @@ export function PokerTable({
 
             return (
               <motion.div
-                key={`${card}-${i}`}
+                key={`${card}-${i}-${gameState.handNumber || 0}`}
                 initial={
                   isRunoutCard && isRunningOut
                     ? { y: -80, rotate: -180, opacity: 0 }
@@ -287,7 +419,7 @@ export function PokerTable({
                     : {}
                 }
               >
-                <Card card={card as CardType} size={isHeadsUp ? "md" : "sm"} />
+                <Card card={card as CardType} />
               </motion.div>
             );
           })}
@@ -305,16 +437,16 @@ export function PokerTable({
           </div>
         )}
 
-        {/* Street indicator */}
+        {/* Street indicator - Above cards with equal spacing */}
         {!isWaitingForOpponent && (
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 translate-y-[140%] bg-black/80 text-white px-4 py-2 rounded-lg z-10">
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[6rem] bg-black/80 text-white px-4 py-2 rounded-lg z-10">
             <div className="text-sm font-semibold uppercase">
               {gameState.currentRound}
             </div>
           </div>
         )}
 
-        {/* Pot display - white text, smaller, black background, beneath round indicator */}
+        {/* Pot display - Below cards with equal spacing */}
         {(() => {
           const mainPot = gameState.pot || 0;
           const sidePotTotal =
@@ -324,12 +456,82 @@ export function PokerTable({
             ) || 0;
           const totalPot = mainPot + sidePotTotal;
           return totalPot > 0 ? (
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 translate-y-[180%] bg-black/90 text-white px-4 py-2 rounded-lg z-10">
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 translate-y-[4rem] bg-black/90 text-white px-4 py-2 rounded-lg z-10">
               <div className="text-sm text-gray-300 mb-1">Pot</div>
               <div className="text-xl font-bold">${totalPot}</div>
             </div>
           ) : null;
         })()}
+
+        {/* Bet indicators - positioned near center, around community cards */}
+        {Object.entries(betIndicators).map(([seatStr, indicator]) => {
+          const seat = Number(seatStr);
+          const player = gameState.players.find((p) => p.seat === seat);
+          if (!player || indicator.amount === 0) return null;
+
+          // Calculate position around center based on seat
+          // Find the correct seat index by matching seat numbers
+          let seatIndex = -1;
+          for (let i = 0; i < NUM_SEATS; i++) {
+            if (getSeatForPosition(i) === seat) {
+              seatIndex = i;
+              break;
+            }
+          }
+          if (seatIndex === -1) return null; // Skip if seat not found
+
+          // Use the exact same angle calculation as player boxes
+          // This ensures perfect alignment
+          const angleInterval = (2 * Math.PI) / NUM_SEATS;
+          const angle = angleInterval * seatIndex + Math.PI / 2;
+
+          // Position bets closer to player boxes using the same angle
+          const betRadiusX = 60; // Increased from 25 to move closer to player boxes
+          const betRadiusY = 53; // Increased from 22 to move closer to player boxes
+          const x = 50 + betRadiusX * Math.cos(angle);
+          const y = 50 + betRadiusY * Math.sin(angle);
+
+          return (
+            <motion.div
+              key={`bet-${seat}`}
+              className="absolute z-[60]"
+              style={{
+                left: `calc(${x}% - 1.5rem)`,
+                top: `calc(${y}% - 0.5rem)`,
+                transform: "translate(-50%, -50%)",
+              }}
+              initial={
+                indicator.animating
+                  ? {
+                      opacity: 0,
+                      scale: 0.3,
+                    }
+                  : {
+                      opacity: 1,
+                      scale: 1,
+                    }
+              }
+              animate={{
+                opacity: 1,
+                scale: 1,
+              }}
+              transition={
+                indicator.animating
+                  ? {
+                      type: "spring",
+                      stiffness: 300,
+                      damping: 25,
+                      duration: 0.5,
+                    }
+                  : {}
+              }
+            >
+              <div className="bg-yellow-500/90 text-black px-3 py-1.5 rounded-lg shadow-lg border-2 border-yellow-600 text-center">
+                <div className="text-base font-bold">${indicator.amount}</div>
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* Player seats */}
@@ -360,7 +562,7 @@ export function PokerTable({
         return (
           <div key={seat} className="absolute z-20" style={position}>
             {isEmpty ? (
-              <div className="bg-[#1a1a1a] text-white px-4 py-2 rounded-xl border-[3px] border-dashed border-gray-500 shadow-lg">
+              <div className="bg-[#1a1a1a] text-white px-4 py-2 rounded-xl border-[0.1875rem] border-dashed border-gray-500 shadow-lg">
                 Empty
               </div>
             ) : (
@@ -379,10 +581,10 @@ export function PokerTable({
                   </div>
                 )}
 
-                {/* Player box */}
+                {/* Player box - scaled 1.3x */}
                 <div
                   className={cn(
-                    "bg-[#1a1a1a] border-[3px] rounded-xl p-3 min-w-[140px] transition-all relative shadow-lg text-center",
+                    "bg-[#1a1a1a] border-[0.1875rem] rounded-xl p-3 min-w-[8.75rem] transition-all relative shadow-lg text-center z-10",
                     // White border by default
                     "border-white",
                     // Green glowing border when current player can act
@@ -390,13 +592,13 @@ export function PokerTable({
                       isActor &&
                       !hasLeft &&
                       !isDisconnected &&
-                      "border-[#4ade80] shadow-[0_0_20px_rgba(74,222,128,0.6)]",
+                      "border-[#4ade80] shadow-[0_0_1.25rem_rgba(74,222,128,0.6)]",
                     // Red glowing border when it's another player's turn
                     isActor &&
                       !isCurrent &&
                       !hasLeft &&
                       !isDisconnected &&
-                      "border-[#ff4d4f] shadow-[0_0_20px_rgba(255,77,79,0.6)]",
+                      "border-[#ff4d4f] shadow-[0_0_1.25rem_rgba(255,77,79,0.6)]",
                     // Grey out if folded OR has left OR disconnected
                     (isFolded || hasLeft || isDisconnected) && "opacity-50",
                     // Additional styling for left players (completely greyed out)
@@ -409,12 +611,14 @@ export function PokerTable({
                       isDisconnected && !hasLeft
                         ? "grayscale(100%)"
                         : undefined,
+                    transform: "scale(1.15)",
+                    transformOrigin: "center",
                   }}
                 >
                   {/* Name */}
                   <div
                     className={cn(
-                      "text-sm font-semibold truncate mb-1",
+                      "text-base font-semibold truncate mb-1",
                       hasLeft
                         ? "text-gray-400"
                         : isDisconnected
@@ -441,7 +645,7 @@ export function PokerTable({
                         : null;
 
                       return (
-                        <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full z-25 flex items-center gap-1">
+                        <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full z-25 flex items-center gap-1">
                           <span className="animate-pulse">🔄</span>
                           <span>
                             {secondsRemaining !== null && secondsRemaining > 0
@@ -454,7 +658,7 @@ export function PokerTable({
 
                   {/* Left indicator - Lower z-index to not block board during runout */}
                   {hasLeft && (
-                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-gray-700 text-white text-[10px] px-2 py-0.5 rounded-full z-25">
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-gray-700 text-white text-xs px-2 py-0.5 rounded-full z-25">
                       Left Game
                     </div>
                   )}
@@ -467,7 +671,7 @@ export function PokerTable({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         className={cn(
-                          "text-xs font-medium block mb-1",
+                          "text-sm font-medium block mb-1",
                           // Strong hands in maroon/red
                           player.playerHandType === "Royal Flush" ||
                             player.playerHandType === "Straight Flush" ||
@@ -491,32 +695,29 @@ export function PokerTable({
                     )}
 
                   {/* Stack */}
-                  <div className="text-xs text-white font-medium mb-1">
+                  <div className="text-sm text-white font-medium mb-1">
                     ${player.chips}
                   </div>
 
-                  {/* Bet - show bet amount prominently */}
-                  {player.currentBet > 0 && (
-                    <div className="text-xs text-yellow-400 font-bold mt-1 bg-yellow-400/20 px-2 py-1 rounded">
-                      Bet: ${player.currentBet}
-                    </div>
-                  )}
-
                   {/* Turn Timer - Progress Bar at bottom of player box */}
                   {turnTimer?.activeSeat === player.seat &&
-                    remainingTime !== null &&
-                    remainingTime > 0 && (
+                    progressPercent > 0 && (
                       <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700/50 overflow-hidden rounded-b-xl z-5">
                         <div
                           className={cn(
-                            "h-full transition-all duration-100 ease-linear",
+                            "h-full",
+                            // No CSS transitions - JavaScript updates handle animation smoothly
                             progressPercent > 50
                               ? "bg-green-500"
                               : progressPercent > 25
                               ? "bg-yellow-500"
                               : "bg-red-500"
                           )}
-                          style={{ width: `${progressPercent}%` }}
+                          style={{
+                            width: `${progressPercent}%`,
+                            // Use will-change for better performance
+                            willChange: "width",
+                          }}
                         />
                       </div>
                     )}
@@ -532,7 +733,7 @@ export function PokerTable({
                   {/* In Heads-Up, Button is SB but we only show dealer badge, not SB badge */}
                   {/* In ring games, show SB badge only if not dealer */}
                   {isSmallBlind && !isDealer && (
-                    <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-bold text-[10px] z-50">
+                    <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-bold z-50">
                       SB
                     </div>
                   )}
@@ -540,58 +741,98 @@ export function PokerTable({
                   {/* Big blind indicator - High z-index to appear above border and timer bar */}
                   {/* Show BB badge if player is BB and not dealer */}
                   {isBigBlind && !isDealer && (
-                    <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold text-[10px] z-50">
+                    <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold z-50">
                       BB
                     </div>
                   )}
                 </div>
 
-                {/* Hole cards - always positioned beneath the player, larger for heads-up */}
-                {player.holeCards && player.holeCards.length > 0 && (
-                  <div className="absolute left-1/2 transform -translate-x-1/2 flex gap-1 z-10 top-full mt-2">
-                    {player.holeCards.map((card, i) => {
-                      // During showdown, show all players' hands
-                      // Otherwise, show card back for bots in local games, or for other players in multiplayer
-                      // If disconnected and folded, show fold animation
-                      const showFaceDown = isShowdown
-                        ? false
-                        : isLocalGame
-                        ? player.isBot
-                        : player.id !== currentUserId;
+                {/* Hole cards - positioned above the player box, angled outward */}
+                {player.holeCards &&
+                  player.holeCards.length > 0 &&
+                  (() => {
+                    const showFaceDown = isShowdown
+                      ? false
+                      : isLocalGame
+                      ? player.isBot
+                      : player.id !== currentUserId;
 
-                      // If disconnected and action was FOLD, animate fold
-                      const shouldAnimateFold =
-                        isDisconnected && player.folded && !isShowdown;
+                    const shouldAnimateFold =
+                      isDisconnected && player.folded && !isShowdown;
 
-                      return (
-                        <motion.div
-                          key={`${card}-${i}`}
-                          animate={
-                            shouldAnimateFold
-                              ? {
-                                  rotate: -90,
-                                  y: 20,
-                                  opacity: 0.3,
-                                }
-                              : {}
-                          }
-                          transition={{
-                            type: "spring",
-                            stiffness: 300,
-                            damping: 25,
-                            delay: i * 0.1,
-                          }}
-                        >
-                          <Card
-                            card={card as CardType}
-                            size={isHeadsUp ? "md" : "sm"}
-                            faceDown={showFaceDown}
-                          />
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                )}
+                    const prevCards =
+                      prevHoleCardsRef.current[player.seat] || [];
+                    const currentCards = player.holeCards || [];
+                    const cardsChanged =
+                      prevCards.length === 0 ||
+                      currentCards.length === 0 ||
+                      prevCards.join(",") !== currentCards.join(",");
+                    const isNewRound = cardsChanged;
+
+                    const seatIndex = SEAT_POSITIONS.findIndex(
+                      (pos, idx) => getSeatForPosition(idx) === player.seat
+                    );
+                    const angleInterval = (2 * Math.PI) / NUM_SEATS;
+                    const angle = angleInterval * seatIndex + Math.PI / 2;
+                    const cardAngle = Math.cos(angle) * 15;
+
+                    return (
+                      <div
+                        className="absolute left-1/2 transform -translate-x-1/2 flex z-0 bottom-full"
+                        style={{
+                          gap: "-1rem",
+                          marginBottom: "-2.8rem", // Overlap player box by 40% (card height ~7rem * 0.4 = 2.8rem)
+                        }}
+                      >
+                        {player.holeCards.map((card, i) => {
+                          return (
+                            <motion.div
+                              key={`${card}-${i}-${gameState.handNumber || 0}-${
+                                gameState.currentRound || "preflop"
+                              }`}
+                              initial={
+                                isNewRound && !shouldAnimateFold
+                                  ? {
+                                      y: 40,
+                                      opacity: 0,
+                                      rotate: cardAngle,
+                                    }
+                                  : false
+                              }
+                              animate={
+                                shouldAnimateFold
+                                  ? {
+                                      rotate: -90,
+                                      y: 20,
+                                      opacity: 0.3,
+                                    }
+                                  : {
+                                      y: 0,
+                                      opacity: 1,
+                                      rotate: cardAngle + (i === 0 ? -2 : 2), // Slight fan effect
+                                    }
+                              }
+                              transition={{
+                                type: "spring",
+                                stiffness: 300,
+                                damping: 25,
+                                delay:
+                                  isNewRound && !shouldAnimateFold
+                                    ? i * 0.15
+                                    : i * 0.1,
+                              }}
+                              style={{ transform: "scale(1.1)" }}
+                            >
+                              <Card
+                                card={card as CardType}
+                                faceDown={showFaceDown}
+                              />
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
               </>
             )}
           </div>

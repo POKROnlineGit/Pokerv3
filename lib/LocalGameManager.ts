@@ -39,12 +39,12 @@ export class LocalGameManager {
 
   private setupPlayers(heroId: string) {
     const playersData = [
-      { id: heroId, name: 'You', isBot: false, chips: 1000, seat: 1 },
-      { id: 'bot-1', name: 'Bot 1', isBot: true, chips: 1000, seat: 2 },
-      { id: 'bot-2', name: 'Bot 2', isBot: true, chips: 1000, seat: 3 },
-      { id: 'bot-3', name: 'Bot 3', isBot: true, chips: 1000, seat: 4 },
-      { id: 'bot-4', name: 'Bot 4', isBot: true, chips: 1000, seat: 5 },
-      { id: 'bot-5', name: 'Bot 5', isBot: true, chips: 1000, seat: 6 },
+      { id: heroId, name: 'You', isBot: false, chips: 200, seat: 1 },
+      { id: 'bot-1', name: 'Bot 1', isBot: true, chips: 200, seat: 2 },
+      { id: 'bot-2', name: 'Bot 2', isBot: true, chips: 200, seat: 3 },
+      { id: 'bot-3', name: 'Bot 3', isBot: true, chips: 200, seat: 4 },
+      { id: 'bot-4', name: 'Bot 4', isBot: true, chips: 200, seat: 5 },
+      { id: 'bot-5', name: 'Bot 5', isBot: true, chips: 200, seat: 6 },
     ];
     
     const players = this.engine.config.maxPlayers === 2 ? playersData.slice(0, 2) : playersData;
@@ -56,7 +56,7 @@ export class LocalGameManager {
             p.status = 'ACTIVE';
             p.folded = false;
             p.left = false;
-            p.chips = 1000;
+            p.chips = 200;
             p.isOffline = false;
         });
     }
@@ -195,8 +195,10 @@ export class LocalGameManager {
     uiState.smallBlind = ctx.smallBlind || ctx.config?.smallBlind || 0;
 
     // Map Round & Phase: Ensure currentRound, currentPhase, and handNumber are available to UI
-    uiState.currentRound = ctx.currentRound || ctx.phase || 'preflop';
-    uiState.currentPhase = ctx.currentPhase || ctx.phase || 'active';
+    // Engine uses currentPhase for rounds (preflop, flop, turn, river, showdown)
+    // Map currentPhase to currentRound for UI display since engine doesn't have separate currentRound
+    uiState.currentRound = ctx.currentPhase || 'preflop';
+    uiState.currentPhase = ctx.currentPhase || 'active';
     uiState.handNumber = ctx.handNumber || 1;
 
     this.updateUI(uiState);
