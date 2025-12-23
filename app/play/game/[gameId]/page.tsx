@@ -28,6 +28,8 @@ export default function GamePage() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isDisconnected, setIsDisconnected] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false); // Track when we're syncing authoritative state
+  const [isInitializing, setIsInitializing] = useState(true); // Track initial game table initialization
   const [timeoutSeconds, setTimeoutSeconds] = useState<number | null>(null);
   const [isHeadsUp, setIsHeadsUp] = useState(false);
   const [gameStatus, setGameStatus] = useState<string | null>(null);
@@ -53,6 +55,8 @@ export default function GamePage() {
   const disconnectTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const gameEndedRef = useRef<boolean>(false); // Track if GAME_FINISHED received
   const handRunoutRef = useRef<boolean>(false); // Track if HAND_RUNOUT received
+  const joinRetryCountRef = useRef<number>(0); // Track retry attempts for "Game not found" errors
+  const joinRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track retry timeout
   const supabase = createClientComponentClient();
   const { toast } = useToast();
 
@@ -71,129 +75,58 @@ export default function GamePage() {
 
     let mounted = true;
     let socket: any = null;
-    let gamesChannel: any = null;
 
-    const setupGame = async () => {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          router.push("/");
-          return;
-        }
-
-        setCurrentUserId(user.id);
-
-        // Check if game exists and get status
-        const { data: game, error: gameError } = await supabase
-          .from("games")
-          .select("id, status, players, game_type, player_ids")
-          .eq("id", gameId)
-          .single();
-
-        if (gameError || !game) {
-          console.error("[Game] Game not found:", gameError);
-          router.push("/play");
-          return;
-        }
-
-        setGameStatus(game.status);
-
-        // Check if user is in game
-        // First check player_ids array (more reliable)
-        let isPlayer = false;
-        if (game.player_ids && Array.isArray(game.player_ids)) {
-          isPlayer = game.player_ids.some(
-            (id: any) => String(id) === String(user.id)
-          );
-        }
-        // Fallback: check players JSONB array
-        if (!isPlayer && game.players && Array.isArray(game.players)) {
-          isPlayer = game.players.some((p: any) => {
-            const playerId = p?.id || p?.userId || p?.user_id;
-            return playerId && String(playerId) === String(user.id);
-          });
-        }
-        if (!isPlayer) {
-          console.error("[Game] User not in game", {
-            userId: user.id,
-            playerIds: game.player_ids,
-            players: game.players,
-          });
-          router.push("/play");
-          return;
-        }
-
-        // Detect heads-up mode
-        if (
-          game.game_type === "heads_up" ||
-          (game.players && game.players.length === 2)
-        ) {
-          setIsHeadsUp(true);
-        }
-
-        // If game status is "starting", connect socket
-        if (game.status === "starting" || game.status === "active") {
-          connectSocket(user.id);
-        }
-
-        // Subscribe to game status changes via Realtime
-        gamesChannel = supabase
-          .channel(`game-${gameId}`)
-          .on(
-            "postgres_changes",
-            {
-              event: "UPDATE",
-              schema: "public",
-              table: "games",
-              filter: `id=eq.${gameId}`,
-            },
-            async (payload) => {
-              if (!mounted) return;
-
-              const updatedGame = payload.new as any;
-              setGameStatus(updatedGame.status);
-
-              // If game status changes to "starting" or "active", connect socket
-              if (
-                (updatedGame.status === "starting" ||
-                  updatedGame.status === "active") &&
-                !socket
-              ) {
-                connectSocket(user.id);
-              }
-            }
-          )
-          .subscribe();
-      } catch (err) {
-        console.error("[Game] Error setting up game:", err);
-        if (mounted) {
-          router.push("/play");
-        }
-      }
-    };
-
-    const connectSocket = async (userId: string) => {
+    const connectSocket = async () => {
       if (socket) return; // Already connected
 
       socket = getSocket();
 
       // Connect socket
       if (!socket.connected) {
+        console.log("[Game] Connecting socket for game", {
+          gameId,
+          userId: currentUserId,
+        });
         socket.connect();
       }
 
       // Wait for connection
       const onConnect = () => {
         if (mounted) {
+          // Reset retry count on fresh connection attempt
+          joinRetryCountRef.current = 0;
+          if (joinRetryTimeoutRef.current) {
+            clearTimeout(joinRetryTimeoutRef.current);
+            joinRetryTimeoutRef.current = null;
+          }
+
+          // On initial connect, (re)join this game room - server will automatically send gameState
+          console.log("[Game] Socket connected, emitting joinGame", {
+            gameId,
+            userId: currentUserId,
+          });
           socket.emit("joinGame", gameId);
+          setIsSyncing(true);
         }
       };
 
       if (socket.connected) {
+        console.log(
+          "[Game] Socket already connected, running onConnect immediately",
+          {
+            gameId,
+            userId: currentUserId,
+          }
+        );
         onConnect();
       } else {
+        console.log(
+          "[Game] Waiting for socket connect event before joining game",
+          {
+            gameId,
+            userId: currentUserId,
+          }
+        );
         socket.once("connect", onConnect);
       }
 
@@ -214,6 +147,33 @@ export default function GamePage() {
       // Listen for game state
       socket.on("gameState", (state: GameState) => {
         if (mounted) {
+          // Mark initialization complete - authoritative state received from server
+          if (isInitializing) {
+            setIsInitializing(false);
+          }
+
+          // Clear syncing state - connection is healthy and we have authoritative state
+          setIsSyncing(false);
+
+          // Reset retry count on successful game state reception
+          if (joinRetryCountRef.current > 0) {
+            console.log("[Game] Game state received, resetting retry count", {
+              gameId,
+              previousRetries: joinRetryCountRef.current,
+            });
+            joinRetryCountRef.current = 0;
+            if (joinRetryTimeoutRef.current) {
+              clearTimeout(joinRetryTimeoutRef.current);
+              joinRetryTimeoutRef.current = null;
+            }
+          }
+
+          console.log("[Game] gameState received", {
+            gameId,
+            handNumber: (state as any).handNumber,
+            currentRound: (state as any).currentRound,
+            currentActorSeat: (state as any).currentActorSeat,
+          });
           // Clear turn timer if action is no longer being awaited
           // When a new gameState arrives, it means the previous action has been processed
           // If there's an active timer, clear it unless the timer is still valid (same seat still acting)
@@ -350,7 +310,9 @@ export default function GamePage() {
                   isBot: Boolean(p.isBot),
                   leaving: Boolean(p.leaving),
                   playerHandType: p.playerHandType,
-                  revealedIndices: Array.isArray(p?.revealedIndices) ? p.revealedIndices : [],
+                  revealedIndices: Array.isArray(p?.revealedIndices)
+                    ? p.revealedIndices
+                    : [],
                   // Preserve disconnected/ghost state from previous state if not explicitly updated
                   disconnected: p.disconnected ?? false,
                   left: p.left ?? false,
@@ -402,7 +364,9 @@ export default function GamePage() {
                 : 0,
             minRaise: typeof state.minRaise === "number" ? state.minRaise : 2,
             lastRaiseAmount:
-              typeof state.lastRaiseAmount === "number" ? state.lastRaiseAmount : undefined,
+              typeof state.lastRaiseAmount === "number"
+                ? state.lastRaiseAmount
+                : undefined,
             betsThisRound: Array.isArray(state.betsThisRound)
               ? state.betsThisRound
               : [],
@@ -440,12 +404,26 @@ export default function GamePage() {
           // Fully replace state - no merging, no partial updates
           // This ensures UI always reflects server state exactly
           setGameState(normalizedState);
+
+          // Detect heads-up mode from gameState (memory-authoritative)
+          if (normalizedState.players && normalizedState.players.length === 2) {
+            setIsHeadsUp(true);
+          } else if (
+            normalizedState.players &&
+            normalizedState.players.length > 2
+          ) {
+            setIsHeadsUp(false);
+          }
         }
       });
 
       // Listen for timeout updates
       socket.on("timeout", (data: { seconds: number }) => {
         if (mounted) {
+          console.log("[Game] timeout event received", {
+            gameId,
+            seconds: data.seconds,
+          });
           setTimeoutSeconds(data.seconds);
 
           if (timeoutIntervalRef.current) {
@@ -470,7 +448,9 @@ export default function GamePage() {
       // Listen for disconnect
       socket.on("disconnect", () => {
         if (mounted) {
+          console.warn("[Game] Socket disconnected", { gameId });
           setIsDisconnected(true);
+          setIsSyncing(true);
         }
       });
 
@@ -478,10 +458,16 @@ export default function GamePage() {
       socket.on("connect", () => {
         if (mounted) {
           setIsDisconnected(false);
+          // Reset retry count on reconnect
+          joinRetryCountRef.current = 0;
+          if (joinRetryTimeoutRef.current) {
+            clearTimeout(joinRetryTimeoutRef.current);
+            joinRetryTimeoutRef.current = null;
+          }
+          // On reconnect, ensure we (re)join this game - server will automatically send gameState
+          console.log("[Game] Socket reconnected, rejoining game", { gameId });
           socket.emit("joinGame", gameId);
-
-          // Request game state sync to clear any disconnect overlays
-          socket.emit("SYNC_GAME", { gameId });
+          setIsSyncing(true);
         }
       });
 
@@ -638,9 +624,9 @@ export default function GamePage() {
           // Set animation state for runout cards
           const runoutCardsList = data.runoutCards || [];
           if (runoutCardsList.length > 0) {
-          setIsRunningOut(true);
+            setIsRunningOut(true);
             setRunoutCards(runoutCardsList);
-            
+
             // Clear animation flags after animation completes
             if (runoutTimeoutRef.current) {
               clearTimeout(runoutTimeoutRef.current);
@@ -677,7 +663,6 @@ export default function GamePage() {
               communityCards: finalBoard,
             };
           });
-
         }
       );
 
@@ -757,7 +742,7 @@ export default function GamePage() {
 
           // Get new cards from the data
           const newCards = data.cards || [];
-          
+
           // Set animation flags
           if (newCards.length > 0) {
             setIsRunningOut(true);
@@ -803,41 +788,60 @@ export default function GamePage() {
       socket.on(
         "GAME_FINISHED",
         (data: {
+          gameId?: string;
           reason?: string;
           message?: string;
           payload?: any;
           winnerId?: string | null;
+          returnUrl?: string;
+          timestamp?: string;
         }) => {
           if (!mounted) return;
+
+          console.log("[Game] GAME_FINISHED received", {
+            gameId: data.gameId,
+            reason: data.reason,
+            winnerId: data.winnerId,
+            timestamp: data.timestamp,
+          });
 
           // IMMEDIATE ACTION CLEANUP: Force hide action controls
           setForceHideActions(true);
           gameEndedRef.current = true; // Mark that game has ended
 
           // Set game finished state - this will show the modal
-          // Extract reason/message from payload
+          // Extract reason/message from payload (backend sends reason directly or in payload)
           const reason =
             data.reason ||
             data.message ||
+            data.payload?.reason ||
             data.payload?.message ||
             "GAME_FINISHED";
 
-          // Handle specific reason: ALL_PLAYERS_LEFT
+          // Handle specific reasons with user-friendly messages
           let message: string;
           if (
             reason === "ALL_PLAYERS_LEFT" ||
             reason?.includes("ALL_PLAYERS_LEFT")
           ) {
             message = "Game Ended. All players have left.";
+          } else if (
+            reason?.includes("inactivity") ||
+            reason?.includes("closed due to inactivity")
+          ) {
+            // Display inactivity reason directly from backend
+            message = reason;
           } else {
+            // Use reason directly, or fallback to generic message
             message =
               data.message ||
               data.reason ||
+              data.payload?.reason ||
               data.payload?.message ||
               "The game has ended.";
           }
 
-          // Safety: Don't try to display winner if winnerId is null (e.g., ALL_PLAYERS_LEFT)
+          // Safety: Don't try to display winner if winnerId is null (e.g., ALL_PLAYERS_LEFT, inactivity closures)
           // The message above already handles this case
 
           setGameFinished({ reason: message });
@@ -872,6 +876,24 @@ export default function GamePage() {
       // Listen for SYNC_GAME response (after reconnection)
       socket.on("SYNC_GAME", (state: GameState) => {
         if (!mounted) return;
+
+        // Mark initialization complete - authoritative state received from server
+        if (isInitializing) {
+          setIsInitializing(false);
+        }
+
+        // Reset retry count on successful sync
+        if (joinRetryCountRef.current > 0) {
+          console.log("[Game] SYNC_GAME received, resetting retry count", {
+            gameId,
+            previousRetries: joinRetryCountRef.current,
+          });
+          joinRetryCountRef.current = 0;
+          if (joinRetryTimeoutRef.current) {
+            clearTimeout(joinRetryTimeoutRef.current);
+            joinRetryTimeoutRef.current = null;
+          }
+        }
 
         // Clear turn timer if action is no longer being awaited (same logic as gameState)
         setTurnTimer((prevTimer) => {
@@ -913,7 +935,9 @@ export default function GamePage() {
                 isBot: Boolean(p.isBot),
                 leaving: Boolean(p.leaving),
                 playerHandType: p.playerHandType,
-                revealedIndices: Array.isArray(p.revealedIndices) ? p.revealedIndices : [],
+                revealedIndices: Array.isArray(p.revealedIndices)
+                  ? p.revealedIndices
+                  : [],
                 disconnected: false, // Clear disconnect status on sync
                 left: false,
                 isGhost: false,
@@ -939,7 +963,9 @@ export default function GamePage() {
               : null,
           minRaise: typeof state.minRaise === "number" ? state.minRaise : 2,
           lastRaiseAmount:
-            typeof state.lastRaiseAmount === "number" ? state.lastRaiseAmount : undefined,
+            typeof state.lastRaiseAmount === "number"
+              ? state.lastRaiseAmount
+              : undefined,
           betsThisRound: Array.isArray(state.betsThisRound)
             ? state.betsThisRound
             : [],
@@ -969,8 +995,21 @@ export default function GamePage() {
 
         setGameState(normalizedState);
 
+        // Detect heads-up mode from gameState (memory-authoritative)
+        if (normalizedState.players && normalizedState.players.length === 2) {
+          setIsHeadsUp(true);
+        } else if (
+          normalizedState.players &&
+          normalizedState.players.length > 2
+        ) {
+          setIsHeadsUp(false);
+        }
+
         // Clear disconnect timers
         setPlayerDisconnectTimers({});
+
+        // Sync complete
+        setIsSyncing(false);
 
         toast({
           title: "Reconnected",
@@ -981,20 +1020,116 @@ export default function GamePage() {
 
       // Listen for errors
       socket.on("error", (error: { error?: string; message?: string }) => {
-        if (mounted) {
-          const errorMessage =
-            error.error || error.message || "An error occurred";
-          console.error("[Game] Socket error:", errorMessage);
+        if (!mounted) return;
 
-          if (errorMessage.includes("Game not found")) {
-            router.push("/play");
-          } else if (errorMessage.includes("Not a player in this game")) {
-            router.push("/play");
+        const errorMessage =
+          error.error || error.message || "An error occurred";
+        console.error("[Game] Socket error:", errorMessage);
+
+        if (errorMessage.includes("Game not found")) {
+          // Graceful retry mechanism: retry joinGame up to 3 times with 500ms delay
+          // This accounts for the brief window where DB record exists but server is still initializing
+          const maxRetries = 3;
+          const retryDelay = 500; // 500ms delay
+
+          if (joinRetryCountRef.current < maxRetries) {
+            joinRetryCountRef.current += 1;
+            console.log(
+              `[Game] Game not found, retrying joinGame (attempt ${joinRetryCountRef.current}/${maxRetries})`,
+              { gameId }
+            );
+
+            // Clear any existing retry timeout
+            if (joinRetryTimeoutRef.current) {
+              clearTimeout(joinRetryTimeoutRef.current);
+            }
+
+            // Wait 500ms, then retry joinGame only (server will handle state sync)
+            joinRetryTimeoutRef.current = setTimeout(() => {
+              if (!mounted) return;
+
+              console.log("[Game] Retrying joinGame after delay", {
+                gameId,
+                attempt: joinRetryCountRef.current,
+              });
+              socket.emit("joinGame", gameId);
+            }, retryDelay);
+          } else {
+            // All retries exhausted, redirect to lobby
+            console.error(
+              "[Game] Game not found after all retries, redirecting to lobby",
+              { gameId, retries: joinRetryCountRef.current }
+            );
+            // Clear retry timeout if it exists
+            if (joinRetryTimeoutRef.current) {
+              clearTimeout(joinRetryTimeoutRef.current);
+              joinRetryTimeoutRef.current = null;
+            }
+            // Reset retry count for future attempts
+            joinRetryCountRef.current = 0;
+            // Mark as unmounted to prevent state updates during redirect
+            mounted = false;
+            // Defer redirect to allow React to finish current render cycle
+            setTimeout(() => {
+              router.replace("/play");
+            }, 0);
           }
+        } else if (errorMessage.includes("Not a player in this game")) {
+          // No retry for authorization errors - redirect immediately
+          console.error("[Game] User not authorized for game, redirecting", {
+            gameId,
+          });
+          // Mark as unmounted to prevent state updates during redirect
+          mounted = false;
+          // Defer redirect to allow React to finish current render cycle
+          setTimeout(() => {
+            router.replace("/play");
+          }, 0);
         }
       });
     };
 
+    const setupGame = async () => {
+      try {
+        // Only perform auth check - server will validate game access via socket
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          console.warn(
+            "[Game] No user found in setupGame, redirecting to root",
+            {
+              gameId,
+            }
+          );
+          // Mark as unmounted to prevent state updates during redirect
+          if (mounted) {
+            mounted = false;
+            setTimeout(() => {
+              router.replace("/");
+            }, 0);
+          }
+          return;
+        }
+
+        setCurrentUserId(user.id);
+        // Game validation and state will come from socket (memory-authoritative)
+        // Server will handle JIT hydration and send gameState when ready
+      } catch (err) {
+        console.error("[Game] Error setting up game:", err, { gameId });
+        if (mounted) {
+          // Mark as unmounted to prevent state updates during redirect
+          mounted = false;
+          setTimeout(() => {
+            router.replace("/play");
+          }, 0);
+        }
+      }
+    };
+
+    // Kick off socket connection & listeners immediately (memory-authoritative)
+    connectSocket();
+    // Run Supabase validation in parallel
     setupGame();
 
     // Cleanup
@@ -1006,8 +1141,9 @@ export default function GamePage() {
       if (runoutTimeoutRef.current) {
         clearTimeout(runoutTimeoutRef.current);
       }
-      if (gamesChannel) {
-        gamesChannel.unsubscribe();
+      if (joinRetryTimeoutRef.current) {
+        clearTimeout(joinRetryTimeoutRef.current);
+        joinRetryTimeoutRef.current = null;
       }
       if (socket) {
         socket.off("gameState");
@@ -1033,10 +1169,14 @@ export default function GamePage() {
       if (disconnectTimerIntervalRef.current) {
         clearInterval(disconnectTimerIntervalRef.current);
       }
+
+      // Reset retry count on unmount
+      joinRetryCountRef.current = 0;
     };
   }, [gameId, router, supabase, toast]);
 
   const handleAction = (action: ActionType, amount?: number) => {
+    // Block actions if we don't have state, no user, or we're currently syncing
     if (!gameState || !currentUserId) return;
 
     const socket = getSocket();
@@ -1090,7 +1230,7 @@ export default function GamePage() {
 
   const handleRevealCard = (cardIndex: number) => {
     if (!gameState || !currentUserId) return;
-    
+
     // Only allow revealing during showdown
     if (gameState.currentRound !== "showdown") {
       console.warn("[Game] ⚠️ Cannot reveal cards outside of showdown");
@@ -1182,11 +1322,13 @@ export default function GamePage() {
       </Dialog>
 
       {/* Main game content - conditional rendering */}
-      {!gameState || !currentUserId ? (
+      {isInitializing || !gameState || !currentUserId ? (
         <div className="container mx-auto px-4 py-8 flex items-center justify-center min-h-[60vh]">
           <div>
-            {gameStatus === "starting"
-              ? "Waiting for all players to connect..."
+            {isInitializing
+              ? "Initializing Game Table..."
+              : !currentUserId
+              ? "Authenticating..."
               : "Connecting to game..."}
           </div>
         </div>
@@ -1230,6 +1372,7 @@ export default function GamePage() {
               isRunningOut={isRunningOut}
               playerDisconnectTimers={playerDisconnectTimers}
               turnTimer={turnTimer}
+              isSyncing={isSyncing}
               onRevealCard={handleRevealCard}
             />
           </div>

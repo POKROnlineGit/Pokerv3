@@ -8,97 +8,87 @@ import { useRouter } from 'next/navigation'
 import { useLocalGameStore } from '@/lib/stores/useLocalGameStore'
 import { MotionCard } from '@/components/motion/MotionCard'
 import { motion } from 'framer-motion'
-import { createClientComponentClient } from '@/lib/supabaseClient'
 import { useToast } from '@/hooks/use-toast'
+import { useSocket } from '@/lib/socketClient'
+import { useQueue } from '@/components/providers/QueueProvider'
 
 export function PlayPageContent() {
   const router = useRouter()
   const startLocalGame = useLocalGameStore((state) => state.startLocalGame)
   const { toast } = useToast()
-  const supabase = createClientComponentClient()
+  const { inQueue, queueType } = useQueue()
   const [inGame, setInGame] = useState(false)
+  const [activeGameId, setActiveGameId] = useState<string | null>(null)
   const [isChecking, setIsChecking] = useState(true)
+  const socket = useSocket()
 
-  // Check if user is in an active game
+  // Redirect to queue page if user is already in a queue
   useEffect(() => {
-    const checkInGame = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        
-        if (!user) {
-          setIsChecking(false)
-          return
-        }
+    if (inQueue && queueType) {
+      console.log('[PlayPage] User already in queue, redirecting...', { queueType })
+      router.push(`/play/queue?type=${queueType}`)
+    }
+  }, [inQueue, queueType, router])
 
-        // Query active or starting games where user is a player
-        const { data: games } = await supabase
-          .from('games')
-          .select('id, player_ids, players, left_players')
-          .in('status', ['active', 'starting'])
+  // Check if user has an active in-memory session via socket (memory-authoritative)
+  // This replaces any database queries - socket is the single source of truth
+  useEffect(() => {
+    let mounted = true
+    let connectHandler: (() => void) | null = null
 
-        if (games && games.length > 0) {
-          // Check if user is in any of these games
-          const userInGame = games.some((g) => {
-            const leftPlayers = Array.isArray(g.left_players)
-              ? g.left_players.map((id: any) => String(id))
-              : []
-
-            if (leftPlayers.includes(String(user.id))) {
-              return false
-            }
-
-            // First check player_ids array (indexed, most efficient)
-            if (g.player_ids && Array.isArray(g.player_ids)) {
-              if (g.player_ids.some((id: any) => String(id) === String(user.id))) {
-                return true
-              }
-            }
-            // Fallback: check players JSONB directly
-            if (g.players && Array.isArray(g.players)) {
-              return g.players.some((p: any) => {
-                const playerId = p?.id || p?.userId || p?.user_id
-                return playerId && String(playerId) === String(user.id)
-              })
-            }
-            return false
-          })
-
-          setInGame(userInGame)
-        } else {
-          setInGame(false)
-        }
-      } catch (error) {
-        console.error('[PlayPage] Error checking game status:', error)
-        setInGame(false)
-      } finally {
-        setIsChecking(false)
-      }
+    const handleSessionStatus = (payload: { active?: boolean; gameId?: string | null }) => {
+      if (!mounted) return
+      const isActive = !!payload?.active && !!payload?.gameId
+      console.log('[PlayPage] session_status received (memory-authoritative)', {
+        active: payload?.active,
+        gameId: payload?.gameId,
+      })
+      setInGame(isActive)
+      setActiveGameId(isActive ? String(payload!.gameId) : null)
+      setIsChecking(false)
     }
 
-    checkInGame()
+    const emitCheckSession = () => {
+      if (!mounted) return
+      console.log('[PlayPage] Emitting check_active_session (socket-based, no DB query)')
+      setIsChecking(true)
+      socket.emit('check_active_session')
+    }
 
-    // Subscribe to game changes to update inGame state
-    const channel = supabase
-      .channel('play-page-game-check')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'games',
-          filter: 'status=in.(active,starting)',
-        },
-        () => {
-          // Recheck when games change
-          checkInGame()
+    // Wait for socket connection before emitting
+    if (socket.connected) {
+      emitCheckSession()
+    } else {
+      console.log('[PlayPage] Socket not connected, waiting for connect event')
+      connectHandler = () => {
+        if (mounted) {
+          emitCheckSession()
         }
-      )
-      .subscribe()
+      }
+      socket.once('connect', connectHandler)
+    }
+
+    socket.on('session_status', handleSessionStatus)
+
+    // Safety timeout: if server doesn't respond, assume no active session
+    const timeoutId = setTimeout(() => {
+      if (!mounted) return
+      console.warn('[PlayPage] check_active_session timed out; assuming no active session')
+      setInGame(false)
+      setActiveGameId(null)
+      setIsChecking(false)
+      socket.off('session_status', handleSessionStatus)
+    }, 5000)
 
     return () => {
-      supabase.removeChannel(channel)
+      mounted = false
+      clearTimeout(timeoutId)
+      socket.off('session_status', handleSessionStatus)
+      if (connectHandler) {
+        socket.off('connect', connectHandler)
+      }
     }
-  }, [supabase])
+  }, [socket])
 
   const handlePlayLocal = () => {
     const gameId = `local-${crypto.randomUUID()}`
@@ -110,12 +100,28 @@ export function PlayPageContent() {
     if (inGame) {
       toast({
         title: 'Cannot join queue',
-        description: 'You are currently in an active game. Please finish your current game first.',
+        description: activeGameId
+          ? 'You are currently in an active game. Rejoin your table or wait for it to finish.'
+          : 'You are currently in an active game. Please finish your current game first.',
         variant: 'destructive',
       })
       return
     }
-    // Navigate to queue page - it will handle joining via Supabase Realtime
+    if (inQueue) {
+      toast({
+        title: 'Already in queue',
+        description: `You are already in the ${queueType === 'heads_up' ? 'Heads-Up' : '6-Max'} queue.`,
+        variant: 'default',
+      })
+      return
+    }
+    console.log('[PlayPage] Navigating to queue', {
+      queueType,
+      inGame,
+      isChecking,
+      inQueue,
+    })
+    // Navigate to queue page - it will handle joining via sockets
     router.push(`/play/queue?type=${queueType}`)
   }
 
@@ -134,8 +140,8 @@ export function PlayPageContent() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-card border-x border-b rounded-b-xl">
             <MotionCard 
-              className={inGame ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} 
-              onClick={() => !inGame && joinQueue('six_max')}
+              className={inGame || inQueue ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} 
+              onClick={() => !inGame && !inQueue && joinQueue('six_max')}
             >
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-4">
@@ -160,18 +166,18 @@ export function PlayPageContent() {
                 <Button 
                   className="w-full" 
                   size="lg"
-                  disabled={inGame || isChecking}
+                  disabled={inGame || inQueue || isChecking}
                   onClick={() => joinQueue('six_max')}
                 >
                   <Play className="mr-2 h-4 w-4" />
-                  {inGame ? 'In Game' : 'Join Queue'}
+                  {inGame ? 'In Game' : inQueue ? 'Already in Queue' : 'Join Queue'}
                 </Button>
               </CardContent>
             </MotionCard>
 
             <MotionCard 
-              className={inGame ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} 
-              onClick={() => !inGame && joinQueue('heads_up')}
+              className={inGame || inQueue ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} 
+              onClick={() => !inGame && !inQueue && joinQueue('heads_up')}
             >
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-4">
@@ -196,11 +202,11 @@ export function PlayPageContent() {
                 <Button 
                   className="w-full" 
                   size="lg"
-                  disabled={inGame || isChecking}
-                  onClick={() => joinQueue('six_max')}
+                  disabled={inGame || inQueue || isChecking}
+                  onClick={() => joinQueue('heads_up')}
                 >
                   <Play className="mr-2 h-4 w-4" />
-                  {inGame ? 'In Game' : 'Join Queue'}
+                  {inGame ? 'In Game' : inQueue ? 'Already in Queue' : 'Join Queue'}
                 </Button>
               </CardContent>
             </MotionCard>
@@ -218,6 +224,25 @@ export function PlayPageContent() {
             <p className="text-sm text-white/80">Play offline against AI bots</p>
           </div>
           <div className="p-6 bg-card border-x border-b rounded-b-xl">
+            {inGame && activeGameId && (
+              <div className="mb-4 flex justify-between items-center">
+                <p className="text-sm text-muted-foreground">
+                  You have an active game. You can rejoin it here:
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    console.log('[PlayPage] Rejoining active game from lobby', {
+                      gameId: activeGameId,
+                    })
+                    router.push(`/play/game/${activeGameId}`)
+                  }}
+                >
+                  Rejoin Game
+                </Button>
+              </div>
+            )}
             <MotionCard className="cursor-pointer" onClick={handlePlayLocal}>
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-4">

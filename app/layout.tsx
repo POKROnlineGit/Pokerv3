@@ -5,12 +5,18 @@ import { Sidebar } from "@/components/Sidebar";
 import { createServerComponentClient } from "@/lib/supabaseClient";
 import { ToastProvider } from "@/components/ToastProvider";
 import { GameRedirectProvider } from "@/components/GameRedirectProvider";
+import { QueueProvider } from "@/components/providers/QueueProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "PokerOnline - Learn & Play Texas Hold'em",
+  title: "POKROnline - Learn & Play Texas Hold'em",
   description: "Play and learn No-Limit Texas Hold'em poker for free",
+  icons: {
+    icon: "/logo/POKROnlineLogoSVG.svg",
+    shortcut: "/logo/POKROnlineLogoSVG.svg",
+    apple: "/logo/POKROnlineLogoSVG.svg",
+  },
 };
 
 export default async function RootLayout({
@@ -52,16 +58,18 @@ export default async function RootLayout({
     <html lang="en" className={theme}>
       <body className={inter.className}>
         <GameRedirectProvider />
-        <ToastProvider>
-          {showSidebar ? (
-            <div className="flex h-screen">
-              <Sidebar />
-              <main className="flex-1 overflow-auto">{children}</main>
-            </div>
-          ) : (
-            <main>{children}</main>
-          )}
-        </ToastProvider>
+        <QueueProvider>
+          <ToastProvider>
+            {showSidebar ? (
+              <div className="flex h-screen">
+                <Sidebar />
+                <main className="flex-1 overflow-auto">{children}</main>
+              </div>
+            ) : (
+              <main>{children}</main>
+            )}
+          </ToastProvider>
+        </QueueProvider>
       </body>
     </html>
   );

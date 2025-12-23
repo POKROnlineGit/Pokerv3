@@ -35,7 +35,7 @@ export function getSocket(): Socket {
     // Set up auth token refresh
     socket.on('connect', async () => {
       console.log('[Socket] ✅ Connected to poker server')
-      
+
       // Refresh token on connect
       const { data: { session } } = await supabase.auth.getSession()
       if (session?.access_token && socket) {

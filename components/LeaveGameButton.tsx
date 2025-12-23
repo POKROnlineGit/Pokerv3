@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
-import { Button } from '@/components/ui/button';
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -11,8 +11,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { useSocket } from '@/lib/socketClient';
+} from "@/components/ui/dialog";
+import { useSocket } from "@/lib/socketClient";
 
 type LeaveGameButtonProps = {
   gameId?: string;
@@ -26,14 +26,21 @@ export function LeaveGameButton({ gameId }: LeaveGameButtonProps) {
   const handleLeave = () => {
     try {
       if (socket && !socket.connected) {
+        console.log(
+          "[LeaveGame] Socket not connected, attempting connect before leaveGame",
+          {
+            gameId,
+          }
+        );
         socket.connect();
       }
-      socket.emit('leaveGame', gameId);
+      console.log("[LeaveGame] Emitting leaveGame", { gameId });
+      socket.emit("leaveGame", gameId);
     } catch (error) {
-      console.error('[LeaveGame] Failed to emit leaveGame:', error);
+      console.error("[LeaveGame] Failed to emit leaveGame:", error);
     } finally {
       setOpen(false);
-      router.push('/play'); // Immediate redirect
+      router.push("/play"); // Immediate redirect
     }
   };
 
@@ -64,10 +71,3 @@ export function LeaveGameButton({ gameId }: LeaveGameButtonProps) {
     </>
   );
 }
-
-
-
-
-
-
-

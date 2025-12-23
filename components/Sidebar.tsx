@@ -127,25 +127,20 @@ export function Sidebar() {
     expanded: {
       width: "240px",
       transition: {
-        type: "spring",
-        stiffness: 300,
-        damping: 30,
+        duration: 0, // Instant transition
       },
     },
     minimized: {
       width: "64px",
       transition: {
-        type: "spring",
-        stiffness: 300,
-        damping: 30,
+        duration: 0, // Instant transition
       },
     },
   };
 
-  // Faster content animation to prevent jiggle
+  // Instant content transition (no animation)
   const contentTransition = {
-    duration: 0.15,
-    ease: "easeInOut",
+    duration: 0,
   };
 
   return (

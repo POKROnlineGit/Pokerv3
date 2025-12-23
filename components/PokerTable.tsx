@@ -27,6 +27,7 @@ interface PokerTableProps {
     duration: number;
     activeSeat: number;
   } | null; // Turn timer data from turn_timer_started event
+  isSyncing?: boolean; // Whether we're currently syncing authoritative state
 }
 
 // Calculate seat positions using sin/cos for equal spacing
@@ -67,6 +68,7 @@ export function PokerTable({
   isRunningOut = false,
   playerDisconnectTimers = {},
   turnTimer = null,
+  isSyncing = false,
 }: PokerTableProps) {
   const { isEnabled: debugMode } = useDebugMode();
 
@@ -316,6 +318,15 @@ export function PokerTable({
         maxWidth: "45rem",
       }}
     >
+      {/* Syncing overlay - blocks interactions while authoritative state is being fetched */}
+      {isSyncing && (
+        <div className="absolute inset-0 z-[70] flex flex-col items-center justify-center bg-black/70">
+          <div className="text-white text-xl font-semibold mb-2">Syncing...</div>
+          <div className="text-sm text-gray-200">
+            Reconnecting to the server and refreshing game state
+          </div>
+        </div>
+      )}
       {/* Debug overlay (super user + debug mode only) */}
       {debugMode && (
         <div className="absolute top-4 left-4 bg-black/90 text-white p-4 rounded-lg text-xs font-mono z-50 border-2 border-yellow-500">
@@ -787,17 +798,13 @@ export function PokerTable({
 
                   // Determine card visibility:
                   // - For hero: always show actual cards (engine sends real cards)
-                  // - For others: show "HIDDEN" if card is not revealed, or actual card if revealed
-                  // - In showdown: cards may be partially revealed
-                  const shouldShowFaceDown = (card: string | null) => {
-                    if (isHero) return false; // Hero always sees their own cards
-                    if (isShowdown) {
-                      // In showdown, if card is "HIDDEN" or null, show back
-                      return card === "HIDDEN" || card === null;
-                    }
-                    // Before showdown, hide all non-hero cards
-                    return !isLocalGame || player.isBot;
-                  };
+                  // - For others: use revealedIndices metadata during showdown for partial reveals
+                  // - If no revealedIndices metadata is present, fall back to legacy HIDDEN/null logic
+                  const revealedIndices: number[] = Array.isArray(
+                    (player as any).revealedIndices
+                  )
+                    ? ((player as any).revealedIndices as number[])
+                    : [];
 
                   // Check if cards are new (for animation trigger)
                   // Compare current cards with previous cards to detect new cards
@@ -824,15 +831,37 @@ export function PokerTable({
                       }}
                     >
                       {cardsToRender.map((card, i) => {
+                        const isRevealedIndex =
+                          isHero ||
+                          (isShowdown &&
+                            (revealedIndices.length > 0
+                              ? revealedIndices.includes(i)
+                              : !(card === "HIDDEN" || card === null)));
+
+                        const shouldShowFaceDown = (card: string | null) => {
+                          if (isHero) return false; // Hero always sees their own cards
+                          if (isShowdown) {
+                            // In showdown, rely on revealedIndices metadata when available
+                            if (revealedIndices.length > 0) {
+                              return !revealedIndices.includes(i);
+                            }
+                            // Fallback: if metadata missing, treat HIDDEN/null as face-down
+                            return card === "HIDDEN" || card === null;
+                          }
+                          // Before showdown, hide all non-hero cards (server validates visibility)
+                          return !isLocalGame || player.isBot;
+                        };
+
                         const cardValue =
                           card === "HIDDEN" || card === null ? "HIDDEN" : card;
                         const showBack = shouldShowFaceDown(card);
+                        const revealKey = showBack ? "down" : "up";
 
                         return (
                           <motion.div
-                            key={`hole-${player.seat}-${cardValue}-${i}-${
+                            key={`hole-${player.seat}-${i}-${
                               gameState.handNumber || 0
-                            }`}
+                            }-${revealKey}`}
                             initial={
                               isNewRound
                                 ? {
