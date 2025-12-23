@@ -638,7 +638,7 @@ export default function GamePage() {
           // Set animation state for runout cards
           const runoutCardsList = data.runoutCards || [];
           if (runoutCardsList.length > 0) {
-            setIsRunningOut(true);
+          setIsRunningOut(true);
             setRunoutCards(runoutCardsList);
             
             // Clear animation flags after animation completes

@@ -23,7 +23,7 @@ export default function LocalGamePage() {
 
   const { gameState, heroId, startLocalGame, leaveLocalGame, playerAction, newGame } = useLocalGameStore();
   const hasInitialized = useRef(false);
-  
+
   // Animation state - same system as online game
   const [runoutCards, setRunoutCards] = useState<string[]>([]);
   const [isRunningOut, setIsRunningOut] = useState(false);
@@ -96,7 +96,7 @@ export default function LocalGamePage() {
     const newCards = currentCards.filter(
       (card: string) => !prevCards.includes(card)
     );
-    
+
     if (newCards.length > 0) {
       console.log('[LocalGame] New cards detected:', newCards, 'Previous:', prevCards, 'Current:', currentCards);
       
@@ -111,7 +111,7 @@ export default function LocalGamePage() {
       
       // Update ref AFTER setting animation state (but before timeout)
       prevCommunityCardsRef.current = currentCards;
-      
+
       // Clear animation flags after animation completes
       const animationDuration = newCards.length * 300 + 500;
       runoutTimeoutRef.current = setTimeout(() => {
@@ -128,7 +128,7 @@ export default function LocalGamePage() {
     return () => {
       if (runoutTimeoutRef.current) {
         clearTimeout(runoutTimeoutRef.current);
-      }
+    }
     };
   }, [gameState?.communityCards, gameState?.board, gameState?.handNumber]);
 
