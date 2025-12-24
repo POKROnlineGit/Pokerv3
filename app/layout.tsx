@@ -7,6 +7,8 @@ import { ToastProvider } from "@/components/ToastProvider";
 import { GameRedirectProvider } from "@/components/GameRedirectProvider";
 import { QueueProvider } from "@/components/providers/QueueProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { ThemeBackground } from "@/components/ThemeBackground";
+import { ThemeBackground } from "@/components/ThemeBackground";
 
 const inter = Inter({ 
   subsets: ["latin"],
@@ -70,6 +72,7 @@ export default async function RootLayout({
     <html lang="en" className={theme}>
       <body className={inter.className}>
         <ThemeProvider>
+          <ThemeBackground />
           <GameRedirectProvider />
           <QueueProvider>
             <ToastProvider>
