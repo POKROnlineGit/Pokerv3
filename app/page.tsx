@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
+import { useTheme } from '@/components/providers/ThemeProvider'
 
 // Floating card component for background
 function FloatingCard({ card, index, delay }: { card: string; index: number; delay: number }) {
@@ -55,7 +56,14 @@ function FloatingCard({ card, index, delay }: { card: string; index: number; del
 export default function HomePage() {
   const router = useRouter()
   const supabase = createClientComponentClient()
+  const { currentTheme } = useTheme()
   const [loading, setLoading] = useState(false)
+
+  // Get theme colors
+  const primaryColor = currentTheme.colors.primary[0]
+  const gradientColors = currentTheme.colors.gradient
+  const centerColor = currentTheme.colors.primary[2] || currentTheme.colors.primary[1]
+  const accentColor = currentTheme.colors.accent[0]
 
   // Check if user is already logged in and redirect
   useEffect(() => {
@@ -104,7 +112,34 @@ export default function HomePage() {
   const showcaseCards = ['Ah', 'Kd', 'Qc', 'Js', 'Th', '9s']
 
   return (
-    <div className="min-h-screen bg-poker-felt overflow-x-hidden">
+    <div className="min-h-screen bg-black relative overflow-x-hidden">
+      {/* --- FIXED BACKGROUND LAYER --- */}
+      <div
+        className="fixed inset-0 z-0 overflow-hidden"
+        style={{ willChange: "contents" }}
+      >
+        {/* Radial Gradient - dark on outsides, theme color in middle */}
+        <div 
+          className="absolute inset-0"
+          style={{
+            background: `radial-gradient(ellipse at top, ${primaryColor} 0%, ${centerColor} 30%, ${gradientColors[1]} 60%, ${gradientColors[2]} 100%)`,
+          }}
+        />
+        
+        {/* Noise Texture */}
+        <div
+          className="absolute inset-0 opacity-[0.03] mix-blend-overlay"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+          }}
+        />
+
+        {/* Vignette */}
+        <div className="absolute inset-0 bg-radial-gradient from-transparent to-black/80 pointer-events-none" />
+      </div>
+
+      {/* --- SCROLLABLE CONTENT LAYER --- */}
+      <div className="relative z-10">
       {/* Theme Toggle */}
       <div className="absolute top-4 right-4 z-50">
         <ThemeToggle />
@@ -124,7 +159,7 @@ export default function HomePage() {
             transition={{ type: "spring", stiffness: 100, damping: 15 }}
             className="text-7xl md:text-9xl font-bold text-white mb-6 drop-shadow-2xl"
             style={{
-              textShadow: '0 0 2.5rem rgba(154, 31, 64, 0.8), 0 0 5rem rgba(154, 31, 64, 0.5)',
+              textShadow: `0 0 2.5rem ${primaryColor}CC, 0 0 5rem ${primaryColor}80`,
             }}
           >
             PokerOnline
@@ -152,7 +187,16 @@ export default function HomePage() {
               <Button
                 onClick={handlePlayNow}
                 size="lg"
-                className="bg-primary-500 hover:bg-primary-600 text-white text-lg px-8 py-6 rounded-2xl shadow-xl"
+                className="text-white text-lg px-8 py-6 rounded-2xl shadow-xl"
+                style={{
+                  backgroundColor: accentColor,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || accentColor
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = accentColor
+                }}
               >
                 <Play className="mr-2 h-5 w-5" />
                 Play Now
@@ -168,7 +212,18 @@ export default function HomePage() {
                 disabled={loading}
                 variant="outline"
                 size="lg"
-                className="bg-white/10 border-2 border-white/30 text-white hover:bg-white/20 text-lg px-8 py-6 rounded-2xl shadow-xl backdrop-blur-sm"
+                className="border-2 text-white text-lg px-8 py-6 rounded-2xl shadow-xl bg-card"
+                style={{
+                  borderColor: `${accentColor}50`,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = `${accentColor}33`;
+                  e.currentTarget.style.borderColor = accentColor;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '';
+                  e.currentTarget.style.borderColor = `${accentColor}50`;
+                }}
               >
                 <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
                   <path
@@ -216,14 +271,17 @@ export default function HomePage() {
               viewport={{ once: true }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
             >
-              <Card className="bg-card/90 backdrop-blur-sm border-2 border-primary-500/20 rounded-2xl shadow-xl h-full">
+              <Card 
+                className="border-2 rounded-2xl shadow-xl h-full bg-card"
+                style={{ borderColor: `${accentColor}33` }}
+              >
                 <CardHeader>
                   <motion.div
                     whileHover={{ rotate: 360 }}
                     transition={{ duration: 0.6 }}
                     className="mb-4"
                   >
-                    <Zap className="h-16 w-16 text-primary-500 mx-auto" />
+                    <Zap className="h-16 w-16 mx-auto" style={{ color: accentColor }} />
                   </motion.div>
                   <CardTitle className="text-2xl text-center mb-4">Play Instantly</CardTitle>
                   <p className="text-muted-foreground text-center">
@@ -240,14 +298,17 @@ export default function HomePage() {
               viewport={{ once: true }}
               transition={{ type: "spring", stiffness: 300, damping: 25, delay: 0.1 }}
             >
-              <Card className="bg-card/90 backdrop-blur-sm border-2 border-primary-500/20 rounded-2xl shadow-xl h-full">
+              <Card 
+                className="border-2 rounded-2xl shadow-xl h-full bg-card"
+                style={{ borderColor: `${accentColor}33` }}
+              >
                 <CardHeader>
                   <motion.div
                     whileHover={{ rotate: 360 }}
                     transition={{ duration: 0.6 }}
                     className="mb-4"
                   >
-                    <BookOpen className="h-16 w-16 text-primary-500 mx-auto" />
+                    <BookOpen className="h-16 w-16 mx-auto" style={{ color: accentColor }} />
                   </motion.div>
                   <CardTitle className="text-2xl text-center mb-4">Learn from Pros</CardTitle>
                   <p className="text-muted-foreground text-center">
@@ -264,7 +325,10 @@ export default function HomePage() {
               viewport={{ once: true }}
               transition={{ type: "spring", stiffness: 300, damping: 25, delay: 0.2 }}
             >
-              <Card className="bg-card/90 backdrop-blur-sm border-2 border-primary-500/20 rounded-2xl shadow-xl h-full">
+              <Card 
+                className="border-2 rounded-2xl shadow-xl h-full bg-card"
+                style={{ borderColor: `${accentColor}33` }}
+              >
                 <CardHeader>
                   <motion.div
                     whileHover={{ rotate: 360 }}
@@ -451,7 +515,8 @@ export default function HomePage() {
                 <motion.div
                   whileHover={{ scale: 1.1, rotate: 360 }}
                   transition={{ duration: 0.5 }}
-                  className="flex-shrink-0 w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center shadow-xl"
+                  className="flex-shrink-0 w-16 h-16 rounded-full flex items-center justify-center shadow-xl"
+                  style={{ backgroundColor: accentColor }}
                 >
                   <item.icon className="h-8 w-8 text-white" />
                 </motion.div>
@@ -497,6 +562,7 @@ export default function HomePage() {
           </motion.div>
         </div>
       </section>
+      </div>
     </div>
   )
 }

@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Search, UserPlus, Check, X, Users, User } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useRouter } from 'next/navigation'
+import { useTheme } from '@/components/providers/ThemeProvider'
 
 interface Friend {
   id: string
@@ -31,6 +32,7 @@ interface FriendRequest {
 export default function FriendsPage() {
   const supabase = createClientComponentClient()
   const router = useRouter()
+  const { currentTheme } = useTheme()
   const [user, setUser] = useState<any>(null)
   const [friends, setFriends] = useState<Friend[]>([])
   const [pendingRequests, setPendingRequests] = useState<FriendRequest[]>([])
@@ -38,6 +40,12 @@ export default function FriendsPage() {
   const [searchResult, setSearchResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
+
+  // Get theme colors
+  const primaryColor = currentTheme.colors.primary[0]
+  const gradientColors = currentTheme.colors.gradient
+  const centerColor = currentTheme.colors.primary[2] || currentTheme.colors.primary[1]
+  const accentColor = currentTheme.colors.accent[0]
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -321,11 +329,39 @@ export default function FriendsPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
+    <div className="min-h-screen bg-black relative">
+      {/* --- FIXED BACKGROUND LAYER --- */}
+      <div
+        className="fixed inset-0 z-0 overflow-hidden"
+        style={{ willChange: "contents" }}
+      >
+        {/* Radial Gradient - dark on outsides, theme color in middle */}
+        <div 
+          className="absolute inset-0"
+          style={{
+            background: `radial-gradient(ellipse at top, ${primaryColor} 0%, ${centerColor} 30%, ${gradientColors[1]} 60%, ${gradientColors[2]} 100%)`,
+          }}
+        />
+        
+        {/* Noise Texture */}
+        <div
+          className="absolute inset-0 opacity-[0.03] mix-blend-overlay"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+          }}
+        />
+
+        {/* Vignette */}
+        <div className="absolute inset-0 bg-radial-gradient from-transparent to-black/80 pointer-events-none" />
+      </div>
+
+      {/* --- SCROLLABLE CONTENT LAYER --- */}
+      <div className="relative z-10">
+        <div className="container mx-auto p-6 max-w-4xl">
         <h1 className="text-3xl font-bold mb-6">Friends</h1>
 
-      {/* Search Bar */}
-      <Card className="mb-6">
+        {/* Search Bar */}
+        <Card className="mb-6 bg-card">
         <CardHeader>
           <CardTitle>Add Friend</CardTitle>
         </CardHeader>
@@ -341,7 +377,24 @@ export default function FriendsPage() {
                 }
               }}
             />
-            <Button onClick={handleSearch} disabled={loading}>
+            <Button 
+              onClick={handleSearch} 
+              disabled={loading}
+              style={{
+                backgroundColor: accentColor,
+                color: 'white',
+              }}
+              onMouseEnter={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || accentColor
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.backgroundColor = accentColor
+                }
+              }}
+            >
               <Search className="h-4 w-4 mr-2" />
               Search
             </Button>
@@ -356,6 +409,16 @@ export default function FriendsPage() {
               <Button
                 size="sm"
                 onClick={() => handleSendRequest(searchResult.id)}
+                style={{
+                  backgroundColor: accentColor,
+                  color: 'white',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || accentColor
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = accentColor
+                }}
               >
                 <UserPlus className="h-4 w-4 mr-2" />
                 Add Friend
@@ -380,7 +443,7 @@ export default function FriendsPage() {
         </TabsList>
 
         <TabsContent value="friends" className="mt-4">
-          <Card>
+          <Card className="bg-card">
             <CardHeader>
               <CardTitle>Your Friends</CardTitle>
             </CardHeader>
@@ -402,6 +465,18 @@ export default function FriendsPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => router.push(`/friends/profile/${friend.id}`)}
+                        style={{
+                          borderColor: accentColor,
+                          color: accentColor,
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = accentColor
+                          e.currentTarget.style.color = 'white'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent'
+                          e.currentTarget.style.color = accentColor
+                        }}
                       >
                         <User className="h-4 w-4 mr-2" />
                         View Profile
@@ -415,7 +490,7 @@ export default function FriendsPage() {
         </TabsContent>
 
         <TabsContent value="pending" className="mt-4">
-          <Card>
+          <Card className="bg-card">
             <CardHeader>
               <CardTitle>Pending Friend Requests</CardTitle>
             </CardHeader>
@@ -440,6 +515,16 @@ export default function FriendsPage() {
                           size="sm"
                           variant="default"
                           onClick={() => handleRespond(request.id, true)}
+                          style={{
+                            backgroundColor: accentColor,
+                            color: 'white',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || accentColor
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = accentColor
+                          }}
                         >
                           <Check className="h-4 w-4 mr-2" />
                           Accept
@@ -461,6 +546,8 @@ export default function FriendsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+        </div>
+      </div>
     </div>
   )
 }

@@ -20,11 +20,13 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTheme } from "@/components/providers/ThemeProvider";
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClientComponentClient();
+  const { currentTheme } = useTheme();
   const [pendingCount, setPendingCount] = useState(0);
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<{
@@ -32,6 +34,10 @@ export function Sidebar() {
     chips: number;
     created_at: string;
   } | null>(null);
+
+  // Get theme colors for sidebar elements (not background)
+  const primaryColor = currentTheme.colors.primary[0];
+  const accentColor = currentTheme.colors.accent[0];
 
   // Detect if we're on a game page
   const isGamePage = pathname?.match(/^\/play\/(game|local)\/[^/]+$/) !== null;
@@ -228,7 +234,7 @@ export function Sidebar() {
                     className="h-9 w-9 flex-shrink-0 object-contain"
                     priority
                   />
-                  <span className="text-2xl font-bold text-primary whitespace-nowrap">
+                  <span className="text-2xl font-bold whitespace-nowrap text-white">
                     POKROnline
                   </span>
                 </Link>
@@ -285,9 +291,24 @@ export function Sidebar() {
                       ? "justify-center px-3 py-3"
                       : "justify-between px-4 py-3",
                     isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-accent text-muted-foreground hover:text-foreground"
+                      ? "text-white"
+                      : "text-white/70 hover:text-white"
                   )}
+                  style={isActive ? {
+                    backgroundColor: `${accentColor}CC`,
+                  } : {
+                    '--hover-bg': `${accentColor}CC`,
+                  } as React.CSSProperties}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.backgroundColor = `${accentColor}CC`;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }
+                  }}
                 >
                   <div
                     className={cn(
@@ -333,9 +354,24 @@ export function Sidebar() {
                   "flex items-center gap-3 rounded-lg transition-colors min-w-0 w-full",
                   isMinimized ? "justify-center px-3 py-3" : "px-4 py-3",
                   pathname === "/play/profile"
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-accent text-muted-foreground hover:text-foreground"
+                    ? "text-white"
+                    : "text-white/70 hover:text-white"
                 )}
+                style={pathname === "/play/profile" ? {
+                  backgroundColor: `${accentColor}CC`,
+                } : {
+                  '--hover-bg': `${accentColor}CC`,
+                } as React.CSSProperties}
+                onMouseEnter={(e) => {
+                  if (pathname !== "/play/profile") {
+                    e.currentTarget.style.backgroundColor = `${accentColor}CC`;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (pathname !== "/play/profile") {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
               >
                 <UserCircle className="h-6 w-6 flex-shrink-0" />
                 {!isMinimized && (
@@ -373,8 +409,17 @@ export function Sidebar() {
                 isMinimized
                   ? "justify-center px-3 py-3"
                   : "justify-start px-4 py-3",
-                "hover:bg-accent text-muted-foreground hover:text-foreground"
+                "text-white/70 hover:text-white"
               )}
+              style={{
+                '--hover-bg': `${accentColor}CC`,
+              } as React.CSSProperties}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = `${accentColor}CC`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
             >
               <div
                 className={cn(
@@ -415,8 +460,17 @@ export function Sidebar() {
               isMinimized
                 ? "justify-center px-3 py-3"
                 : "justify-start px-4 py-3",
-              "hover:bg-accent text-muted-foreground hover:text-foreground"
+              "text-white/70 hover:text-white"
             )}
+            style={{
+              '--hover-bg': `${accentColor}CC`,
+            } as React.CSSProperties}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = `${accentColor}CC`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             <LogOut className="h-5 w-5 flex-shrink-0" />
             {!isMinimized && (

@@ -8,14 +8,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { createClientComponentClient } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { useTheme } from '@/components/providers/ThemeProvider'
 
 export default function SignInPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { currentTheme } = useTheme()
   const supabase = createClientComponentClient()
   const router = useRouter()
+
+  // Get theme colors
+  const primaryColor = currentTheme.colors.primary[0]
+  const gradientColors = currentTheme.colors.gradient
+  const centerColor = currentTheme.colors.primary[2] || currentTheme.colors.primary[1]
+  const accentColor = currentTheme.colors.accent[0]
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -83,9 +91,14 @@ export default function SignInPage() {
   return (
     <div className="min-h-screen bg-black relative flex items-center justify-center p-4">
       {/* Background matching coming soon page */}
-      <div className="fixed inset-0 z-0 overflow-hidden">
+      <div className="fixed inset-0 z-0 overflow-hidden" style={{ willChange: "contents" }}>
         {/* Radial Gradient */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-900 via-green-950 to-black" />
+        <div 
+          className="absolute inset-0"
+          style={{
+            background: `radial-gradient(ellipse at top, ${primaryColor} 0%, ${centerColor} 30%, ${gradientColors[1]} 60%, ${gradientColors[2]} 100%)`,
+          }}
+        />
         
         {/* Noise Texture - CSS-based for better performance */}
         <div
@@ -137,7 +150,21 @@ export default function SignInPage() {
               />
             </div>
             <div className="flex gap-2">
-              <Button type="submit" className="flex-1" disabled={loading}>
+              <Button 
+                type="submit" 
+                className="flex-1" 
+                disabled={loading}
+                style={{
+                  backgroundColor: accentColor,
+                  color: 'white',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || accentColor
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = accentColor
+                }}
+              >
                 Sign In
               </Button>
               <Button
@@ -146,6 +173,18 @@ export default function SignInPage() {
                 className="flex-1"
                 onClick={handleSignUp}
                 disabled={loading}
+                style={{
+                  borderColor: accentColor,
+                  color: accentColor,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = accentColor
+                  e.currentTarget.style.color = 'white'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent'
+                  e.currentTarget.style.color = accentColor
+                }}
               >
                 Sign Up
               </Button>
@@ -167,6 +206,18 @@ export default function SignInPage() {
             className="w-full"
             onClick={handleGoogleSignIn}
             disabled={loading}
+            style={{
+              borderColor: accentColor,
+              color: accentColor,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = accentColor
+              e.currentTarget.style.color = 'white'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent'
+              e.currentTarget.style.color = accentColor
+            }}
           >
             <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
               <path

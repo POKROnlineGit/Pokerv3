@@ -25,7 +25,7 @@ export const MotionCard = forwardRef<HTMLDivElement, MotionCardProps>(
         {...(props as MotionCardHTMLProps)}
         {...motionProps}
       >
-        <Card>
+        <Card className="border-0 bg-transparent shadow-none">
           {children}
         </Card>
       </motion.div>

@@ -1,14 +1,17 @@
-import { notFound } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { createServerComponentClient } from '@/lib/supabaseClient'
-import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowLeft, ArrowRight } from 'lucide-react'
+"use client";
+
+import { notFound, useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { createClientComponentClient } from "@/lib/supabaseClient";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, ArrowRight } from "lucide-react";
+import { useTheme } from "@/components/providers/ThemeProvider";
 
 const LESSONS: Record<number, { title: string; content: string }> = {
   1: {
-    title: 'Preflop Basics',
+    title: "Preflop Basics",
     content: `# Preflop Basics
 
 ## Starting Hand Selection
@@ -32,7 +35,7 @@ The foundation of winning poker starts with selecting the right hands to play pr
 Remember: It's better to fold a marginal hand than to play it out of position.`,
   },
   2: {
-    title: 'Continuation Betting',
+    title: "Continuation Betting",
     content: `# Continuation Betting
 
 ## What is a C-Bet?
@@ -55,7 +58,7 @@ A continuation bet (C-bet) is a bet made on the flop by the player who raised pr
 - **Large C-bet (2/3 pot)**: When you want to build a big pot with strong hands`,
   },
   3: {
-    title: 'Pot Odds & Equity',
+    title: "Pot Odds & Equity",
     content: `# Pot Odds & Equity
 
 ## Understanding Pot Odds
@@ -79,7 +82,7 @@ Your equity is the percentage chance you have to win the hand at showdown.
 Implied odds consider future betting rounds. If you might win a big pot when you hit, you can call with worse pot odds.`,
   },
   4: {
-    title: 'Bluffing & Semi-Bluffing',
+    title: "Bluffing & Semi-Bluffing",
     content: `# Bluffing & Semi-Bluffing
 
 ## The Art of Bluffing
@@ -106,7 +109,7 @@ A semi-bluff is a bet with a drawing hand that:
 **Bluff when the story makes sense**. If you've been betting strong, a bluff on the river can work.`,
   },
   5: {
-    title: 'Reading Opponents',
+    title: "Reading Opponents",
     content: `# Reading Opponents
 
 ## Observing Your Opponents
@@ -135,7 +138,7 @@ Once you identify a player's style, adjust:
 - Fold to aggressive players' raises unless you're strong`,
   },
   6: {
-    title: 'Bankroll Management',
+    title: "Bankroll Management",
     content: `# Bankroll Management
 
 ## Protecting Your Bankroll
@@ -166,105 +169,261 @@ Don't be afraid to move down if:
 
 Remember: The goal is long-term growth, not short-term gains.`,
   },
-}
+};
 
-export default async function LessonPage({ params }: { params: Promise<{ lessonId: string }> }) {
-  const { lessonId: lessonIdParam } = await params
-  const lessonId = parseInt(lessonIdParam)
-  const lesson = LESSONS[lessonId]
+export default function LessonPage({
+  params,
+}: {
+  params: Promise<{ lessonId: string }>;
+}) {
+  const [lessonId, setLessonId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const router = useRouter();
+  const supabase = createClientComponentClient();
+  const { currentTheme } = useTheme();
+
+  // Get theme colors
+  const primaryColor = currentTheme.colors.primary[0];
+  const gradientColors = currentTheme.colors.gradient;
+  const centerColor =
+    currentTheme.colors.primary[2] || currentTheme.colors.primary[1];
+  const accentColor = currentTheme.colors.accent[0];
+
+  useEffect(() => {
+    const loadData = async () => {
+      const resolvedParams = await params;
+      const id = parseInt(resolvedParams.lessonId);
+      setLessonId(id);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/");
+        return;
+      }
+      setUser(user);
+      setLoading(false);
+    };
+    loadData();
+  }, [params, supabase, router]);
+
+  if (loading || !lessonId) {
+    return (
+      <div className="min-h-screen bg-black relative">
+        <div className="container mx-auto px-4 py-8 max-w-4xl flex items-center justify-center min-h-screen">
+          <div className="text-white">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  const lesson = LESSONS[lessonId];
 
   if (!lesson) {
-    notFound()
+    notFound();
   }
 
-  const supabase = await createServerComponentClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/')
-  }
-
-  // Mark lesson as completed when page loads (you could add a button for this)
-  // For now, we'll just track that they viewed it
+  const handleComplete = async () => {
+    if (!user) return;
+    await supabase.from("lesson_progress").upsert({
+      user_id: user.id,
+      lesson_id: lessonId,
+      completed: true,
+      progress_percent: 100,
+    });
+    router.push("/learn");
+  };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="mb-4">
-        <Link href="/learn">
-          <Button variant="ghost">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Lessons
-          </Button>
-        </Link>
+    <div className="min-h-screen bg-black relative">
+      {/* --- FIXED BACKGROUND LAYER --- */}
+      <div
+        className="fixed inset-0 z-0 overflow-hidden"
+        style={{ willChange: "contents" }}
+      >
+        {/* Radial Gradient - dark on outsides, theme color in middle */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `radial-gradient(ellipse at top, ${primaryColor} 0%, ${centerColor} 30%, ${gradientColors[1]} 60%, ${gradientColors[2]} 100%)`,
+          }}
+        />
+
+        {/* Noise Texture */}
+        <div
+          className="absolute inset-0 opacity-[0.03] mix-blend-overlay"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+          }}
+        />
+
+        {/* Vignette */}
+        <div className="absolute inset-0 bg-radial-gradient from-transparent to-black/80 pointer-events-none" />
       </div>
 
-      <Card>
-        <CardContent className="p-8">
-          <h1 className="text-4xl font-bold mb-6">{lesson.title}</h1>
-          <div className="prose prose-lg dark:prose-invert max-w-none">
-            {lesson.content.split('\n').map((line, i) => {
-              if (line.startsWith('# ')) {
-                return <h1 key={i} className="text-3xl font-bold mt-8 mb-4">{line.slice(2)}</h1>
-              } else if (line.startsWith('## ')) {
-                return <h2 key={i} className="text-2xl font-semibold mt-6 mb-3">{line.slice(3)}</h2>
-              } else if (line.startsWith('### ')) {
-                return <h3 key={i} className="text-xl font-semibold mt-4 mb-2">{line.slice(4)}</h3>
-              } else if (line.startsWith('- **')) {
-                const match = line.match(/\*\*(.*?)\*\*: (.*)/)
-                if (match) {
-                  return (
-                    <li key={i} className="ml-4 mb-2">
-                      <strong>{match[1]}</strong>: {match[2]}
-                    </li>
-                  )
-                }
-              } else if (line.startsWith('- ')) {
-                return <li key={i} className="ml-4 mb-2">{line.slice(2)}</li>
-              } else if (line.trim() === '') {
-                return <br key={i} />
-              } else {
-                return <p key={i} className="mb-4">{line}</p>
-              }
-            })}
-          </div>
-
-          <div className="flex justify-between mt-8 pt-6 border-t">
-            {lessonId > 1 ? (
-              <Link href={`/learn/${lessonId - 1}`}>
-                <Button variant="outline">
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Previous
-                </Button>
-              </Link>
-            ) : (
-              <div />
-            )}
-            {lessonId < 6 ? (
-              <Link href={`/learn/${lessonId + 1}`}>
-                <Button>
-                  Next
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            ) : (
-              <Button onClick={async () => {
-                await supabase
-                  .from('lesson_progress')
-                  .upsert({
-                    user_id: user.id,
-                    lesson_id: lessonId,
-                    completed: true,
-                    progress_percent: 100
-                  })
-                redirect('/learn')
-              }}>
-                Complete Lesson
+      {/* --- SCROLLABLE CONTENT LAYER --- */}
+      <div className="relative z-10">
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          <div className="mb-4">
+            <Link href="/learn">
+              <Button
+                variant="outline"
+                style={{
+                  borderColor: accentColor,
+                  color: accentColor,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = accentColor;
+                  e.currentTarget.style.color = "white";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                  e.currentTarget.style.color = accentColor;
+                }}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Lessons
               </Button>
-            )}
+            </Link>
           </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
 
+          <Card className="bg-card">
+            <CardContent className="p-8">
+              <h1 className="text-4xl font-bold mb-6">{lesson.title}</h1>
+              <div className="prose prose-lg dark:prose-invert max-w-none">
+                {lesson.content.split("\n").map((line, i) => {
+                  if (line.startsWith("# ")) {
+                    return (
+                      <h1 key={i} className="text-3xl font-bold mt-8 mb-4">
+                        {line.slice(2)}
+                      </h1>
+                    );
+                  } else if (line.startsWith("## ")) {
+                    return (
+                      <h2 key={i} className="text-2xl font-semibold mt-6 mb-3">
+                        {line.slice(3)}
+                      </h2>
+                    );
+                  } else if (line.startsWith("### ")) {
+                    return (
+                      <h3 key={i} className="text-xl font-semibold mt-4 mb-2">
+                        {line.slice(4)}
+                      </h3>
+                    );
+                  } else if (line.startsWith("- **")) {
+                    const match = line.match(/\*\*(.*?)\*\*: (.*)/);
+                    if (match) {
+                      return (
+                        <li key={i} className="ml-4 mb-2">
+                          <strong>{match[1]}</strong>: {match[2]}
+                        </li>
+                      );
+                    }
+                  } else if (line.startsWith("- ")) {
+                    return (
+                      <li key={i} className="ml-4 mb-2">
+                        {line.slice(2)}
+                      </li>
+                    );
+                  } else if (line.trim() === "") {
+                    return <br key={i} />;
+                  } else {
+                    return (
+                      <p key={i} className="mb-4">
+                        {line}
+                      </p>
+                    );
+                  }
+                })}
+              </div>
+
+              <div className="flex justify-between mt-8 pt-6 border-t">
+                {lessonId > 1 ? (
+                  <Link href={`/learn/${lessonId - 1}`}>
+                    <Button
+                      variant="outline"
+                      style={{
+                        borderColor: accentColor,
+                        color: accentColor,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = accentColor;
+                        e.currentTarget.style.color = "white";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                        e.currentTarget.style.color = accentColor;
+                      }}
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Previous
+                    </Button>
+                  </Link>
+                ) : (
+                  <div />
+                )}
+                {lessonId < 6 ? (
+                  <Link href={`/learn/${lessonId + 1}`}>
+                    <Button
+                      style={{
+                        background: `linear-gradient(to right, ${accentColor}, ${
+                          currentTheme.colors.accent[1] || accentColor
+                        })`,
+                        color: "white",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = `linear-gradient(to right, ${
+                          currentTheme.colors.accent[1] || accentColor
+                        }, ${
+                          currentTheme.colors.accent[2] ||
+                          currentTheme.colors.accent[1] ||
+                          accentColor
+                        })`;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = `linear-gradient(to right, ${accentColor}, ${
+                          currentTheme.colors.accent[1] || accentColor
+                        })`;
+                      }}
+                    >
+                      Next
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button
+                    onClick={handleComplete}
+                    style={{
+                      background: `linear-gradient(to right, ${accentColor}, ${
+                        currentTheme.colors.accent[1] || accentColor
+                      })`,
+                      color: "white",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = `linear-gradient(to right, ${
+                        currentTheme.colors.accent[1] || accentColor
+                      }, ${
+                        currentTheme.colors.accent[2] ||
+                        currentTheme.colors.accent[1] ||
+                        accentColor
+                      })`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = `linear-gradient(to right, ${accentColor}, ${
+                        currentTheme.colors.accent[1] || accentColor
+                      })`;
+                    }}
+                  >
+                    Complete Lesson
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

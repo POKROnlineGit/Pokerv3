@@ -11,16 +11,25 @@ import { motion } from 'framer-motion'
 import { useToast } from '@/hooks/use-toast'
 import { useSocket } from '@/lib/socketClient'
 import { useQueue } from '@/components/providers/QueueProvider'
+import { useTheme } from '@/components/providers/ThemeProvider'
 
 export function PlayPageContent() {
   const router = useRouter()
   const startLocalGame = useLocalGameStore((state) => state.startLocalGame)
   const { toast } = useToast()
   const { inQueue, queueType } = useQueue()
+  const { currentTheme } = useTheme()
   const [inGame, setInGame] = useState(false)
   const [activeGameId, setActiveGameId] = useState<string | null>(null)
   const [isChecking, setIsChecking] = useState(true)
+  const [isSocketConnected, setIsSocketConnected] = useState(false)
   const socket = useSocket()
+
+  // Get theme colors
+  const primaryColor = currentTheme.colors.primary[0] // Main primary color
+  const gradientColors = currentTheme.colors.gradient
+  const accentColor = currentTheme.colors.accent[0] // Main accent color
+  const centerColor = currentTheme.colors.primary[2] || currentTheme.colors.primary[1] // Middle gradient color
 
   // Redirect to queue page if user is already in a queue
   useEffect(() => {
@@ -29,6 +38,29 @@ export function PlayPageContent() {
       router.push(`/play/queue?type=${queueType}`)
     }
   }, [inQueue, queueType, router])
+
+  // Track socket connection status
+  useEffect(() => {
+    setIsSocketConnected(socket.connected)
+
+    const handleConnect = () => {
+      setIsSocketConnected(true)
+    }
+
+    const handleDisconnect = () => {
+      setIsSocketConnected(false)
+      // If socket disconnects while checking, keep checking state
+      // This prevents buttons from being enabled when server is down
+    }
+
+    socket.on('connect', handleConnect)
+    socket.on('disconnect', handleDisconnect)
+
+    return () => {
+      socket.off('connect', handleConnect)
+      socket.off('disconnect', handleDisconnect)
+    }
+  }, [socket])
 
   // Check if user has an active in-memory session via socket (memory-authoritative)
   // This replaces any database queries - socket is the single source of truth
@@ -45,7 +77,10 @@ export function PlayPageContent() {
       })
       setInGame(isActive)
       setActiveGameId(isActive ? String(payload!.gameId) : null)
-      setIsChecking(false)
+      // Only set isChecking to false if socket is still connected
+      if (socket.connected) {
+        setIsChecking(false)
+      }
     }
 
     const emitCheckSession = () => {
@@ -70,14 +105,21 @@ export function PlayPageContent() {
 
     socket.on('session_status', handleSessionStatus)
 
-    // Safety timeout: if server doesn't respond, assume no active session
+    // Safety timeout: if server doesn't respond, only assume no active session if socket is connected
+    // If socket is not connected, keep isChecking true to prevent buttons from being enabled
     const timeoutId = setTimeout(() => {
       if (!mounted) return
-      console.warn('[PlayPage] check_active_session timed out; assuming no active session')
-      setInGame(false)
-      setActiveGameId(null)
-      setIsChecking(false)
-      socket.off('session_status', handleSessionStatus)
+      if (socket.connected) {
+        console.warn('[PlayPage] check_active_session timed out; assuming no active session')
+        setInGame(false)
+        setActiveGameId(null)
+        setIsChecking(false)
+        socket.off('session_status', handleSessionStatus)
+      } else {
+        console.warn('[PlayPage] check_active_session timed out but socket not connected; keeping buttons disabled')
+        // Keep isChecking true if socket is not connected
+        // This prevents buttons from being enabled when server is down
+      }
     }, 5000)
 
     return () => {
@@ -126,27 +168,58 @@ export function PlayPageContent() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <div className="min-h-screen bg-black relative">
+      {/* --- FIXED BACKGROUND LAYER --- */}
+      <div
+        className="fixed inset-0 z-0 overflow-hidden"
+        style={{ willChange: "contents" }}
+      >
+        {/* Radial Gradient - dark on outsides, theme color in middle */}
+        <div 
+          className="absolute inset-0"
+          style={{
+            background: `radial-gradient(ellipse at top, ${primaryColor} 0%, ${centerColor} 30%, ${gradientColors[1]} 60%, ${gradientColors[2]} 100%)`,
+          }}
+        />
+        
+        {/* Noise Texture */}
+        <div
+          className="absolute inset-0 opacity-[0.03] mix-blend-overlay"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+          }}
+        />
+
+        {/* Vignette */}
+        <div className="absolute inset-0 bg-radial-gradient from-transparent to-black/80 pointer-events-none" />
+      </div>
+
+      {/* --- SCROLLABLE CONTENT LAYER --- */}
+      <div className="relative z-10 container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto space-y-8">
         {/* Find a Game Section */}
-        <motion.section
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="bg-[#9A1F40] text-white px-6 py-4 rounded-t-xl">
+        <section>
+          <div 
+            className="text-white px-6 py-4 rounded-t-xl"
+            style={{ 
+              background: `linear-gradient(to right, ${accentColor}, ${currentTheme.colors.accent[1] || accentColor})`,
+            }}
+          >
             <h2 className="text-2xl font-bold">Find a Game</h2>
             <p className="text-sm text-white/80">Join an online multiplayer table</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-card border-x border-b rounded-b-xl">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-card rounded-b-xl">
             <MotionCard 
-              className={inGame || inQueue ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} 
+              className={`${inGame || inQueue ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} bg-card rounded-xl overflow-hidden`}
               onClick={() => !inGame && !inQueue && joinQueue('six_max')}
             >
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="bg-primary/10 p-3 rounded-lg">
-                    <Users className="h-8 w-8 text-primary" />
+                  <div 
+                    className="p-3 rounded-lg"
+                    style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
+                  >
+                    <Users className="h-8 w-8" style={{ color: accentColor }} />
                   </div>
                   <div>
                     <h3 className="text-xl font-semibold">6-Max</h3>
@@ -166,23 +239,36 @@ export function PlayPageContent() {
                 <Button 
                   className="w-full" 
                   size="lg"
-                  disabled={inGame || inQueue || isChecking}
+                  disabled={inGame || inQueue || isChecking || !isSocketConnected}
                   onClick={() => joinQueue('six_max')}
+                  style={{
+                    background: `linear-gradient(to right, ${accentColor}, ${currentTheme.colors.accent[1] || accentColor})`,
+                    color: 'white',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = `linear-gradient(to right, ${currentTheme.colors.accent[1] || accentColor}, ${currentTheme.colors.accent[2] || currentTheme.colors.accent[1] || accentColor})`
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = `linear-gradient(to right, ${accentColor}, ${currentTheme.colors.accent[1] || accentColor})`
+                  }}
                 >
                   <Play className="mr-2 h-4 w-4" />
-                  {inGame ? 'In Game' : inQueue ? 'Already in Queue' : 'Join Queue'}
+                  {inGame ? 'In Game' : inQueue ? 'Already in Queue' : !isSocketConnected ? 'Connecting...' : 'Join Queue'}
                 </Button>
               </CardContent>
             </MotionCard>
 
             <MotionCard 
-              className={inGame || inQueue ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} 
+              className={`${inGame || inQueue ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} bg-card rounded-xl overflow-hidden`}
               onClick={() => !inGame && !inQueue && joinQueue('heads_up')}
             >
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="bg-primary/10 p-3 rounded-lg">
-                    <User className="h-8 w-8 text-primary" />
+                  <div 
+                    className="p-3 rounded-lg"
+                    style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
+                  >
+                    <User className="h-8 w-8" style={{ color: accentColor }} />
                   </div>
                   <div>
                     <h3 className="text-xl font-semibold">Heads-Up</h3>
@@ -202,28 +288,39 @@ export function PlayPageContent() {
                 <Button 
                   className="w-full" 
                   size="lg"
-                  disabled={inGame || inQueue || isChecking}
+                  disabled={inGame || inQueue || isChecking || !isSocketConnected}
                   onClick={() => joinQueue('heads_up')}
+                  style={{
+                    backgroundColor: accentColor,
+                    color: 'white',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || accentColor
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = accentColor
+                  }}
                 >
                   <Play className="mr-2 h-4 w-4" />
-                  {inGame ? 'In Game' : inQueue ? 'Already in Queue' : 'Join Queue'}
+                  {inGame ? 'In Game' : inQueue ? 'Already in Queue' : !isSocketConnected ? 'Connecting...' : 'Join Queue'}
                 </Button>
               </CardContent>
             </MotionCard>
           </div>
-        </motion.section>
+        </section>
 
         {/* Host a Game Section */}
-        <motion.section
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-        >
-          <div className="bg-[#9A1F40] text-white px-6 py-4 rounded-t-xl">
+        <section>
+          <div 
+            className="text-white px-6 py-4 rounded-t-xl"
+            style={{ 
+              background: `linear-gradient(to right, ${accentColor}, ${currentTheme.colors.accent[1] || accentColor})`,
+            }}
+          >
             <h2 className="text-2xl font-bold">Host a Game</h2>
             <p className="text-sm text-white/80">Play offline against AI bots</p>
           </div>
-          <div className="p-6 bg-card border-x border-b rounded-b-xl">
+          <div className="p-6 bg-card rounded-b-xl">
             {inGame && activeGameId && (
               <div className="mb-4 flex justify-between items-center">
                 <p className="text-sm text-muted-foreground">
@@ -238,16 +335,31 @@ export function PlayPageContent() {
                     })
                     router.push(`/play/game/${activeGameId}`)
                   }}
+                  style={{
+                    borderColor: accentColor,
+                    color: accentColor,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = accentColor
+                    e.currentTarget.style.color = 'white'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent'
+                    e.currentTarget.style.color = accentColor
+                  }}
                 >
                   Rejoin Game
                 </Button>
               </div>
             )}
-            <MotionCard className="cursor-pointer" onClick={handlePlayLocal}>
+            <MotionCard className="cursor-pointer bg-card rounded-xl overflow-hidden" onClick={handlePlayLocal}>
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="bg-secondary/10 p-3 rounded-lg">
-                    <Bot className="h-8 w-8 text-secondary-foreground" />
+                  <div 
+                    className="p-3 rounded-lg"
+                    style={{ backgroundColor: `${accentColor}20`, color: accentColor }}
+                  >
+                    <Bot className="h-8 w-8" style={{ color: accentColor }} />
                   </div>
                   <div>
                     <h3 className="text-xl font-semibold">Play Local</h3>
@@ -268,14 +380,29 @@ export function PlayPageContent() {
                     <span className="font-medium text-foreground">Free (Practice)</span>
                   </div>
                 </div>
-                <Button variant="secondary" className="w-full" size="lg">
+                <Button 
+                  variant="secondary" 
+                  className="w-full" 
+                  size="lg"
+                  style={{
+                    background: `linear-gradient(to right, ${accentColor}, ${currentTheme.colors.accent[1] || accentColor})`,
+                    color: 'white',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = `linear-gradient(to right, ${currentTheme.colors.accent[1] || accentColor}, ${currentTheme.colors.accent[2] || currentTheme.colors.accent[1] || accentColor})`
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = `linear-gradient(to right, ${accentColor}, ${currentTheme.colors.accent[1] || accentColor})`
+                  }}
+                >
                   <Bot className="mr-2 h-4 w-4" />
                   Start Local Game
                 </Button>
               </CardContent>
             </MotionCard>
           </div>
-        </motion.section>
+        </section>
+        </div>
       </div>
     </div>
   )
