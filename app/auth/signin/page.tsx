@@ -81,14 +81,28 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-900 via-green-800 to-emerald-900 flex items-center justify-center p-4">
-      <div className="absolute top-4 right-4">
+    <div className="min-h-screen bg-black relative flex items-center justify-center p-4">
+      {/* Background matching coming soon page */}
+      <div className="fixed inset-0 z-0 overflow-hidden">
+        {/* Radial Gradient */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-900 via-green-950 to-black" />
+        
+        {/* Noise Texture - CSS-based for better performance */}
+        <div
+          className="absolute inset-0 opacity-[0.03] mix-blend-overlay"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+          }}
+        />
+      </div>
+
+      <div className="absolute top-4 right-4 z-10">
         <ThemeToggle />
       </div>
 
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md relative z-10">
         <CardHeader>
-          <CardTitle className="text-2xl">Sign In to PokerOnline</CardTitle>
+          <CardTitle className="text-2xl">Sign In to POKROnline</CardTitle>
           <CardDescription>
             Enter your credentials or sign in with Google
           </CardDescription>

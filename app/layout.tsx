@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Oswald } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { createServerComponentClient } from "@/lib/supabaseClient";
@@ -7,7 +7,15 @@ import { ToastProvider } from "@/components/ToastProvider";
 import { GameRedirectProvider } from "@/components/GameRedirectProvider";
 import { QueueProvider } from "@/components/providers/QueueProvider";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ 
+  subsets: ["latin"],
+  variable: "--font-inter",
+});
+const oswald = Oswald({ 
+  subsets: ["latin"],
+  weight: "700",
+  variable: "--font-oswald",
+});
 
 export const metadata: Metadata = {
   title: "POKROnline - Learn & Play Texas Hold'em",

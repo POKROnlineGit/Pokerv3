@@ -10,6 +10,8 @@ import {
   LogOut,
   Users,
   UserCircle,
+  ChevronRight,
+  ChevronLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,10 +39,14 @@ export function Sidebar() {
   // Minimized state: default to true on game pages, false otherwise
   const [isMinimized, setIsMinimized] = useState(isGamePage);
 
-  // Update minimized state when route changes
+  // Update minimized state when route changes to/from game page
   useEffect(() => {
     setIsMinimized(isGamePage);
   }, [isGamePage]);
+
+  const toggleSidebar = () => {
+    setIsMinimized((prev) => !prev);
+  };
 
   useEffect(() => {
     // Get current user
@@ -143,23 +149,61 @@ export function Sidebar() {
     duration: 0,
   };
 
+  // Tooltip component for minimized sidebar items
+  const Tooltip = ({
+    children,
+    text,
+    show,
+  }: {
+    children: React.ReactNode;
+    text: string;
+    show: boolean;
+  }) => {
+    const [isHovered, setIsHovered] = useState(false);
+
+    return (
+      <div
+        className="relative w-full flex items-center"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {children}
+        <AnimatePresence>
+          {show && isHovered && (
+            <motion.div
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -8 }}
+              transition={{ duration: 0.15 }}
+              className="absolute left-full ml-2 z-[9999] px-3 py-2 bg-gray-900 text-white text-sm rounded-md shadow-xl whitespace-nowrap pointer-events-none"
+              style={{
+                top: "50%",
+                transform: "translateY(-50%)",
+              }}
+            >
+              {text}
+              <div
+                className="absolute right-full border-4 border-transparent border-r-gray-900"
+                style={{
+                  top: "50%",
+                  right: "100%",
+                  transform: "translateY(-50%)",
+                }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  };
+
   return (
     <motion.aside
-      className="flex flex-col h-screen border-r bg-card flex-shrink-0 z-50 overflow-hidden"
+      className="flex flex-col h-screen border-r bg-card flex-shrink-0 z-50 overflow-visible"
       variants={sidebarVariants}
       animate={isMinimized ? "minimized" : "expanded"}
       initial={isMinimized ? "minimized" : "expanded"}
       style={{ willChange: "width" }}
-      onMouseEnter={() => {
-        if (isGamePage) {
-          setIsMinimized(false);
-        }
-      }}
-      onMouseLeave={() => {
-        if (isGamePage) {
-          setIsMinimized(true);
-        }
-      }}
     >
       <div
         className={cn("border-b overflow-hidden", isMinimized ? "p-4" : "p-6")}
@@ -214,35 +258,123 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 p-4 space-y-2 min-w-0">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          // Special handling for /play to exclude /play/profile
-          let isActive = false;
-          if (item.href === "/play") {
-            // Match /play exactly or /play/game/... or /play/local/..., but not /play/profile
-            isActive =
-              pathname === "/play" ||
-              pathname.startsWith("/play/game/") ||
-              pathname.startsWith("/play/local/");
-          } else {
-            // For other routes, use startsWith but ensure /play/profile doesn't match /play
-            isActive = pathname.startsWith(item.href);
-          }
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
+      <nav className="flex-1 flex flex-col p-4 overflow-visible min-h-0">
+        <div className="flex flex-col space-y-2 flex-shrink-0">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            // Special handling for /play to exclude /play/profile
+            let isActive = false;
+            if (item.href === "/play") {
+              // Match /play exactly or /play/game/... or /play/local/..., but not /play/profile
+              isActive =
+                pathname === "/play" ||
+                pathname.startsWith("/play/game/") ||
+                pathname.startsWith("/play/local/");
+            } else {
+              // For other routes, use startsWith but ensure /play/profile doesn't match /play
+              isActive = pathname.startsWith(item.href);
+            }
+            return (
+              <Tooltip text={item.label} show={isMinimized}>
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg transition-colors min-w-0 w-full",
+                    isMinimized
+                      ? "justify-center px-3 py-3"
+                      : "justify-between px-4 py-3",
+                    isActive
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-accent text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "flex items-center",
+                      isMinimized ? "justify-center" : "gap-3"
+                    )}
+                  >
+                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    {!isMinimized && (
+                      <motion.span
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: "auto" }}
+                        exit={{ opacity: 0, width: 0 }}
+                        transition={contentTransition}
+                        className="whitespace-nowrap overflow-hidden"
+                      >
+                        {item.label}
+                      </motion.span>
+                    )}
+                  </div>
+                  {!isMinimized &&
+                    item.badge !== null &&
+                    item.badge !== undefined && (
+                      <Badge variant="destructive" className="ml-auto">
+                        {item.badge}
+                      </Badge>
+                    )}
+                </Link>
+              </Tooltip>
+            );
+          })}
+          {/* Profile Link - At bottom of nav */}
+          {profile && (
+            <Tooltip
+              text={`${
+                profile.username
+              } - ${profile.chips.toLocaleString()} chips`}
+              show={isMinimized}
+            >
+              <Link
+                href="/play/profile"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg transition-colors min-w-0 w-full",
+                  isMinimized ? "justify-center px-3 py-3" : "px-4 py-3",
+                  pathname === "/play/profile"
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-accent text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <UserCircle className="h-6 w-6 flex-shrink-0" />
+                {!isMinimized && (
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">
+                      {profile.username}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {profile.chips.toLocaleString()} chips • Joined:{" "}
+                      {new Date(profile.created_at).toLocaleDateString(
+                        "en-US",
+                        {
+                          month: "short",
+                          day: "numeric",
+                        }
+                      )}
+                    </div>
+                  </div>
+                )}
+              </Link>
+            </Tooltip>
+          )}
+        </div>
+
+        {/* Toggle Button - At bottom of nav with space */}
+        <div className="mt-auto pt-6">
+          <Tooltip
+            text={isMinimized ? "Expand" : "Collapse"}
+            show={isMinimized}
+          >
+            <button
+              onClick={toggleSidebar}
               className={cn(
-                "flex items-center gap-3 rounded-lg transition-colors min-w-0",
+                "flex items-center gap-3 rounded-lg transition-colors min-w-0 w-full",
                 isMinimized
                   ? "justify-center px-3 py-3"
-                  : "justify-between px-4 py-3",
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-accent text-muted-foreground hover:text-foreground"
+                  : "justify-start px-4 py-3",
+                "hover:bg-accent text-muted-foreground hover:text-foreground"
               )}
-              title={isMinimized ? item.label : undefined}
             >
               <div
                 className={cn(
@@ -250,90 +382,56 @@ export function Sidebar() {
                   isMinimized ? "justify-center" : "gap-3"
                 )}
               >
-                <Icon className="h-5 w-5 flex-shrink-0" />
-                {!isMinimized && (
-                  <motion.span
-                    initial={{ opacity: 0, width: 0 }}
-                    animate={{ opacity: 1, width: "auto" }}
-                    exit={{ opacity: 0, width: 0 }}
-                    transition={contentTransition}
-                    className="whitespace-nowrap overflow-hidden"
-                  >
-                    {item.label}
-                  </motion.span>
+                {isMinimized ? (
+                  <ChevronRight className="h-5 w-5 flex-shrink-0" />
+                ) : (
+                  <>
+                    <ChevronLeft className="h-5 w-5 flex-shrink-0" />
+                    <motion.span
+                      initial={{ opacity: 0, width: 0 }}
+                      animate={{ opacity: 1, width: "auto" }}
+                      exit={{ opacity: 0, width: 0 }}
+                      transition={contentTransition}
+                      className="whitespace-nowrap overflow-hidden"
+                    >
+                      Collapse
+                    </motion.span>
+                  </>
                 )}
               </div>
-              {!isMinimized &&
-                item.badge !== null &&
-                item.badge !== undefined && (
-                  <Badge variant="destructive" className="ml-auto">
-                    {item.badge}
-                  </Badge>
-                )}
-            </Link>
-          );
-        })}
-        {/* Profile Link - At bottom of nav */}
-        {profile && (
-          <Link
-            href="/play/profile"
-            className={cn(
-              "flex items-center gap-3 rounded-lg transition-colors min-w-0",
-              isMinimized ? "justify-center px-3 py-3" : "px-4 py-3",
-              pathname === "/play/profile"
-                ? "bg-primary text-primary-foreground"
-                : "hover:bg-accent text-muted-foreground hover:text-foreground"
-            )}
-            title={
-              isMinimized
-                ? `${
-                    profile.username
-                  } - ${profile.chips.toLocaleString()} chips`
-                : undefined
-            }
-          >
-            <UserCircle className="h-6 w-6 flex-shrink-0" />
-            {!isMinimized && (
-              <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{profile.username}</div>
-                <div className="text-xs text-muted-foreground truncate">
-                  {profile.chips.toLocaleString()} chips • Joined:{" "}
-                  {new Date(profile.created_at).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </div>
-              </div>
-            )}
-          </Link>
-        )}
+            </button>
+          </Tooltip>
+        </div>
       </nav>
 
       <div
-        className={cn("border-t overflow-hidden", isMinimized ? "p-4" : "p-4")}
+        className={cn("border-t overflow-visible", isMinimized ? "p-4" : "p-4")}
       >
-        <Button
-          variant="ghost"
-          className={cn(
-            "w-full gap-3",
-            isMinimized ? "justify-center px-3" : "justify-start"
-          )}
-          onClick={handleSignOut}
-          title={isMinimized ? "Sign Out" : undefined}
-        >
-          <LogOut className="h-5 w-5 flex-shrink-0" />
-          {!isMinimized && (
-            <motion.span
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: "auto" }}
-              exit={{ opacity: 0, width: 0 }}
-              transition={contentTransition}
-              className="whitespace-nowrap overflow-hidden"
-            >
-              Sign Out
-            </motion.span>
-          )}
-        </Button>
+        <Tooltip text="Sign Out" show={isMinimized}>
+          <button
+            onClick={handleSignOut}
+            className={cn(
+              "flex items-center gap-3 rounded-lg transition-colors min-w-0 w-full",
+              isMinimized
+                ? "justify-center px-3 py-3"
+                : "justify-start px-4 py-3",
+              "hover:bg-accent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <LogOut className="h-5 w-5 flex-shrink-0" />
+            {!isMinimized && (
+              <motion.span
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: "auto" }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={contentTransition}
+                className="whitespace-nowrap overflow-hidden"
+              >
+                Sign Out
+              </motion.span>
+            )}
+          </button>
+        </Tooltip>
       </div>
     </motion.aside>
   );
