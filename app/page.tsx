@@ -112,7 +112,7 @@ export default function HomePage() {
   const showcaseCards = ['Ah', 'Kd', 'Qc', 'Js', 'Th', '9s']
 
   return (
-    <div className="min-h-screen bg-black relative overflow-x-hidden">
+    <div className="min-h-screen relative overflow-x-hidden">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
       {/* Theme Toggle */}

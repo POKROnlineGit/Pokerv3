@@ -211,7 +211,7 @@ export default function LessonPage({
 
   if (loading || !lessonId) {
     return (
-      <div className="min-h-screen bg-black relative">
+      <div className="min-h-screen relative">
         <div className="container mx-auto px-4 py-8 max-w-4xl flex items-center justify-center min-h-screen">
           <div className="text-white">Loading...</div>
         </div>
@@ -237,7 +237,7 @@ export default function LessonPage({
   };
 
   return (
-    <div className="min-h-screen bg-black relative">
+    <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
         <div className="container mx-auto px-4 py-8 max-w-4xl">

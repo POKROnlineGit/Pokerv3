@@ -281,9 +281,8 @@ export function Sidebar() {
               isActive = pathname.startsWith(item.href);
             }
             return (
-              <Tooltip text={item.label} show={isMinimized}>
+              <Tooltip key={item.href} text={item.label} show={isMinimized}>
                 <Link
-                  key={item.href}
                   href={item.href}
                   className={cn(
                     "flex items-center gap-3 rounded-lg transition-colors min-w-0 w-full",

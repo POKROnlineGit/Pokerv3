@@ -140,7 +140,7 @@ export default function QueuePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black relative">
+      <div className="min-h-screen relative">
         {/* --- FIXED BACKGROUND LAYER --- */}
         <div
           className="fixed inset-0 z-0 overflow-hidden"
@@ -177,7 +177,7 @@ export default function QueuePage() {
   }
 
   return (
-    <div className="min-h-screen bg-black relative">
+    <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
         <div className="container mx-auto px-4 py-8">

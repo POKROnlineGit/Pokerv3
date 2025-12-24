@@ -46,7 +46,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black relative">
+      <div className="min-h-screen relative">
         <div className="container mx-auto max-w-4xl p-6 flex items-center justify-center min-h-screen">
           <div className="text-white">Loading...</div>
         </div>
@@ -79,7 +79,7 @@ export default function ProfilePage() {
   }> = [];
 
   return (
-    <div className="min-h-screen bg-black relative">
+    <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
         <div className="p-6">

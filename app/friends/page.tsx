@@ -329,7 +329,7 @@ export default function FriendsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black relative">
+    <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
         <div className="container mx-auto p-6 max-w-4xl">

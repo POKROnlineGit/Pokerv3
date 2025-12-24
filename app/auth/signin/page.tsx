@@ -89,7 +89,7 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black relative flex items-center justify-center p-4">
+    <div className="min-h-screen relative flex items-center justify-center p-4">
 
       <div className="absolute top-4 right-4 z-10">
         <ThemeToggle />

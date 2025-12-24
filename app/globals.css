@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 @layer base {
+  html,
+  body {
+    background-color: #000000;
+  }
+
   :root {
     /* Official PokerOnline Color Palette */
     --color-primary-500: #9A1F40;
