@@ -1,0 +1,166 @@
+{
+  "schemes": [
+    {
+      "name": "Emerald Felt",
+      "description": "Green and black - matches current coming soon page",
+      "primary": {
+        "500": "#10B981",
+        "600": "#059669",
+        "700": "#047857",
+        "800": "#065F46"
+      },
+      "gradient": {
+        "start": "#064E3B",
+        "middle": "#022C22",
+        "end": "#000000"
+      },
+      "background": {
+        "base": "#000000",
+        "card": "rgba(0, 0, 0, 0.3)",
+        "hover": "rgba(255, 255, 255, 0.05)"
+      },
+      "accent": {
+        "primary": "#10B981",
+        "secondary": "#34D399",
+        "muted": "#6EE7B7"
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#D1D5DB",
+        "muted": "#9CA3AF"
+      },
+      "border": "rgba(255, 255, 255, 0.1)",
+      "success": "#22C55E"
+    },
+    {
+      "name": "Maroon Royal",
+      "description": "Maroon, red, and black - matches current site primary colors",
+      "primary": {
+        "500": "#9A1F40",
+        "600": "#861A38",
+        "700": "#6B152C",
+        "800": "#5B1125"
+      },
+      "gradient": {
+        "start": "#7F1D1D",
+        "middle": "#450A0A",
+        "end": "#000000"
+      },
+      "background": {
+        "base": "#000000",
+        "card": "rgba(0, 0, 0, 0.3)",
+        "hover": "rgba(255, 255, 255, 0.05)"
+      },
+      "accent": {
+        "primary": "#9A1F40",
+        "secondary": "#DC2626",
+        "muted": "#EF4444"
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#D1D5DB",
+        "muted": "#9CA3AF"
+      },
+      "border": "rgba(255, 255, 255, 0.1)",
+      "success": "#22C55E"
+    },
+    {
+      "name": "Golden Casino",
+      "description": "Gold, amber, and black - classic poker table and casino aesthetic",
+      "primary": {
+        "500": "#D97706",
+        "600": "#B45309",
+        "700": "#92400E",
+        "800": "#78350F"
+      },
+      "gradient": {
+        "start": "#78350F",
+        "middle": "#451A03",
+        "end": "#000000"
+      },
+      "background": {
+        "base": "#000000",
+        "card": "rgba(0, 0, 0, 0.3)",
+        "hover": "rgba(255, 255, 255, 0.05)"
+      },
+      "accent": {
+        "primary": "#F59E0B",
+        "secondary": "#FBBF24",
+        "muted": "#FCD34D"
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#F3F4F6",
+        "muted": "#D1D5DB"
+      },
+      "border": "rgba(255, 255, 255, 0.1)",
+      "success": "#22C55E"
+    },
+    {
+      "name": "Deep Blue",
+      "description": "Navy blue, indigo, and black - sophisticated poker room atmosphere",
+      "primary": {
+        "500": "#3B82F6",
+        "600": "#2563EB",
+        "700": "#1D4ED8",
+        "800": "#1E40AF"
+      },
+      "gradient": {
+        "start": "#1E3A8A",
+        "middle": "#1E1B4B",
+        "end": "#000000"
+      },
+      "background": {
+        "base": "#000000",
+        "card": "rgba(0, 0, 0, 0.3)",
+        "hover": "rgba(255, 255, 255, 0.05)"
+      },
+      "accent": {
+        "primary": "#3B82F6",
+        "secondary": "#60A5FA",
+        "muted": "#93C5FD"
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#E5E7EB",
+        "muted": "#D1D5DB"
+      },
+      "border": "rgba(255, 255, 255, 0.1)",
+      "success": "#22C55E"
+    },
+    {
+      "name": "Royal Purple",
+      "description": "Purple, violet, and black - luxury high-stakes poker room vibe",
+      "primary": {
+        "500": "#9333EA",
+        "600": "#7E22CE",
+        "700": "#6B21A8",
+        "800": "#581C87"
+      },
+      "gradient": {
+        "start": "#581C87",
+        "middle": "#3B0764",
+        "end": "#000000"
+      },
+      "background": {
+        "base": "#000000",
+        "card": "rgba(0, 0, 0, 0.3)",
+        "hover": "rgba(255, 255, 255, 0.05)"
+      },
+      "accent": {
+        "primary": "#A855F7",
+        "secondary": "#C084FC",
+        "muted": "#D8B4FE"
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#F3F4F6",
+        "muted": "#E5E7EB"
+      },
+      "border": "rgba(255, 255, 255, 0.1)",
+      "success": "#22C55E"
+    }
+  ]
+}
+
+

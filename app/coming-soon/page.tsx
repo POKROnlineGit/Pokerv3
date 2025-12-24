@@ -420,6 +420,13 @@ export default function ComingSoonPage() {
                   </svg>
                 </span>
               </Button>
+
+              <button
+                onClick={scrollToFeatures}
+                className="text-emerald-400/60 hover:text-emerald-300 text-sm font-medium animate-bounce mt-4"
+              >
+                Scroll to explore ▼
+              </button>
             </motion.div>
           </motion.div>
         </div>

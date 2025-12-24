@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poker Color Scheme Comparison</title>
+    <style>
+        @media print {
+            body { margin: 0; }
+            .scheme { page-break-inside: avoid; }
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            font-size: 36px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #999;
+            margin-bottom: 40px;
+            font-size: 16px;
+        }
+        
+        .scheme {
+            background: #2a2a2a;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        .scheme-header {
+            padding: 30px;
+            color: white;
+        }
+        
+        .scheme-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .scheme-desc {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .scheme-body {
+            padding: 30px;
+        }
+        
+        .color-section {
+            margin-bottom: 25px;
+        }
+        
+        .color-section:last-child {
+            margin-bottom: 0;
+        }
+        
+        .section-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #999;
+            margin-bottom: 12px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        
+        .color-row {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .color-item {
+            flex: 1;
+        }
+        
+        .color-swatch {
+            height: 80px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        .color-code {
+            font-size: 11px;
+            color: #999;
+            text-align: center;
+            margin-top: 8px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Poker Color Scheme Comparison</h1>
+        <p class="subtitle">Compare different color palettes for your poker platform</p>
+        
+        <!-- Emerald Felt -->
+        <div class="scheme">
+            <div class="scheme-header" style="background: linear-gradient(135deg, #064E3B, #022C22, #000000);">
+                <div class="scheme-name">Emerald Felt</div>
+                <div class="scheme-desc">Green and black - matches current coming soon page</div>
+            </div>
+            <div class="scheme-body">
+                <div class="color-section">
+                    <div class="section-title">Primary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #10B981;"></div>
+                            <div class="color-code">#10B981</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #059669;"></div>
+                            <div class="color-code">#059669</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #047857;"></div>
+                            <div class="color-code">#047857</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #065F46;"></div>
+                            <div class="color-code">#065F46</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Secondary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #06B6D4;"></div>
+                            <div class="color-code">#06B6D4</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #0891B2;"></div>
+                            <div class="color-code">#0891B2</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #0E7490;"></div>
+                            <div class="color-code">#0E7490</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Gradient Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #064E3B;"></div>
+                            <div class="color-code">#064E3B</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #022C22;"></div>
+                            <div class="color-code">#022C22</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #000000;"></div>
+                            <div class="color-code">#000000</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Accent Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #10B981;"></div>
+                            <div class="color-code">#10B981</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #34D399;"></div>
+                            <div class="color-code">#34D399</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #6EE7B7;"></div>
+                            <div class="color-code">#6EE7B7</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Emerald Felt - Darker -->
+        <div class="scheme">
+            <div class="scheme-header" style="background: linear-gradient(135deg, #022C22, #021713, #000000);">
+                <div class="scheme-name">Emerald Felt - Darker</div>
+                <div class="scheme-desc">Deeper, moodier green - more sophisticated poker room feel</div>
+            </div>
+            <div class="scheme-body">
+                <div class="color-section">
+                    <div class="section-title">Primary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #059669;"></div>
+                            <div class="color-code">#059669</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #047857;"></div>
+                            <div class="color-code">#047857</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #065F46;"></div>
+                            <div class="color-code">#065F46</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #064E3B;"></div>
+                            <div class="color-code">#064E3B</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Secondary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #0E7490;"></div>
+                            <div class="color-code">#0E7490</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #0C4A6E;"></div>
+                            <div class="color-code">#0C4A6E</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #075985;"></div>
+                            <div class="color-code">#075985</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Gradient Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #022C22;"></div>
+                            <div class="color-code">#022C22</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #021713;"></div>
+                            <div class="color-code">#021713</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #000000;"></div>
+                            <div class="color-code">#000000</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Accent Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #059669;"></div>
+                            <div class="color-code">#059669</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #10B981;"></div>
+                            <div class="color-code">#10B981</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #34D399;"></div>
+                            <div class="color-code">#34D399</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Emerald Felt - Bright -->
+        <div class="scheme">
+            <div class="scheme-header" style="background: linear-gradient(135deg, #047857, #064E3B, #000000);">
+                <div class="scheme-name">Emerald Felt - Bright</div>
+                <div class="scheme-desc">Vibrant green - energetic and modern poker table</div>
+            </div>
+            <div class="scheme-body">
+                <div class="color-section">
+                    <div class="section-title">Primary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #34D399;"></div>
+                            <div class="color-code">#34D399</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #10B981;"></div>
+                            <div class="color-code">#10B981</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #059669;"></div>
+                            <div class="color-code">#059669</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #047857;"></div>
+                            <div class="color-code">#047857</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Secondary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #22D3EE;"></div>
+                            <div class="color-code">#22D3EE</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #06B6D4;"></div>
+                            <div class="color-code">#06B6D4</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #0891B2;"></div>
+                            <div class="color-code">#0891B2</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Gradient Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #047857;"></div>
+                            <div class="color-code">#047857</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #064E3B;"></div>
+                            <div class="color-code">#064E3B</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #000000;"></div>
+                            <div class="color-code">#000000</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Accent Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #6EE7B7;"></div>
+                            <div class="color-code">#6EE7B7</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #34D399;"></div>
+                            <div class="color-code">#34D399</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #10B981;"></div>
+                            <div class="color-code">#10B981</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Maroon Royal -->
+        <div class="scheme">
+            <div class="scheme-header" style="background: linear-gradient(135deg, #7F1D1D, #450A0A, #000000);">
+                <div class="scheme-name">Maroon Royal</div>
+                <div class="scheme-desc">Maroon, red, and black - matches current site primary colors</div>
+            </div>
+            <div class="scheme-body">
+                <div class="color-section">
+                    <div class="section-title">Primary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #9A1F40;"></div>
+                            <div class="color-code">#9A1F40</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #861A38;"></div>
+                            <div class="color-code">#861A38</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #6B152C;"></div>
+                            <div class="color-code">#6B152C</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #5B1125;"></div>
+                            <div class="color-code">#5B1125</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Secondary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #D97706;"></div>
+                            <div class="color-code">#D97706</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #B45309;"></div>
+                            <div class="color-code">#B45309</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #92400E;"></div>
+                            <div class="color-code">#92400E</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Gradient Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #7F1D1D;"></div>
+                            <div class="color-code">#7F1D1D</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #450A0A;"></div>
+                            <div class="color-code">#450A0A</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #000000;"></div>
+                            <div class="color-code">#000000</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Accent Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #9A1F40;"></div>
+                            <div class="color-code">#9A1F40</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #DC2626;"></div>
+                            <div class="color-code">#DC2626</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #EF4444;"></div>
+                            <div class="color-code">#EF4444</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Maroon Royal - Deep -->
+        <div class="scheme">
+            <div class="scheme-header" style="background: linear-gradient(135deg, #5B1125, #3F0A0A, #000000);">
+                <div class="scheme-name">Maroon Royal - Deep</div>
+                <div class="scheme-desc">Darker maroon - luxurious high-stakes room atmosphere</div>
+            </div>
+            <div class="scheme-body">
+                <div class="color-section">
+                    <div class="section-title">Primary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #7F1D1D;"></div>
+                            <div class="color-code">#7F1D1D</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #6B152C;"></div>
+                            <div class="color-code">#6B152C</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #5B1125;"></div>
+                            <div class="color-code">#5B1125</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #450A0A;"></div>
+                            <div class="color-code">#450A0A</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Secondary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #B45309;"></div>
+                            <div class="color-code">#B45309</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #92400E;"></div>
+                            <div class="color-code">#92400E</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #78350F;"></div>
+                            <div class="color-code">#78350F</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Gradient Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #5B1125;"></div>
+                            <div class="color-code">#5B1125</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #3F0A0A;"></div>
+                            <div class="color-code">#3F0A0A</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #000000;"></div>
+                            <div class="color-code">#000000</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Accent Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #7F1D1D;"></div>
+                            <div class="color-code">#7F1D1D</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #9A1F40;"></div>
+                            <div class="color-code">#9A1F40</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #DC2626;"></div>
+                            <div class="color-code">#DC2626</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Maroon Royal - Crimson -->
+        <div class="scheme">
+            <div class="scheme-header" style="background: linear-gradient(135deg, #991B1B, #7F1D1D, #000000);">
+                <div class="scheme-name">Maroon Royal - Crimson</div>
+                <div class="scheme-desc">Brighter red tones - bold and confident casino vibe</div>
+            </div>
+            <div class="scheme-body">
+                <div class="color-section">
+                    <div class="section-title">Primary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #DC2626;"></div>
+                            <div class="color-code">#DC2626</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #B91C1C;"></div>
+                            <div class="color-code">#B91C1C</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #991B1B;"></div>
+                            <div class="color-code">#991B1B</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #7F1D1D;"></div>
+                            <div class="color-code">#7F1D1D</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Secondary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #F59E0B;"></div>
+                            <div class="color-code">#F59E0B</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #D97706;"></div>
+                            <div class="color-code">#D97706</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #B45309;"></div>
+                            <div class="color-code">#B45309</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Gradient Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #991B1B;"></div>
+                            <div class="color-code">#991B1B</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #7F1D1D;"></div>
+                            <div class="color-code">#7F1D1D</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #000000;"></div>
+                            <div class="color-code">#000000</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Accent Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #EF4444;"></div>
+                            <div class="color-code">#EF4444</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #DC2626;"></div>
+                            <div class="color-code">#DC2626</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #F87171;"></div>
+                            <div class="color-code">#F87171</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Golden Casino -->
+        <div class="scheme">
+            <div class="scheme-header" style="background: linear-gradient(135deg, #78350F, #451A03, #000000);">
+                <div class="scheme-name">Golden Casino</div>
+                <div class="scheme-desc">Gold, amber, and black - classic poker table and casino aesthetic</div>
+            </div>
+            <div class="scheme-body">
+                <div class="color-section">
+                    <div class="section-title">Primary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #D97706;"></div>
+                            <div class="color-code">#D97706</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #B45309;"></div>
+                            <div class="color-code">#B45309</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #92400E;"></div>
+                            <div class="color-code">#92400E</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #78350F;"></div>
+                            <div class="color-code">#78350F</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="color-section">
+                    <div class="section-title">Secondary Colors</div>
+                    <div class="color-row">
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #DC2626;"></div>
+                            <div class="color-code">#DC2626</div>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-swatch" style="background: #B91C1C;"></div>
+                            <div class="color-code">#B91C1C</div>
+                        </div>
+                        <div
