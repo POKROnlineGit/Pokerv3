@@ -107,13 +107,16 @@ export default function SignInPage() {
             backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
           }}
         />
+
+        {/* Vignette */}
+        <div className="absolute inset-0 bg-radial-gradient from-transparent to-black/80 pointer-events-none" />
       </div>
 
       <div className="absolute top-4 right-4 z-10">
         <ThemeToggle />
       </div>
 
-      <Card className="w-full max-w-md relative z-10">
+      <Card className="w-full max-w-md relative z-10 bg-card">
         <CardHeader>
           <CardTitle className="text-2xl">Sign In to POKROnline</CardTitle>
           <CardDescription>
@@ -122,7 +125,13 @@ export default function SignInPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {error && (
-            <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+            <div 
+              className="text-sm p-3 rounded-md"
+              style={{
+                backgroundColor: `${accentColor}20`,
+                color: accentColor,
+              }}
+            >
               {error}
             </div>
           )}
