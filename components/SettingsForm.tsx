@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { createClientComponentClient } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/components/providers/ThemeProvider'
+import { getTheme } from '@/lib/themes'
 import {
   Select,
   SelectContent,
@@ -145,26 +146,35 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
             <Label htmlFor="color-theme">Color Theme</Label>
             <Select
               value={colorTheme}
-              onValueChange={(value) => setColorThemeLocal(value)}
+              onValueChange={(value) => {
+                setColorThemeLocal(value)
+              }}
             >
               <SelectTrigger id="color-theme" className="w-full">
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1">
-                    <div
-                      className="h-4 w-4 rounded border border-border"
-                      style={{ backgroundColor: currentTheme.colors.primary[0] }}
-                    />
-                    <div
-                      className="h-4 w-4 rounded border border-border"
-                      style={{ backgroundColor: currentTheme.colors.gradient[0] }}
-                    />
-                    <div
-                      className="h-4 w-4 rounded border border-border"
-                      style={{ backgroundColor: currentTheme.colors.accent[0] }}
-                    />
+                    {(() => {
+                      const selectedTheme = getTheme(colorTheme)
+                      return (
+                        <>
+                          <div
+                            className="h-4 w-4 rounded border border-border"
+                            style={{ backgroundColor: selectedTheme.colors.primary[0] }}
+                          />
+                          <div
+                            className="h-4 w-4 rounded border border-border"
+                            style={{ backgroundColor: selectedTheme.colors.gradient[0] }}
+                          />
+                          <div
+                            className="h-4 w-4 rounded border border-border"
+                            style={{ backgroundColor: selectedTheme.colors.accent[0] }}
+                          />
+                        </>
+                      )
+                    })()}
                   </div>
                   <SelectValue>
-                    {currentTheme.name}
+                    {getTheme(colorTheme).name}
                   </SelectValue>
                 </div>
               </SelectTrigger>
