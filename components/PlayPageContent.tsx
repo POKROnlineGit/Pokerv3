@@ -168,7 +168,7 @@ export function PlayPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-black relative">
+    <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10 container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto space-y-8">
