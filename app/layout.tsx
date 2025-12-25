@@ -3,7 +3,7 @@ import { Inter, Oswald } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { createServerComponentClient } from "@/lib/supabaseClient";
-import { ToastProvider } from "@/components/ToastProvider";
+import { ToastProvider } from "@/components/providers/ToastProvider";
 import { GameRedirectProvider } from "@/components/GameRedirectProvider";
 import { QueueProvider } from "@/components/providers/QueueProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";

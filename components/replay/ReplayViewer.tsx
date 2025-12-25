@@ -10,9 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PokerTable } from "@/components/PokerTable";
+import { PokerTable } from "@/components/game/PokerTable";
 import { ReplayOrchestrator, type ReplayInput, type ReplayResult } from "@/lib/replay/ReplayOrchestrator";
-import { useReplayController } from "@/lib/hooks/useReplayController";
+import { useReplayController } from "@/lib/hooks";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 import { Play, Pause, SkipForward, SkipBack, X, AlertCircle } from "lucide-react";
 // @ts-ignore - Importing from shared backend

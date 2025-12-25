@@ -5,10 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Play, Bot, Users, User } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useLocalGameStore } from '@/lib/hooks/useLocalGameStore'
+import { useLocalGameStore } from '@/lib/hooks'
 import { MotionCard } from '@/components/motion/MotionCard'
-import { motion } from 'framer-motion'
-import { useToast } from '@/lib/hooks/use-toast'
+import { useToast } from '@/lib/hooks'
 import { useSocket } from '@/lib/socketClient'
 import { useQueue } from '@/components/providers/QueueProvider'
 import { useTheme } from '@/components/providers/ThemeProvider'
@@ -34,7 +33,6 @@ export function PlayPageContent() {
   // Redirect to queue page if user is already in a queue
   useEffect(() => {
     if (inQueue && queueType) {
-      console.log('[PlayPage] User already in queue, redirecting...', { queueType })
       router.push(`/play/queue?type=${queueType}`)
     }
   }, [inQueue, queueType, router])
@@ -71,10 +69,6 @@ export function PlayPageContent() {
     const handleSessionStatus = (payload: { active?: boolean; gameId?: string | null }) => {
       if (!mounted) return
       const isActive = !!payload?.active && !!payload?.gameId
-      console.log('[PlayPage] session_status received (memory-authoritative)', {
-        active: payload?.active,
-        gameId: payload?.gameId,
-      })
       setInGame(isActive)
       setActiveGameId(isActive ? String(payload!.gameId) : null)
       // Only set isChecking to false if socket is still connected
@@ -85,7 +79,6 @@ export function PlayPageContent() {
 
     const emitCheckSession = () => {
       if (!mounted) return
-      console.log('[PlayPage] Emitting check_active_session (socket-based, no DB query)')
       setIsChecking(true)
       socket.emit('check_active_session')
     }
@@ -94,7 +87,6 @@ export function PlayPageContent() {
     if (socket.connected) {
       emitCheckSession()
     } else {
-      console.log('[PlayPage] Socket not connected, waiting for connect event')
       connectHandler = () => {
         if (mounted) {
           emitCheckSession()
@@ -110,16 +102,13 @@ export function PlayPageContent() {
     const timeoutId = setTimeout(() => {
       if (!mounted) return
       if (socket.connected) {
-        console.warn('[PlayPage] check_active_session timed out; assuming no active session')
         setInGame(false)
         setActiveGameId(null)
         setIsChecking(false)
         socket.off('session_status', handleSessionStatus)
-      } else {
-        console.warn('[PlayPage] check_active_session timed out but socket not connected; keeping buttons disabled')
-        // Keep isChecking true if socket is not connected
-        // This prevents buttons from being enabled when server is down
       }
+      // Keep isChecking true if socket is not connected
+      // This prevents buttons from being enabled when server is down
     }, 5000)
 
     return () => {
@@ -157,12 +146,6 @@ export function PlayPageContent() {
       })
       return
     }
-    console.log('[PlayPage] Navigating to queue', {
-      queueType,
-      inGame,
-      isChecking,
-      inQueue,
-    })
     // Navigate to queue page - it will handle joining via sockets
     router.push(`/play/queue?type=${queueType}`)
   }
@@ -305,9 +288,6 @@ export function PlayPageContent() {
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    console.log('[PlayPage] Rejoining active game from lobby', {
-                      gameId: activeGameId,
-                    })
                     router.push(`/play/game/${activeGameId}`)
                   }}
                   style={{

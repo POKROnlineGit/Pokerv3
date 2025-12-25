@@ -1,6 +1,6 @@
 'use client'
 
-import { useGameRedirect } from '@/lib/hooks/useGameRedirect'
+import { useGameRedirect } from '@/lib/hooks'
 
 /**
  * Client component wrapper for game redirect hook

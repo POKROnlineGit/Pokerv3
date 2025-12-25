@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Search, UserPlus, Check, X, Users, User } from 'lucide-react'
-import { useToast } from '@/lib/hooks/use-toast'
+import { useToast } from '@/lib/hooks'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/components/providers/ThemeProvider'
 

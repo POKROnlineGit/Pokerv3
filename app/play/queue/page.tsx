@@ -34,39 +34,29 @@ export default function QueuePage() {
 
     const handleConnect = () => {
       if (!mounted) return
-      console.log('[QueuePage] Socket connected for queue', { queueType: type })
       setIsConnected(true)
       setLoading(false)
     }
 
     const handleDisconnect = () => {
       if (!mounted) return
-      console.warn('[QueuePage] Socket disconnected while in queue', {
-        queueType: type,
-      })
       setIsConnected(false)
     }
 
     const handleMatchFound = (payload: { gameId: string }) => {
       if (!mounted) return
       if (payload?.gameId) {
-        console.log('[QueuePage] match_found received, navigating to game', {
-          queueType: type,
-          gameId: payload.gameId,
-        })
         router.push(`/play/game/${payload.gameId}`)
       }
     }
 
     const handleQueueUpdate = (payload: any) => {
       if (!mounted) return
-      console.log('[QueuePage] Queue update received:', payload)
       setLoading(false)
     }
 
     const handleQueueInfo = (data: { queueType: string; count: number; needed: number; target: number }) => {
       if (!mounted) return
-      console.log('[QueuePage] Received queue info:', data)
       if (data.queueType === type) {
         setQueueStatus(data)
       }
@@ -86,15 +76,10 @@ export default function QueuePage() {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) {
-          console.warn('[QueuePage] No user found when attempting to join queue')
           router.push('/')
           return
         }
 
-        console.log('[QueuePage] Emitting join_queue', {
-          queueType: type,
-          userId: user.id,
-        })
         socket.emit('join_queue', { queueType: type })
       } catch (err: any) {
         console.error('[Queue] Error joining queue via socket:', err)
@@ -106,10 +91,8 @@ export default function QueuePage() {
     }
 
     if (socket.connected) {
-      console.log('[QueuePage] Socket already connected, joining queue immediately')
       emitJoinQueue()
     } else {
-      console.log('[QueuePage] Waiting for socket connect before joining queue')
       socket.once('connect', emitJoinQueue)
     }
 
@@ -126,10 +109,9 @@ export default function QueuePage() {
 
   const handleLeaveQueue = async () => {
     try {
-      console.log('[QueuePage] Leaving queue via global action', { queueType: type })
       leaveQueue(type) // Clears global state + emits socket event
     } catch (err: any) {
-      console.error('[Queue] Error leaving queue:', err)
+      // Error handled silently - user will be redirected anyway
     } finally {
       router.push('/play')
     }

@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { PokerTable } from "@/components/PokerTable";
-import { ActionPopup } from "@/components/ActionPopup";
+import { PokerTable } from "@/components/game/PokerTable";
+import { ActionPopup } from "@/components/game/ActionPopup";
 import { GameState, ActionType } from "@/lib/types/poker";
-import { useLocalGameStore } from "@/lib/hooks/useLocalGameStore";
+import { useLocalGameStore } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 
@@ -134,8 +134,6 @@ export default function LocalGamePage() {
     );
 
     if (newCards.length > 0) {
-      console.log('[LocalGame] New cards detected:', newCards, 'Previous:', prevCards, 'Current:', currentCards);
-      
       // Clear any existing timeout
       if (runoutTimeoutRef.current) {
         clearTimeout(runoutTimeoutRef.current);
@@ -179,21 +177,6 @@ export default function LocalGamePage() {
     );
   }
 
-  // Debug Props: Log what we're receiving from the Manager before rendering
-  console.log("[LocalGame View] Passing to Table:", { 
-    pot: adaptedGameState?.pot || gameState?.pot || gameState?.totalPot, 
-    pots: adaptedGameState?.pots,
-    sidePots: adaptedGameState?.sidePots,
-    players: adaptedGameState?.players?.length || 0,
-    communityCards: adaptedGameState?.communityCards?.length || 0,
-    buttonSeat: adaptedGameState?.buttonSeat,
-    dealerSeat: adaptedGameState?.dealerSeat,
-    sbSeat: adaptedGameState?.sbSeat,
-    bbSeat: adaptedGameState?.bbSeat,
-    currentActorSeat: adaptedGameState?.currentActorSeat,
-    currentRound: adaptedGameState?.currentRound
-  });
-
   const handleAction = (action: ActionType, amount?: number) => {
     if (!gameState || !heroId) return;
     playerAction(action, amount);
@@ -235,7 +218,7 @@ export default function LocalGamePage() {
         <PokerTable
           gameState={adaptedGameState!}
           currentUserId={heroId} // Pass the EXACT UUID from store
-          playerNames={BOT_NAMES}
+          playerNames={playerNames}
           isLocalGame={true}
           isHeadsUp={false}
           runoutCards={runoutCards}

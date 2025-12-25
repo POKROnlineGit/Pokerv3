@@ -7,7 +7,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Trophy, Clock, Coins, Play } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { createClientComponentClient } from "@/lib/supabaseClient";
-import { ReplayViewer } from "@/components/ReplayViewer";
+import { ReplayViewer } from "@/components/replay/ReplayViewer";
 // @ts-ignore - Importing from shared backend
 import { PokerCodec, indexToCard } from "@backend/game/handHistory/PokerCodec";
 

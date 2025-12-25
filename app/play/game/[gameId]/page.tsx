@@ -2,14 +2,14 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { PokerTable } from "@/components/PokerTable";
-import { ActionPopup } from "@/components/ActionPopup";
-import { LeaveGameButton } from "@/components/LeaveGameButton";
+import { PokerTable } from "@/components/game/PokerTable";
+import { ActionPopup } from "@/components/game/ActionPopup";
+import { LeaveGameButton } from "@/components/game/LeaveGameButton";
 import { GameState, ActionType } from "@/lib/types/poker";
 import { getSocket, disconnectSocket } from "@/lib/socketClient";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 import { AlertCircle, Wifi, WifiOff } from "lucide-react";
-import { useToast } from "@/lib/hooks/use-toast";
+import { useToast } from "@/lib/hooks";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +32,6 @@ export default function GamePage() {
   const [isInitializing, setIsInitializing] = useState(true); // Track initial game table initialization
   const [timeoutSeconds, setTimeoutSeconds] = useState<number | null>(null);
   const [isHeadsUp, setIsHeadsUp] = useState(false);
-  const [gameStatus, setGameStatus] = useState<string | null>(null);
   const [gameFinished, setGameFinished] = useState<{ reason: string } | null>(
     null
   ); // Game finished modal
@@ -48,7 +47,6 @@ export default function GamePage() {
   // Animation state for community cards
   const [runoutCards, setRunoutCards] = useState<string[]>([]);
   const [isRunningOut, setIsRunningOut] = useState(false);
-  const prevCommunityCardsRef = useRef<string[]>([]);
   const runoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const prevPhaseRef = useRef<string | null>(null); // Track previous phase for disconnect detection
@@ -127,10 +125,6 @@ export default function GamePage() {
 
       // Connect socket
       if (!socket.connected) {
-        console.log("[Game] Connecting socket for game", {
-          gameId,
-          userId: currentUserId,
-        });
         socket.connect();
       }
 
@@ -145,32 +139,14 @@ export default function GamePage() {
           }
 
           // On initial connect, (re)join this game room - server will automatically send gameState
-          console.log("[Game] Socket connected, emitting joinGame", {
-            gameId,
-            userId: currentUserId,
-          });
           socket.emit("joinGame", gameId);
           setIsSyncing(true);
         }
       };
 
       if (socket.connected) {
-        console.log(
-          "[Game] Socket already connected, running onConnect immediately",
-          {
-            gameId,
-            userId: currentUserId,
-          }
-        );
         onConnect();
       } else {
-        console.log(
-          "[Game] Waiting for socket connect event before joining game",
-          {
-            gameId,
-            userId: currentUserId,
-          }
-        );
         socket.once("connect", onConnect);
       }
 
@@ -201,23 +177,12 @@ export default function GamePage() {
 
           // Reset retry count on successful game state reception
           if (joinRetryCountRef.current > 0) {
-            console.log("[Game] Game state received, resetting retry count", {
-              gameId,
-              previousRetries: joinRetryCountRef.current,
-            });
             joinRetryCountRef.current = 0;
             if (joinRetryTimeoutRef.current) {
               clearTimeout(joinRetryTimeoutRef.current);
               joinRetryTimeoutRef.current = null;
             }
           }
-
-          console.log("[Game] gameState received", {
-            gameId,
-            handNumber: (state as any).handNumber,
-            currentRound: (state as any).currentRound,
-            currentActorSeat: (state as any).currentActorSeat,
-          });
           // Clear turn timer if action is no longer being awaited
           // When a new gameState arrives, it means the previous action has been processed
           // If there's an active timer, clear it unless the timer is still valid (same seat still acting)
@@ -464,10 +429,6 @@ export default function GamePage() {
       // Listen for timeout updates
       socket.on("timeout", (data: { seconds: number }) => {
         if (mounted) {
-          console.log("[Game] timeout event received", {
-            gameId,
-            seconds: data.seconds,
-          });
           setTimeoutSeconds(data.seconds);
 
           if (timeoutIntervalRef.current) {
@@ -492,7 +453,6 @@ export default function GamePage() {
       // Listen for disconnect
       socket.on("disconnect", () => {
         if (mounted) {
-          console.warn("[Game] Socket disconnected", { gameId });
           setIsDisconnected(true);
           setIsSyncing(true);
         }
@@ -509,7 +469,6 @@ export default function GamePage() {
             joinRetryTimeoutRef.current = null;
           }
           // On reconnect, ensure we (re)join this game - server will automatically send gameState
-          console.log("[Game] Socket reconnected, rejoining game", { gameId });
           socket.emit("joinGame", gameId);
           setIsSyncing(true);
         }
@@ -842,13 +801,6 @@ export default function GamePage() {
         }) => {
           if (!mounted) return;
 
-          console.log("[Game] GAME_FINISHED received", {
-            gameId: data.gameId,
-            reason: data.reason,
-            winnerId: data.winnerId,
-            timestamp: data.timestamp,
-          });
-
           // IMMEDIATE ACTION CLEANUP: Force hide action controls
           setForceHideActions(true);
           gameEndedRef.current = true; // Mark that game has ended
@@ -928,10 +880,6 @@ export default function GamePage() {
 
         // Reset retry count on successful sync
         if (joinRetryCountRef.current > 0) {
-          console.log("[Game] SYNC_GAME received, resetting retry count", {
-            gameId,
-            previousRetries: joinRetryCountRef.current,
-          });
           joinRetryCountRef.current = 0;
           if (joinRetryTimeoutRef.current) {
             clearTimeout(joinRetryTimeoutRef.current);
@@ -1078,10 +1026,6 @@ export default function GamePage() {
 
           if (joinRetryCountRef.current < maxRetries) {
             joinRetryCountRef.current += 1;
-            console.log(
-              `[Game] Game not found, retrying joinGame (attempt ${joinRetryCountRef.current}/${maxRetries})`,
-              { gameId }
-            );
 
             // Clear any existing retry timeout
             if (joinRetryTimeoutRef.current) {
@@ -1091,19 +1035,10 @@ export default function GamePage() {
             // Wait 500ms, then retry joinGame only (server will handle state sync)
             joinRetryTimeoutRef.current = setTimeout(() => {
               if (!mounted) return;
-
-              console.log("[Game] Retrying joinGame after delay", {
-                gameId,
-                attempt: joinRetryCountRef.current,
-              });
               socket.emit("joinGame", gameId);
             }, retryDelay);
           } else {
             // All retries exhausted, redirect to lobby
-            console.error(
-              "[Game] Game not found after all retries, redirecting to lobby",
-              { gameId, retries: joinRetryCountRef.current }
-            );
             // Clear retry timeout if it exists
             if (joinRetryTimeoutRef.current) {
               clearTimeout(joinRetryTimeoutRef.current);
@@ -1120,9 +1055,6 @@ export default function GamePage() {
           }
         } else if (errorMessage.includes("Not a player in this game")) {
           // No retry for authorization errors - redirect immediately
-          console.error("[Game] User not authorized for game, redirecting", {
-            gameId,
-          });
           // Mark as unmounted to prevent state updates during redirect
           mounted = false;
           // Defer redirect to allow React to finish current render cycle
@@ -1140,12 +1072,6 @@ export default function GamePage() {
           data: { user },
         } = await supabase.auth.getUser();
         if (!user) {
-          console.warn(
-            "[Game] No user found in setupGame, redirecting to root",
-            {
-              gameId,
-            }
-          );
           // Mark as unmounted to prevent state updates during redirect
           if (mounted) {
             mounted = false;
@@ -1234,33 +1160,7 @@ export default function GamePage() {
     // Validate it's the player's turn before sending action
     const isMyTurn = gameState.currentActorSeat === player.seat;
 
-    // Log warning if not player's turn, but still send action (server will validate)
-    // This helps diagnose race conditions where gameState updates between render and action
-    if (!isMyTurn) {
-      console.warn(
-        "[Game] ⚠️ Sending action when it may not be player's turn",
-        {
-          action,
-          playerSeat: player.seat,
-          currentActorSeat: gameState.currentActorSeat,
-          playerFolded: player.folded,
-          playerAllIn: player.allIn,
-          gameState: {
-            currentRound: gameState.currentRound,
-            currentActorSeat: gameState.currentActorSeat,
-            players: gameState.players.map((p) => ({
-              seat: p.seat,
-              name: p.name,
-              folded: p.folded,
-              allIn: p.allIn,
-              currentBet: p.currentBet,
-              chips: p.chips,
-            })),
-          },
-        }
-      );
-      // Don't return - let server validate (but log for debugging)
-    }
+    // Server will validate if it's the player's turn
 
     const payload = {
       gameId,
@@ -1277,7 +1177,6 @@ export default function GamePage() {
 
     // Only allow revealing during showdown
     if (gameState.currentRound !== "showdown") {
-      console.warn("[Game] ⚠️ Cannot reveal cards outside of showdown");
       return;
     }
 
@@ -1410,7 +1309,7 @@ export default function GamePage() {
               gameState={gameState}
               currentUserId={currentUserId}
               onRevealCard={handleRevealCard}
-              playerNames={playerNames} // <--- Injected here
+              playerNames={playerNames}
               isLocalGame={false}
               isHeadsUp={isHeadsUp}
               runoutCards={runoutCards}

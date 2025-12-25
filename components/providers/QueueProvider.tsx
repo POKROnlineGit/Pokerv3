@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSocket } from '@/lib/socketClient'
-import { QueueStatusPopup } from '@/components/QueueStatusPopup'
+import { QueueStatusPopup } from '@/components/game/QueueStatusPopup'
 
 interface QueueContextType {
   inQueue: boolean

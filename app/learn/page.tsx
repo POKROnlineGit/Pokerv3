@@ -1,6 +1,6 @@
 'use client'
 
-import { LessonCard } from '@/components/LessonCard'
+import { LessonCard } from '@/components/learn/LessonCard'
 import { createClientComponentClient } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'

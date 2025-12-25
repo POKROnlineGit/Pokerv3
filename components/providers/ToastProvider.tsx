@@ -1,25 +1,25 @@
-'use client'
+"use client";
 
-import { useState, useCallback } from 'react'
-import { ToastContext, type Toast } from '@/lib/hooks/use-toast'
-import type { ReactNode } from 'react'
+import { useState, useCallback } from "react";
+import { ToastContext, type Toast } from "@/lib/hooks";
+import type { ReactNode } from "react";
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([])
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
   const toast = useCallback(
-    ({ title, description, variant = 'default' }: Omit<Toast, 'id'>) => {
-      const id = Math.random().toString(36).substring(7)
-      const newToast: Toast = { id, title, description, variant }
-      setToasts((prev) => [...prev, newToast])
+    ({ title, description, variant = "default" }: Omit<Toast, "id">) => {
+      const id = Math.random().toString(36).substring(7);
+      const newToast: Toast = { id, title, description, variant };
+      setToasts((prev) => [...prev, newToast]);
 
       // Auto remove after 3 seconds
       setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id))
-      }, 3000)
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 3000);
     },
     []
-  )
+  );
 
   return (
     <ToastContext.Provider value={{ toasts, toast }}>
@@ -29,9 +29,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={toast.id}
             className={`px-4 py-3 rounded-lg shadow-lg animate-in slide-in-from-top-5 min-w-[18.75rem] ${
-              toast.variant === 'destructive'
-                ? 'bg-destructive text-destructive-foreground'
-                : 'bg-background border text-foreground'
+              toast.variant === "destructive"
+                ? "bg-destructive text-destructive-foreground"
+                : "bg-background border text-foreground"
             }`}
           >
             <div className="font-semibold">{toast.title}</div>
@@ -42,5 +42,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         ))}
       </div>
     </ToastContext.Provider>
-  )
+  );
 }
+

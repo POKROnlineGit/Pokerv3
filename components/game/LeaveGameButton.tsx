@@ -26,18 +26,11 @@ export function LeaveGameButton({ gameId }: LeaveGameButtonProps) {
   const handleLeave = () => {
     try {
       if (socket && !socket.connected) {
-        console.log(
-          "[LeaveGame] Socket not connected, attempting connect before leaveGame",
-          {
-            gameId,
-          }
-        );
         socket.connect();
       }
-      console.log("[LeaveGame] Emitting leaveGame", { gameId });
       socket.emit("leaveGame", gameId);
     } catch (error) {
-      console.error("[LeaveGame] Failed to emit leaveGame:", error);
+      // Error handled silently - user will be redirected anyway
     } finally {
       setOpen(false);
       router.push("/play"); // Immediate redirect

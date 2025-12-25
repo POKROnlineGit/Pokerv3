@@ -239,11 +239,6 @@ export function ActionPopup({
       (queuedAction === "call" || queuedAction === "check")
     ) {
       // Someone raised - clear queued call/check (should fold instead)
-      console.log("[ActionPopup] Clearing queued action due to raise", {
-        previousChipsToCall: prevChipsToCallRef.current,
-        currentChipsToCall,
-        queuedAction,
-      });
       setQueuedAction(null);
     }
 

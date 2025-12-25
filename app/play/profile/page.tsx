@@ -4,7 +4,7 @@ import { createClientComponentClient } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { HandHistoryList } from "@/components/HandHistoryList";
+import { HandHistoryList } from "@/components/replay/HandHistoryList";
 import { UserCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTheme } from "@/components/providers/ThemeProvider";

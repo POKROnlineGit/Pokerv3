@@ -5,7 +5,7 @@ import { GameState, Player } from "@/lib/types/poker";
 import { Card as CardType, getNextActivePlayer } from "@/lib/utils/pokerUtils";
 import { Card } from "@/components/Card";
 import { cn } from "@/lib/utils";
-import { useDebugMode } from "@/lib/hooks/useDebugMode";
+import { useDebugMode } from "@/lib/hooks";
 import { motion } from "framer-motion";
 
 interface PokerTableProps {
@@ -14,7 +14,6 @@ interface PokerTableProps {
     currentPhase?: string; // Actual phase from server (may be "waiting")
   };
   currentUserId: string;
-  onAction?: () => void;
   onRevealCard?: (cardIndex: number) => void; // Callback for revealing a card during showdown
   playerNames?: Record<string, string>;
   isLocalGame?: boolean;
@@ -59,7 +58,6 @@ function calculateSeatPositions(
 export function PokerTable({
   gameState,
   currentUserId,
-  onAction,
   onRevealCard,
   playerNames,
   isLocalGame = false,
@@ -120,26 +118,6 @@ export function PokerTable({
       ]
     : runoutCards.filter((card) => !isRunningOut);
 
-  // Debug: Log animation props for local games
-  useEffect(() => {
-    if (isLocalGame) {
-      console.log("[PokerTable] Animation props:", {
-        runoutCards,
-        isRunningOut,
-        communityCards: gameState.communityCards,
-        runoutCardsLength: runoutCards.length,
-        pendingCards,
-        cardsToHide,
-      });
-    }
-  }, [
-    runoutCards,
-    isRunningOut,
-    isLocalGame,
-    gameState.communityCards,
-    pendingCards,
-    cardsToHide,
-  ]);
 
   // Turn timer state - use ref to track current timer to avoid stale closures
   const [progressPercent, setProgressPercent] = useState<number>(0);
@@ -386,7 +364,7 @@ export function PokerTable({
             <div className="text-white">
               {gameState.pot +
                 (gameState.sidePots?.reduce(
-                  (sum, pot) => sum + (pot.amount || 0),
+                  (sum, pot) => sum + (pot?.amount || 0),
                   0
                 ) || 0)}{" "}
               chips
@@ -914,3 +892,4 @@ export function PokerTable({
     </div>
   );
 }
+
