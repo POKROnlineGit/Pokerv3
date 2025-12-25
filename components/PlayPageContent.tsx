@@ -75,7 +75,14 @@ export function PlayPageContent() {
       if (socket.connected) {
         setIsChecking(false)
       }
+      
+      // Automatic redirect to active game
+      if (isActive && payload?.gameId) {
+        router.push(`/play/game/${payload.gameId}`)
+      }
     }
+
+    socket.on('session_status', handleSessionStatus)
 
     const emitCheckSession = () => {
       if (!mounted) return
@@ -83,10 +90,13 @@ export function PlayPageContent() {
       socket.emit('check_active_session')
     }
 
-    // Wait for socket connection before emitting
+    // Check session status when socket connects (or immediately if already connected)
+    // This is the same mechanism used to check queue eligibility, so it's reliable
     if (socket.connected) {
+      // Socket already connected - check session immediately
       emitCheckSession()
     } else {
+      // Socket not connected yet - check session when it connects
       connectHandler = () => {
         if (mounted) {
           emitCheckSession()
@@ -94,8 +104,6 @@ export function PlayPageContent() {
       }
       socket.once('connect', connectHandler)
     }
-
-    socket.on('session_status', handleSessionStatus)
 
     // Safety timeout: if server doesn't respond, only assume no active session if socket is connected
     // If socket is not connected, keep isChecking true to prevent buttons from being enabled
@@ -119,7 +127,7 @@ export function PlayPageContent() {
         socket.off('connect', connectHandler)
       }
     }
-  }, [socket])
+  }, [socket, router])
 
   const handlePlayLocal = () => {
     const gameId = `local-${crypto.randomUUID()}`
