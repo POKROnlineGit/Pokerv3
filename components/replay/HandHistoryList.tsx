@@ -9,7 +9,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 import { ReplayViewer } from "@/components/replay/ReplayViewer";
 // @ts-ignore - Importing from shared backend
-import { PokerCodec, indexToCard } from "@backend/game/handHistory/PokerCodec";
+import { PokerCodec, indexToCard } from "@backend/domain/handHistory/PokerCodec";
 
 interface HandSummary {
   id: string;

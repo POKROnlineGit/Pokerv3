@@ -6,12 +6,12 @@
  * SHOW_CARDS is mapped to engine reveal actions.
  */
 
-import { TexasHoldemEngine } from "@backend/game/engine/TexasHoldemEngine";
+import { TexasHoldemEngine } from "@backend/domain/game/engine/TexasHoldemEngine";
 import {
   PokerCodec,
   ActionType,
   indexToCard,
-} from "@backend/game/handHistory/PokerCodec";
+} from "@backend/domain/handHistory/PokerCodec";
 import type { GameState } from "@/lib/types/poker";
 import type { GameResult, EngineContext, EngineCard } from "@/lib/types/engine";
 

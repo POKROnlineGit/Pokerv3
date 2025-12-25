@@ -16,7 +16,7 @@ import { useReplayController } from "@/lib/hooks";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 import { Play, Pause, SkipForward, SkipBack, X, AlertCircle } from "lucide-react";
 // @ts-ignore - Importing from shared backend
-import { PokerCodec } from "@backend/game/handHistory/PokerCodec";
+import { PokerCodec } from "@backend/domain/handHistory/PokerCodec";
 
 interface HandSummary {
   id: string;
