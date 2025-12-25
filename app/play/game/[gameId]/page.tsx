@@ -9,7 +9,7 @@ import { GameState, ActionType } from "@/lib/types/poker";
 import { getSocket, disconnectSocket } from "@/lib/socketClient";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 import { AlertCircle, Wifi, WifiOff } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -59,6 +59,50 @@ export default function GamePage() {
   const joinRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track retry timeout
   const supabase = createClientComponentClient();
   const { toast } = useToast();
+
+  // --- Client-Side Hydration: Player Names ---
+  const [playerNames, setPlayerNames] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!gameState?.players && !currentUserId) return;
+
+    const fetchNames = async () => {
+      // Collect all player IDs (non-bots) from gameState
+      const playerIds = new Set<string>();
+      
+      if (gameState?.players) {
+        gameState.players
+          .filter(p => !p.isBot)
+          .forEach(p => playerIds.add(p.id));
+      }
+      
+      // Explicitly include current user ID (same system as opponents)
+      if (currentUserId) {
+        playerIds.add(currentUserId);
+      }
+
+      // Find IDs we don't have names for yet
+      const missingIds = Array.from(playerIds).filter(id => !playerNames[id]);
+
+      if (missingIds.length === 0) return;
+
+      // DIRECT DB CALL - Same system for all players including current user
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .in('id', missingIds);
+
+      if (data) {
+        const newNames: Record<string, string> = {};
+        data.forEach((p: any) => {
+          if (p.username) newNames[p.id] = p.username;
+        });
+        setPlayerNames(prev => ({ ...prev, ...newNames }));
+      }
+    };
+
+    fetchNames();
+  }, [gameState?.players, currentUserId, supabase, playerNames]);
 
   // Redirect local games to the local game page
   useEffect(() => {
@@ -1365,7 +1409,8 @@ export default function GamePage() {
             <PokerTable
               gameState={gameState}
               currentUserId={currentUserId}
-              playerNames={undefined}
+              onRevealCard={handleRevealCard}
+              playerNames={playerNames} // <--- Injected here
               isLocalGame={false}
               isHeadsUp={isHeadsUp}
               runoutCards={runoutCards}
@@ -1373,7 +1418,6 @@ export default function GamePage() {
               playerDisconnectTimers={playerDisconnectTimers}
               turnTimer={turnTimer}
               isSyncing={isSyncing}
-              onRevealCard={handleRevealCard}
             />
           </div>
 

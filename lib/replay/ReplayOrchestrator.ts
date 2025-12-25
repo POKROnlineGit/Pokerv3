@@ -1,9 +1,9 @@
 /**
  * ReplayOrchestrator
  *
- * A bridge between binary hand history (from PokerCodec) and the TexasHoldemEngine.
- * Translates historical data into engine-compatible formats and produces a timeline
- * of GameState snapshots for replay visualization.
+ * Engine-Driven architecture: Transitions are triggered solely by engine effects,
+ * ensuring perfect synchronization. WIN_POT and NEXT_STREET tags are skipped.
+ * SHOW_CARDS is mapped to engine reveal actions.
  */
 
 import { TexasHoldemEngine } from "@backend/game/engine/TexasHoldemEngine";
@@ -13,60 +13,38 @@ import {
   indexToCard,
 } from "@backend/game/handHistory/PokerCodec";
 import type { GameState } from "@/lib/types/poker";
-import type {
-  GameResult,
-  TransitionOverrides,
-  EngineContext,
-  EngineCard,
-} from "@/lib/types/engine";
+import type { GameResult, EngineContext, EngineCard } from "@/lib/types/engine";
 
-/**
- * Input data structure for replay generation
- */
 export interface ReplayInput {
   gameId: string;
   variant: "six_max" | "heads_up" | "full_ring";
-  manifest: Record<string, string>; // Seat -> UserUUID
-  startingStacks: number[]; // Array in manifest order
+  manifest: Record<string, string>;
+  startingStacks: number[];
   actions: Array<{
-    seatIndex: number; // Manifest index (0-based)
-    type: number; // ActionType enum value
+    seatIndex: number;
+    type: number;
     amount?: number;
     cards?: number[];
     potIndex?: number;
     deltaTime?: number;
-    street?: string; // For NEXT_STREET actions
+    street?: string;
   }>;
-  board: number[]; // Card indices 0-51
-  holeCards: number[][]; // Array of arrays in manifest order
+  board: number[];
+  holeCards: number[][];
 }
 
-/**
- * A single frame in the replay timeline
- */
 export interface ReplayFrame {
-  actionIndex: number; // Correlates to the index in the original Codec action list
-  state: GameState; // The full engine state object at this moment
-  timestamp: number; // Server timestamp if available, or generated
+  actionIndex: number;
+  state: GameState;
+  timestamp: number;
 }
 
-/**
- * Result of replay generation
- */
 export interface ReplayResult {
   frames: ReplayFrame[];
-  error?: string; // Error message if replay stopped early
-  stoppedAtActionIndex?: number; // Index where replay stopped (if error)
+  error?: string;
+  stoppedAtActionIndex?: number;
 }
 
-/**
- * Card object format expected by the engine
- * Using EngineCard type from @/lib/types/engine
- */
-
-/**
- * Rank to value mapping
- */
 const RANK_VALUES: Record<string, number> = {
   "2": 2,
   "3": 3,
@@ -83,9 +61,6 @@ const RANK_VALUES: Record<string, number> = {
   A: 14,
 };
 
-/**
- * Suit character to full name mapping
- */
 const SUIT_MAP: Record<string, "hearts" | "diamonds" | "clubs" | "spades"> = {
   h: "hearts",
   d: "diamonds",
@@ -95,38 +70,25 @@ const SUIT_MAP: Record<string, "hearts" | "diamonds" | "clubs" | "spades"> = {
 
 export class ReplayOrchestrator {
   private engine: TexasHoldemEngine;
-  private history: ReplayInput; // Store original history data
-  private manifestToSeat: Map<number, number>; // Manifest index -> Physical seat
-  private seatToPlayerId: Map<number, string>; // Physical seat -> Player UUID
-  private sortedSeats: number[]; // Sorted seat numbers for manifest order
+  private history: ReplayInput;
+  private manifestToSeat: Map<number, number>;
+  private seatToPlayerId: Map<number, string>;
 
-  /**
-   * Constructor
-   * @param history - Decoded hand history data
-   */
-  constructor(history: ReplayInput) {
-    // Store history for later use
+  constructor(history: ReplayInput, playerNames?: Record<string, string>) {
     this.history = history;
-    // Initialize engine
     this.engine = new TexasHoldemEngine(history.gameId, history.variant);
 
-    // RIGID SEAT COMPACTION: Map manifest indices strictly to Engine Seats 1..N (no gaps)
-    // Parse manifest keys to integers and sort numerically
+    // 1. Rigid Seat Mapping
     const manifestSeatKeys = Object.keys(history.manifest)
       .map((k) => parseInt(k, 10))
       .sort((a, b) => a - b);
 
-    // Map sorted manifest indices strictly to Engine Seats 1..N (compacted)
-    // This ensures no gaps and proper geometry for heads-up logic
     const engineSeatKeys = manifestSeatKeys.map((_, index) => index + 1);
-
-    this.sortedSeats = engineSeatKeys;
     this.manifestToSeat = new Map();
     this.seatToPlayerId = new Map();
 
-    // Map manifest index -> engine seat (1..N, compacted)
     manifestSeatKeys.forEach((manifestSeat, manifestIndex) => {
-      const engineSeat = engineSeatKeys[manifestIndex]; // Always index + 1
+      const engineSeat = engineSeatKeys[manifestIndex];
       this.manifestToSeat.set(manifestIndex, engineSeat);
       this.seatToPlayerId.set(
         engineSeat,
@@ -134,31 +96,32 @@ export class ReplayOrchestrator {
       );
     });
 
-    // Create player objects with starting stacks
-    // Critical: Set chips BEFORE blinds are posted (engine will deduct blinds in _enterPreflop)
+    // 2. Initialize Players
     const players = manifestSeatKeys.map((manifestSeat, manifestIndex) => {
       const startingStack = history.startingStacks[manifestIndex];
-      if (startingStack === undefined) {
-        throw new Error(
-          `Missing starting stack for manifest index ${manifestIndex} (manifest seat ${manifestSeat})`
-        );
-      }
+      if (startingStack === undefined) throw new Error("Missing stack");
 
-      const engineSeat = engineSeatKeys[manifestIndex]; // Always index + 1 (compacted)
+      const engineSeat = engineSeatKeys[manifestIndex];
+      const playerId = history.manifest[String(manifestSeat)];
+
+      // CLEANUP: Unconditionally try to use the injected map.
+      // If the map is missing the ID, we fall back to a generic ID string.
+      // We do NOT rely on the engine or previous state.
+      const displayName = playerNames?.[playerId] || `Player ${engineSeat}`;
+
       return {
-        id: history.manifest[String(manifestSeat)],
-        name: `Player ${engineSeat}`,
-        seat: engineSeat, // Compacted seat 1..N
-        chips: startingStack, // Set BEFORE blinds (engine will deduct in _enterPreflop)
-        isBot: false, // Replay players are not bots
-        isOffline: false, // Ensure players are online
+        id: playerId,
+        name: displayName,
+        seat: engineSeat,
+        chips: startingStack,
+        isBot: false,
+        isOffline: false,
       };
     });
 
-    // Add players to engine
     this.engine.addPlayers(players);
 
-    // Force all players to ACTIVE status and ensure they are dealt into the hand
+    // 3. Force Active Status
     const ctx = this.engine.context as unknown as EngineContext;
     if (ctx.players) {
       ctx.players.forEach((p) => {
@@ -170,438 +133,321 @@ export class ReplayOrchestrator {
     }
   }
 
-  /**
-   * Main replay generation loop
-   * @returns Timeline of GameState snapshots
-   */
-  generateReplay(): ReplayResult {
+  public generateReplay(): ReplayResult {
     const frames: ReplayFrame[] = [];
     let currentTimestamp = Date.now();
+    let actionIndex = 0;
 
     try {
-      // Get history once for the entire function
-      const history = this.getHistory();
-
-      // Log raw decoded action log for debugging
-      console.log("[ReplayOrchestrator] ===== RAW DECODED ACTION LOG =====");
-      console.log(
-        `[ReplayOrchestrator] Total actions: ${history.actions.length}`
-      );
-      console.log(`[ReplayOrchestrator] Variant: ${history.variant}`);
-      console.log(`[ReplayOrchestrator] Game ID: ${history.gameId}`);
-      console.log(`[ReplayOrchestrator] Manifest:`, history.manifest);
-      console.log(
-        `[ReplayOrchestrator] Starting stacks:`,
-        history.startingStacks
-      );
-      console.log(`[ReplayOrchestrator] Board cards (indices):`, history.board);
-      console.log(
-        `[ReplayOrchestrator] Hole cards (indices per player):`,
-        history.holeCards
-      );
-      console.log(`[ReplayOrchestrator] Action sequence:`);
-      history.actions.forEach((action, idx) => {
-        const actionTypeName =
-          Object.keys(ActionType).find(
-            (key) => ActionType[key as keyof typeof ActionType] === action.type
-          ) || `UNKNOWN(${action.type})`;
-        const seat = this.getSeatFromManifestIndex(action.seatIndex);
-        console.log(
-          `  [${idx}] ${actionTypeName} | seatIndex: ${
-            action.seatIndex
-          } → engineSeat: ${seat} | amount: ${
-            action.amount ?? "N/A"
-          } | street: ${action.street ?? "N/A"}`
-        );
-      });
-      console.log("[ReplayOrchestrator] ====================================");
-
-      // 1. Capture initial state (before preflop)
+      // --- Frame -1: Initial State ---
       frames.push({
-        actionIndex: -1, // Before any actions
+        actionIndex: -1,
         state: this.captureState(),
         timestamp: currentTimestamp,
       });
 
-      // 2. Prepare hole cards for preflop transition
-      // Convert from manifest order to seat-keyed object
-      const holeCardsOverride: Record<number, EngineCard[]> = {};
+      // --- FIX: Synchronize Button Position ---
+      // The engine defaults buttonSeat to 1. We must set it based on who actually
+      // posted the Small Blind in the history to ensure 'First Actor' logic matches.
+      const sbAction = this.history.actions.find(
+        (a) => a.type === ActionType.POST_SMALL_BLIND
+      );
+      if (sbAction) {
+        const sbSeat = this.manifestToSeat.get(sbAction.seatIndex);
+        if (sbSeat) {
+          const ctx = this.engine.context as unknown as EngineContext;
+          const numPlayers = ctx.players.length;
 
-      history.holeCards.forEach((cardIndices, manifestIndex) => {
-        const seat = this.getSeatFromManifestIndex(manifestIndex);
-        if (seat === null) {
-          throw new Error(`Invalid manifest index: ${manifestIndex}`);
+          if (this.history.variant === "heads_up") {
+            // In Heads-Up, the Small Blind IS the Button
+            ctx.buttonSeat = sbSeat;
+          } else {
+            // In Ring Games, SB is to the left of Button.
+            // Since seats are compacted 1..N, Button is SB - 1 (wrapping N)
+            ctx.buttonSeat = sbSeat === 1 ? numPlayers : sbSeat - 1;
+          }
         }
+      }
 
-        holeCardsOverride[seat] = cardIndices.map((idx) =>
-          this.indexToCardObject(idx)
-        );
+      // --- Preflop Execution ---
+      const holeCardsOverride: Record<number, EngineCard[]> = {};
+      this.history.holeCards.forEach((cardIndices, manifestIndex) => {
+        const seat = this.manifestToSeat.get(manifestIndex);
+        if (seat) {
+          holeCardsOverride[seat] = cardIndices.map((idx) =>
+            this.indexToCardObject(idx)
+          );
+        }
       });
 
-      // 3. Execute preflop transition with hole card overrides
-      const preflopResult = this.engine.executeTransition("preflop", {
+      const preflopRes = this.engine.executeTransition("preflop", {
         holeCards: holeCardsOverride,
       } as unknown as null) as unknown as GameResult;
 
-      if (!preflopResult.success) {
-        throw new Error("Failed to execute preflop transition");
-      }
+      if (!preflopRes.success) throw new Error("Preflop transition failed");
 
-      // Capture state after preflop (blinds posted, cards dealt)
       frames.push({
-        actionIndex: -1, // Still before action loop
+        actionIndex: -1,
         state: this.captureState(),
         timestamp: (currentTimestamp += 100),
       });
 
-      // 4. Process actions
-      for (
-        let actionIndex = 0;
-        actionIndex < history.actions.length;
-        actionIndex++
-      ) {
-        const action = history.actions[actionIndex];
+      // --- Main Action Loop ---
+      const actions = this.history.actions;
+      for (; actionIndex < actions.length; actionIndex++) {
+        const action = actions[actionIndex];
 
-        // Skip blind and ante actions (handled by engine automatically)
+        // SKIP: Engine-handled automatic actions
         if (
-          action.type === ActionType.POST_SMALL_BLIND ||
-          action.type === ActionType.POST_BIG_BLIND ||
-          action.type === ActionType.POST_ANTE
+          [
+            ActionType.POST_SMALL_BLIND,
+            ActionType.POST_BIG_BLIND,
+            ActionType.POST_ANTE,
+            ActionType.WIN_POT, // Engine calculates winners automatically
+            ActionType.NEXT_STREET, // Engine calculates transitions automatically
+          ].includes(action.type)
         ) {
           continue;
         }
 
-        // Skip WIN_POT actions (these are events, not player actions)
-        if (action.type === ActionType.WIN_POT) {
-          continue;
-        }
+        const seat = this.manifestToSeat.get(action.seatIndex);
+        if (!seat) throw new Error(`Invalid seat index: ${action.seatIndex}`);
 
-        // Handle street transitions
-        if (action.type === ActionType.NEXT_STREET) {
-          const streetName = this.mapStreetName(action.street);
-          if (!streetName) {
-            throw new Error(`Invalid street name: ${action.street}`);
-          }
+        const engineActionType = this.codecActionTypeToEngine(action.type);
+        if (!engineActionType) continue;
 
-          const transitionResult = this.handleStreetTransition(streetName);
-          if (!transitionResult.success) {
-            throw new Error(
-              `Failed to execute ${streetName} transition: ${JSON.stringify(
-                transitionResult
-              )}`
-            );
-          }
-
-          // Capture state after street transition
-          frames.push({
-            actionIndex,
-            state: this.captureState(),
-            timestamp: (currentTimestamp += 100),
-          });
-          continue;
-        }
-
-        // Handle player actions
-        const seat = this.getSeatFromManifestIndex(action.seatIndex);
-        if (seat === null) {
-          throw new Error(
-            `Invalid seat index in action ${actionIndex}: ${action.seatIndex}`
-          );
-        }
-
-        // Get engine state before processing action
+        // VALIDATE: Check engine state before processing
         const ctxBefore = this.engine.context as unknown as EngineContext;
         const currentActorSeat = ctxBefore.currentActorSeat;
 
-        // If currentActorSeat is null, it means the previous round completed
-        // Skip any non-NEXT_STREET actions until we find the NEXT_STREET action
+        // If currentActorSeat is null, the round has completed - skip non-transition actions
         if (currentActorSeat === null) {
-          if (action.type === ActionType.NEXT_STREET) {
-            // NEXT_STREET is already handled above, so continue
-            continue;
-          } else {
-            // Round completed but this isn't NEXT_STREET - skip it (likely a duplicate/extra action in history)
-            continue;
-          }
+          continue;
         }
 
-        // VALIDATE: currentActorSeat must match the action's seat
+        // Validate that the action's seat matches the current actor
         if (currentActorSeat !== seat) {
           console.error(
-            `[ReplayOrchestrator] Desync at action ${actionIndex}:`,
+            `[ReplayOrchestrator] Seat mismatch at action ${actionIndex}:`,
             {
-              engineState: {
-                currentActorSeat,
-                phase: ctxBefore.currentPhase,
-              },
-              historyAction: {
-                seatIndex: action.seatIndex,
-                mappedSeat: seat,
-                type: action.type,
-              },
+              expectedSeat: currentActorSeat,
+              actionSeat: seat,
+              actionType: engineActionType,
+              phase: ctxBefore.currentPhase,
+              actionIndex,
             }
           );
           throw new Error(
-            `Desync detected at action ${actionIndex}: Engine expects seat ${currentActorSeat} to act, but history says seat ${seat} (manifest index ${action.seatIndex}) acted.`
+            `Desync: Engine expects seat ${currentActorSeat} to act, but history says seat ${seat} (manifest index ${action.seatIndex}) acted at action index ${actionIndex}`
           );
         }
 
-        const engineActionType = this.codecActionTypeToEngine(action.type);
-        if (!engineActionType) {
-          throw new Error(
-            `Unknown action type ${action.type} at action index ${actionIndex}`
-          );
+        // SETUP: Reveal Index (if applicable)
+        let revealIndex: number | undefined;
+        if (engineActionType === "reveal") {
+          if (action.cards && action.cards.length > 0) {
+            const cardVal = action.cards[0];
+            const playerHoleCards =
+              this.history.holeCards[action.seatIndex] || [];
+            revealIndex = playerHoleCards.indexOf(cardVal);
+            if (revealIndex === -1) revealIndex = 0; // Fallback
+          } else {
+            revealIndex = 0;
+          }
         }
 
+        // EXECUTE: Player Action
         const engineAction: any = {
-          seat: seat,
+          seat,
           type: engineActionType,
+          amount: action.amount,
+          index: revealIndex,
         };
 
-        // Add amount for monetary actions
-        if (action.amount !== undefined) {
-          engineAction.amount = action.amount;
-        }
-
-        // Process action through engine
-        const actionResult = this.engine.processAction(
+        const result = this.engine.processAction(
           engineAction
         ) as unknown as GameResult;
 
-        // Get engine state after processing action
-        const ctxAfter = this.engine.context as unknown as EngineContext;
-
-        // CRITICAL: Ignore returned 'effects'. Do NOT execute SCHEDULE_TRANSITION.
-        // The engine may emit SCHEDULE_TRANSITION effects when rounds complete, but we drive
-        // all transitions strictly from the historical log (NEXT_STREET actions).
-        // Executing engine-scheduled transitions would cause desync (random cards vs. historical cards).
-
-        if (!actionResult.success) {
-          // Graceful failure: return timeline up to this point
-          console.error(`[ReplayOrchestrator] Action ${actionIndex} failed:`, {
-            action,
-            engineAction,
-            engineStateBefore: {
-              currentActorSeat: currentActorSeat,
-              phase: ctxBefore.currentPhase,
-            },
-            engineStateAfter: {
-              currentActorSeat: ctxAfter.currentActorSeat,
-              phase: ctxAfter.currentPhase,
-            },
-            errorEvents: actionResult.events,
+        if (!result.success) {
+          // Log helpful error info
+          const ctx = this.engine.context as unknown as EngineContext;
+          console.error(`[Replay] Action failed at index ${actionIndex}:`, {
+            type: engineActionType,
+            seat,
+            currentActor: ctx.currentActorSeat,
+            phase: ctx.currentPhase,
           });
-          return {
-            frames,
-            error: `Engine rejected action at index ${actionIndex}: ${JSON.stringify(
-              actionResult.events
-            )}`,
-            stoppedAtActionIndex: actionIndex,
-          };
+          const errEvent = result.events.find((e: any) => e.type === "ERROR");
+          throw new Error(
+            errEvent?.payload?.message || "Engine rejected action"
+          );
         }
 
-        // Capture state after action
+        // CAPTURE: State after action
         frames.push({
           actionIndex,
           state: this.captureState(),
           timestamp: (currentTimestamp += 100),
         });
+
+        // EXECUTE: Auto-Transitions (Engine-Driven)
+        // We listen for the engine requesting a transition via effects
+        if (result.effects) {
+          for (const effect of result.effects) {
+            if (effect.type === "SCHEDULE_TRANSITION") {
+              const targetPhase = effect.targetPhase;
+
+              // Prepare historical cards if dealing a street
+              let overrides: any = null;
+              if (["flop", "turn", "river"].includes(targetPhase)) {
+                const boardIndices = this.getBoardIndicesForStreet(targetPhase);
+                overrides = {
+                  communityCards: boardIndices.map((idx) =>
+                    this.indexToCardObject(idx)
+                  ),
+                };
+              }
+
+              // Execute the transition
+              const transResult = this.engine.executeTransition(
+                targetPhase,
+                overrides as unknown as null
+              ) as unknown as GameResult;
+              if (!transResult.success) {
+                throw new Error(`Auto-transition to ${targetPhase} failed`);
+              }
+
+              // Capture state after transition
+              frames.push({
+                actionIndex,
+                state: this.captureState(),
+                timestamp: (currentTimestamp += 100),
+              });
+            }
+          }
+        }
       }
 
       return { frames };
-    } catch (error: any) {
+    } catch (err: any) {
+      console.error("[ReplayOrchestrator] Generation failed:", err);
       return {
         frames,
-        error: error.message || "Unknown error during replay generation",
-        stoppedAtActionIndex:
-          frames.length > 0 ? frames[frames.length - 1].actionIndex : -1,
+        error: err.message,
+        stoppedAtActionIndex: actionIndex,
       };
     }
   }
 
-  /**
-   * Handle street transition (flop, turn, river)
-   * @param streetName - Street name ("flop", "turn", "river")
-   */
-  private handleStreetTransition(streetName: "flop" | "turn" | "river"): {
-    success: boolean;
-  } {
-    const history = this.getHistory();
-    const boardIndices = this.getBoardIndicesForStreet(
-      streetName,
-      history.board
-    );
+  // --- Helpers ---
 
-    // Convert indices to card objects
-    const communityCards = boardIndices.map((idx) =>
-      this.indexToCardObject(idx)
-    );
-
-    // Execute transition with community card overrides
-    const result = this.engine.executeTransition(streetName, {
-      communityCards: communityCards,
-    } as unknown as null) as unknown as GameResult;
-
-    return { success: result.success };
-  }
-
-  /**
-   * Get board card indices for a specific street
-   * @param street - Street name
-   * @param board - Full board array from codec
-   * @returns Array of card indices for this street
-   */
-  private getBoardIndicesForStreet(
-    street: "flop" | "turn" | "river",
-    board: number[]
-  ): number[] {
+  private getBoardIndicesForStreet(street: string): number[] {
+    const board = this.history.board;
     switch (street) {
       case "flop":
-        // Flop: indices 0, 1, 2 (3 cards)
         return board.slice(0, 3);
       case "turn":
-        // Turn: index 3 (1 card)
         return board.slice(3, 4);
       case "river":
-        // River: index 4 (1 card)
         return board.slice(4, 5);
       default:
-        throw new Error(`Unknown street: ${street}`);
+        return [];
     }
   }
 
-  /**
-   * Convert codec card index to engine card object
-   * @param index - Card index (0-51)
-   * @returns Engine card object
-   */
   private indexToCardObject(index: number): EngineCard {
-    // Use codec's indexToCard to get string representation
-    const cardString = indexToCard(index);
-    // cardString format: "Ah", "Kd", "Tc", etc.
+    const str = indexToCard(index);
+    const rankChar = str[0];
+    const suitChar = str[1].toLowerCase();
+    return {
+      suit: SUIT_MAP[suitChar],
+      rank: rankChar as any,
+      value: RANK_VALUES[rankChar],
+      display: str,
+    };
+  }
 
-    const rankChar = cardString[0];
-    const suitChar = cardString[1].toLowerCase();
+  private captureState(): GameState {
+    const ctx = this.engine.context as unknown as EngineContext;
+    // Reconstruct clean GameState object from engine context
+    // This logic mirrors the previous implementation but ensures deep clone via JSON
+    const rawState = JSON.parse(JSON.stringify(ctx));
 
-    const suit = SUIT_MAP[suitChar];
-    if (!suit) {
-      throw new Error(`Invalid suit character: ${suitChar}`);
-    }
+    const playersBefore = rawState.players || [];
+    const mappedPlayers = playersBefore.map((p: any) => {
+      // Handle holeCards the same way as getPlayerContext does
+      // Mirror the structure: check if holeCards exists before processing
+      let holeCards: string[] = [];
+      if (p.holeCards && Array.isArray(p.holeCards)) {
+        // Map holeCards - for replay (God Mode), show all cards
+        holeCards = p.holeCards.map((c: any) => {
+          // Convert card object to display string
+          return typeof c === "string" ? c : c?.display || "HIDDEN";
+        });
 
-    const rank = rankChar as EngineCard["rank"];
-    const value = RANK_VALUES[rank];
-    if (value === undefined) {
-      throw new Error(`Invalid rank character: ${rankChar}`);
-    }
+        // If all cards are hidden and player is folded, return empty array
+        // (for UI consistency - folded players show no cards)
+        // This mirrors getPlayerContext behavior
+        if (p.folded && holeCards.every((c) => c === "HIDDEN")) {
+          holeCards = [];
+        }
+      }
+      // If holeCards is undefined/null, holeCards remains empty array
+      // Player object is ALWAYS returned (mirrors getPlayerContext)
+
+      return {
+        id: p.id || "",
+        name: p.name || `Player ${p.seat || "?"}`,
+        seat: p.seat || 0,
+        chips: p.chips || 0,
+        currentBet: p.currentBet || 0,
+        totalBet: p.totalBet || 0,
+        holeCards: holeCards,
+        folded: p.folded || false,
+        allIn: p.allIn || false,
+        isBot: p.isBot || false,
+        left: p.left || false,
+        revealedIndices: p.revealedIndices || [],
+      };
+    });
+
+    const finalPlayers = mappedPlayers.filter((p: any) => p.id); // Filter out players without IDs
 
     return {
-      suit,
-      rank,
-      value,
-      display: cardString,
-    };
-  }
-
-  /**
-   * Capture current game state
-   * @returns Full game state (God Mode - all cards visible)
-   * Returns a clean, immutable snapshot of the engine's internal state
-   */
-  private captureState(): GameState {
-    // Access engine context directly for "God Mode" visibility
-    // This gives us the raw state with all hole cards visible
-    const ctx = this.engine.context as unknown as EngineContext;
-
-    // Return JSON.parse(JSON.stringify(...)) to ensure a clean, immutable snapshot
-    // Convert engine context to GameState format
-    const state: GameState = {
-      gameId: ctx.gameId || "",
-      status: (ctx.status || "active") as GameState["status"],
-      phase: (ctx.currentPhase || "preflop") as GameState["phase"],
-      players: ctx.players.map((p) => ({
-        id: p.id,
-        name: p.name,
-        seat: p.seat,
-        chips: p.chips,
-        currentBet: p.currentBet,
-        totalBet: p.totalBet,
-        holeCards: p.holeCards.map((c) =>
-          typeof c === "string" ? c : c.display || `${c.rank}${c.suit[0]}`
-        ),
-        folded: p.folded,
-        allIn: p.allIn,
-        isBot: p.isBot,
-        leaving: p.leaving,
-        left: p.left,
-        revealedIndices: p.revealedIndices || [],
-      })),
-      communityCards: ctx.communityCards.map((c) =>
-        typeof c === "string" ? c : c.display || `${c.rank}${c.suit[0]}`
+      gameId: rawState.gameId,
+      status: rawState.status,
+      phase: rawState.currentPhase || "preflop",
+      currentRound: rawState.currentPhase || "preflop",
+      players: finalPlayers,
+      communityCards: (rawState.communityCards || []).map((c: any) =>
+        typeof c === "string" ? c : c?.display || c
       ),
-      pot: ctx.pots?.[0]?.amount || 0,
-      sidePots: ctx.pots?.slice(1).map((pot) => ({
-        amount: pot.amount,
-        eligibleSeats:
-          pot.eligiblePlayers
-            ?.map((pid) => {
-              const player = ctx.players.find((p) => p.id === pid);
-              return player?.seat;
-            })
-            .filter((s): s is number => s !== undefined) || [],
-      })),
-      pots: ctx.pots?.map((pot) => ({
-        amount: pot.amount,
-        contributors: pot.eligiblePlayers || [],
-      })),
-      currentActorSeat: ctx.currentActorSeat || null,
-      buttonSeat: ctx.buttonSeat || 0,
-      dealerSeat: ctx.buttonSeat || 0,
-      sbSeat: ctx.sbSeat || 0,
-      bbSeat: ctx.bbSeat || 0,
-      actionDeadline: ctx.actionDeadline
-        ? new Date(ctx.actionDeadline).getTime()
+      pot: rawState.pots?.[0]?.amount || 0,
+      sidePots:
+        rawState.pots?.slice(1).map((pot: any) => ({
+          amount: pot.amount,
+          eligibleSeats: [], // Simplified for replay display
+        })) || [],
+      pots: rawState.pots,
+      currentActorSeat: rawState.currentActorSeat,
+      buttonSeat: rawState.buttonSeat,
+      dealerSeat: rawState.buttonSeat,
+      sbSeat: rawState.sbSeat,
+      bbSeat: rawState.bbSeat,
+      actionDeadline: rawState.actionDeadline
+        ? new Date(rawState.actionDeadline).getTime()
         : null,
-      minRaise: ctx.minRaise || ctx.bigBlind || 0,
-      lastRaiseAmount: ctx.lastRaiseAmount || undefined,
-      betsThisRound: ctx.players.map((p) => p.currentBet),
-      currentRound: (ctx.currentPhase ||
-        "preflop") as GameState["currentRound"],
-      handNumber: ctx.handNumber || 1,
-      bigBlind: ctx.bigBlind,
-      smallBlind: ctx.smallBlind,
-      config: ctx.config
-        ? {
-            maxPlayers: ctx.config.maxPlayers,
-            smallBlind: ctx.config.smallBlind,
-            bigBlind: ctx.config.bigBlind,
-            turnTimer: ctx.config.actionTimeoutMs,
-          }
-        : undefined,
-      currentPhase: ctx.currentPhase,
-    };
-
-    return state;
+      minRaise: rawState.minRaise,
+      handNumber: rawState.handNumber,
+      bigBlind: rawState.bigBlind,
+      smallBlind: rawState.smallBlind,
+      currentPhase: rawState.currentPhase,
+      config: rawState.config,
+    } as GameState;
   }
 
-  /**
-   * Get seat number from manifest index
-   * @param manifestIndex - Manifest index (0-based)
-   * @returns Physical seat number or null if invalid
-   */
-  private getSeatFromManifestIndex(manifestIndex: number): number | null {
-    const seat = this.manifestToSeat.get(manifestIndex);
-    return seat !== undefined ? seat : null;
-  }
-
-  /**
-   * Convert codec action type to engine action type string
-   * @param actionType - Codec ActionType enum value
-   * @returns Engine action type string or null if unknown
-   */
-  private codecActionTypeToEngine(
-    actionType: number
-  ): "fold" | "check" | "call" | "bet" | "allin" | "reveal" | null {
-    switch (actionType) {
+  private codecActionTypeToEngine(type: number): string | null {
+    switch (type) {
       case ActionType.FOLD:
         return "fold";
       case ActionType.CHECK:
@@ -609,51 +455,11 @@ export class ReplayOrchestrator {
       case ActionType.CALL:
         return "call";
       case ActionType.BET_OR_RAISE:
-        return "bet"; // Engine handles bet/raise distinction internally
-      case ActionType.WIN_POT:
-        // WIN_POT is not a player action, skip it
-        return null;
+        return "bet"; // All-in actions are also recorded as BET_OR_RAISE
       case ActionType.SHOW_CARDS:
         return "reveal";
-      case ActionType.POST_SMALL_BLIND:
-      case ActionType.POST_BIG_BLIND:
-      case ActionType.POST_ANTE:
-        // These are handled by engine automatically, return null to skip
-        return null;
-      case ActionType.NEXT_STREET:
-        // Handled separately, return null
-        return null;
       default:
         return null;
     }
-  }
-
-  /**
-   * Map codec street name to engine street name
-   * @param street - Street name from codec (may be uppercase)
-   * @returns Engine street name or null if invalid
-   */
-  private mapStreetName(street?: string): "flop" | "turn" | "river" | null {
-    if (!street) return null;
-
-    const normalized = street.toLowerCase();
-    switch (normalized) {
-      case "flop":
-        return "flop";
-      case "turn":
-        return "turn";
-      case "river":
-        return "river";
-      default:
-        return null;
-    }
-  }
-
-  /**
-   * Get history data (stored during construction)
-   * @returns Original history input data
-   */
-  private getHistory(): ReplayInput {
-    return this.history;
   }
 }

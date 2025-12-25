@@ -15,7 +15,6 @@ import { ReplayOrchestrator, type ReplayInput, type ReplayResult } from "@/lib/r
 import { useReplayController } from "@/lib/hooks/useReplayController";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 import { Play, Pause, SkipForward, SkipBack, X, AlertCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
 // @ts-ignore - Importing from shared backend
 import { PokerCodec } from "@backend/game/handHistory/PokerCodec";
 
@@ -71,18 +70,6 @@ export function ReplayViewer({
   // Decode hand data into ReplayInput
   const replayInput = useMemo<ReplayInput | null>(() => {
     try {
-      console.log("[ReplayViewer] Starting decode process for hand:", {
-        handId: hand.id,
-        gameId: hand.game_id,
-        handIndex: hand.hand_index,
-        hasReplayData: !!hand.replay_data,
-        replayDataLength: hand.replay_data?.length || 0,
-        config: hand.config,
-        hasManifest: !!hand.player_manifest,
-        manifestKeys: Object.keys(hand.player_manifest || {}),
-        manifest: hand.player_manifest,
-      });
-
       if (!hand.replay_data) {
         console.error("[ReplayViewer] No replay_data found in hand object");
         setOrchestrationError("No replay data found for this hand");
@@ -92,22 +79,17 @@ export function ReplayViewer({
 
       // Validate variant - try config first, then infer from player count
       let variant: "six_max" | "heads_up" | "full_ring" | undefined = hand.config?.gameType as "six_max" | "heads_up" | "full_ring" | undefined;
-      console.log("[ReplayViewer] Variant from config:", variant, "Full config:", hand.config);
       
       // If variant not in config, try to infer from player count
       if (!variant || !["six_max", "heads_up", "full_ring"].includes(variant)) {
         const playerCount = Object.keys(hand.player_manifest || {}).length;
-        console.log("[ReplayViewer] Variant not in config, inferring from player count:", playerCount);
         
         if (playerCount === 2) {
           variant = "heads_up";
-          console.log("[ReplayViewer] Inferred variant: heads_up (2 players)");
         } else if (playerCount <= 6) {
           variant = "six_max";
-          console.log("[ReplayViewer] Inferred variant: six_max (<=6 players)");
         } else if (playerCount <= 9) {
           variant = "full_ring";
-          console.log("[ReplayViewer] Inferred variant: full_ring (<=9 players)");
         }
       }
       
@@ -124,11 +106,9 @@ export function ReplayViewer({
       }
 
       // Decode replay data
-      console.log("[ReplayViewer] Attempting to decode replay_data...");
       let buffer: Uint8Array;
       try {
         buffer = PokerCodec.fromHex(hand.replay_data);
-        console.log("[ReplayViewer] Successfully converted hex to buffer, length:", buffer.length);
       } catch (hexError: any) {
         console.error("[ReplayViewer] Failed to convert hex to buffer:", hexError);
         throw new Error(`Failed to parse hex string: ${hexError?.message || "Unknown error"}`);
@@ -137,16 +117,6 @@ export function ReplayViewer({
       let decoded: any;
       try {
         decoded = PokerCodec.decode(buffer);
-        console.log("[ReplayViewer] Successfully decoded buffer:", {
-          hasStartingStacks: !!decoded.startingStacks,
-          startingStacksLength: decoded.startingStacks?.length || 0,
-          hasActions: !!decoded.actions,
-          actionsLength: decoded.actions?.length || 0,
-          hasBoard: !!decoded.board,
-          boardLength: decoded.board?.length || 0,
-          hasHoleCards: !!decoded.holeCards,
-          holeCardsLength: decoded.holeCards?.length || 0,
-        });
       } catch (decodeError: any) {
         console.error("[ReplayViewer] Failed to decode buffer:", decodeError);
         throw new Error(`Failed to decode replay data: ${decodeError?.message || "Unknown error"}`);
@@ -162,16 +132,6 @@ export function ReplayViewer({
         board: decoded.board || [],
         holeCards: decoded.holeCards || [],
       };
-
-      console.log("[ReplayViewer] Successfully built ReplayInput:", {
-        gameId: input.gameId,
-        variant: input.variant,
-        manifestSize: Object.keys(input.manifest).length,
-        startingStacksLength: input.startingStacks.length,
-        actionsLength: input.actions.length,
-        boardLength: input.board.length,
-        holeCardsLength: input.holeCards.length,
-      });
 
       return input;
     } catch (error: any) {
@@ -241,30 +201,32 @@ export function ReplayViewer({
     return true;
   }, [replayInput]);
 
-  // Generate replay timeline using ReplayOrchestrator
+  // --- Client-Side Hydration: Fetch Names ---
+  const [playerNames, setPlayerNames] = useState<Record<string, string>>(
+    propPlayerNames || {}
+  );
+
+  // Generate replay timeline
   const replayResult = useMemo<ReplayResult | null>(() => {
     if (!replayInput || !isValidInput) {
-      if (!replayInput) {
-        setIsLoading(false);
-      }
+      if (!replayInput) setIsLoading(false);
       return null;
     }
 
     try {
       setIsLoading(true);
       setOrchestrationError(null);
-      const orchestrator = new ReplayOrchestrator(replayInput);
+      // Inject the fetched names here
+      const orchestrator = new ReplayOrchestrator(replayInput, playerNames);
       const result = orchestrator.generateReplay();
       setIsLoading(false);
       return result;
     } catch (error: any) {
-      const errorMessage =
-        error?.message || "Failed to generate replay timeline";
-      setOrchestrationError(errorMessage);
+      setOrchestrationError(error?.message || "Failed to generate replay");
       setIsLoading(false);
       return null;
     }
-  }, [replayInput, isValidInput]);
+  }, [replayInput, isValidInput, playerNames]);
 
   // Use replay controller hook
   const { state, controls, error: controllerError } = useReplayController(
@@ -275,18 +237,33 @@ export function ReplayViewer({
   // Derive isHeadsUp from variant
   const isHeadsUp = replayInput?.variant === "heads_up";
 
-  // Build player names map (fallback to "Seat X" if not provided)
-  const playerNames = useMemo(() => {
-    if (propPlayerNames) {
-      return propPlayerNames;
-    }
+  useEffect(() => {
+    if (!hand.player_manifest) return;
 
-    const names: Record<string, string> = {};
-    Object.entries(hand.player_manifest).forEach(([seat, userId]) => {
-      names[userId] = `Seat ${seat}`;
-    });
-    return names;
-  }, [propPlayerNames, hand.player_manifest]);
+    const fetchNames = async () => {
+      const allPlayerIds = Object.values(hand.player_manifest);
+      // Only fetch what we don't have
+      const missingIds = allPlayerIds.filter(id => !playerNames[id]);
+      
+      if (missingIds.length === 0) return;
+
+      // DIRECT DB CALL: Fetch usernames from profiles
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .in('id', missingIds);
+
+      if (data) {
+        const newNames: Record<string, string> = {};
+        data.forEach((p: any) => {
+          if (p.username) newNames[p.id] = p.username;
+        });
+        setPlayerNames(prev => ({ ...prev, ...newNames }));
+      }
+    };
+
+    fetchNames();
+  }, [hand.player_manifest, supabase, playerNames]);
 
   // Handle close - pause playback
   const handleClose = useCallback(() => {
@@ -365,16 +342,13 @@ export function ReplayViewer({
         </DialogDescription>
         
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center p-4 border-b">
           <div>
             <h2 className="text-xl font-semibold">Hand Replay</h2>
             <p className="text-sm text-muted-foreground">
               Game: {hand.game_id.slice(0, 8)} • Hand #{hand.hand_index} • {replayInput?.variant?.replace("_", " ") || "Unknown"}
             </p>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleClose}>
-            <X className="h-4 w-4" />
-          </Button>
         </div>
 
         {/* Error Banner */}
@@ -415,7 +389,7 @@ export function ReplayViewer({
               </div>
             </div>
           ) : state.activeState && currentUserId && replayInput ? (
-            <div className="absolute inset-0">
+            <div className="absolute inset-0 flex items-center justify-center">
               <PokerTable
                 gameState={state.activeState}
                 currentUserId={currentUserId}

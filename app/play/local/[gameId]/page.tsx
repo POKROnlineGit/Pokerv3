@@ -5,8 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { PokerTable } from "@/components/PokerTable";
 import { ActionPopup } from "@/components/ActionPopup";
 import { GameState, ActionType } from "@/lib/types/poker";
-import { useLocalGameStore } from "@/lib/stores/useLocalGameStore";
+import { useLocalGameStore } from "@/lib/hooks/useLocalGameStore";
 import { Button } from "@/components/ui/button";
+import { createClientComponentClient } from "@/lib/supabaseClient";
 
 const BOT_NAMES: Record<string, string> = {
   "bot-1": "AggroBot",
@@ -20,9 +21,44 @@ export default function LocalGamePage() {
   const params = useParams();
   const router = useRouter();
   const gameId = params.gameId as string;
+  const supabase = createClientComponentClient();
 
   const { gameState, heroId, startLocalGame, leaveLocalGame, playerAction, newGame } = useLocalGameStore();
   const hasInitialized = useRef(false);
+  
+  // --- Client-Side Hydration: Player Names (including hero) ---
+  const [playerNames, setPlayerNames] = useState<Record<string, string>>(BOT_NAMES);
+
+  // Fetch hero's username from database
+  useEffect(() => {
+    if (!heroId) return;
+
+    const fetchHeroName = async () => {
+      // Check if we already have the hero's name (and it's not a bot name)
+      if (playerNames[heroId] && !BOT_NAMES[heroId]) {
+        return; // Already fetched
+      }
+
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, username')
+          .eq('id', heroId)
+          .single();
+
+        if (data?.username) {
+          setPlayerNames(prev => ({
+            ...prev,
+            [heroId]: data.username
+          }));
+        }
+      } catch (error) {
+        console.error('[LocalGame] Error fetching hero username:', error);
+      }
+    };
+
+    fetchHeroName();
+  }, [heroId, supabase, playerNames]);
 
   // Animation state - same system as online game
   const [runoutCards, setRunoutCards] = useState<string[]>([]);

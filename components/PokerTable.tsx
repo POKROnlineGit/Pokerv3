@@ -314,8 +314,8 @@ export function PokerTable({
     <div
       className="relative mx-auto aspect-[5/3]"
       style={{
-        width: "min(80vw, calc(80vh * 5 / 3), 45rem)",
-        maxWidth: "45rem",
+        width: "min(70vw, calc(70vh * 5 / 3), 38rem)",
+        maxWidth: "38rem",
       }}
     >
       {/* Syncing overlay - blocks interactions while authoritative state is being fetched */}
@@ -658,7 +658,7 @@ export function PokerTable({
                     )}
                   >
                     {player.id === currentUserId
-                      ? player.name || "You"
+                      ? playerNames?.[player.id] || player.name || "You"
                       : playerNames?.[player.id] ||
                         player.name ||
                         `Player ${seat}`}
