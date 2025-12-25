@@ -58,7 +58,7 @@ export default function ProfilePage() {
     const fetchHands = async () => {
       const { data, error } = await supabase
         .from("hand_histories")
-        .select("id, game_id, hand_index, final_pot, winner_id, played_at")
+        .select("id, game_id, hand_index, final_pot, winner_id, played_at, replay_data, player_manifest")
         .order("played_at", { ascending: false })
         .limit(20);
 
