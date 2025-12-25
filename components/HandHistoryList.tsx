@@ -59,33 +59,53 @@ function HandCard({
       // Use Universal Codec helper to parse hex string
       const buffer = PokerCodec.fromHex(hand.replay_data);
 
-      // 2. Determine Player Count from Manifest
-      // (Required by codec to know how many hole card slots to read)
-      const playerCount = Object.keys(hand.player_manifest || {}).length;
-      if (playerCount === 0) return "Invalid player manifest (0 players).";
+      // Decode (playerCount is now read from the header)
+      const decoded = PokerCodec.decode(buffer);
 
-      // 3. Decode
-      const decoded = PokerCodec.decode(buffer, playerCount);
+      // Get sorted seat indices from manifest to match codec order (calculated once)
+      const sortedSeats = Object.keys(hand.player_manifest || {})
+        .map((k) => parseInt(k, 10))
+        .sort((a, b) => a - b);
 
-      // 4. Format Actions to Text
-      return decoded.actions
-        .map((action: any, i: number) => {
-          let text = `[${i.toString().padStart(2, "0")}] `;
+      // Build the log output
+      const logLines: string[] = [];
 
-          if (action.type === ActionType.NEXT_STREET) {
-            text += `--- ${action.street?.toUpperCase() || "NEXT STREET"} ---`;
-          } else {
-            // Identify Actor
-            const playerId = hand.player_manifest[String(action.seatIndex)];
-            const isMe = playerId === currentUserId;
-            const actorLabel = isMe ? "HERO" : `Seat ${action.seatIndex}`;
+      // 1. Display Starting Stacks
+      if (decoded.startingStacks && decoded.startingStacks.length > 0) {
+        logLines.push("=== STARTING STACKS ===");
 
-            text += `${actorLabel} ${getActionLabel(action.type)}`;
-            if (action.amount) text += ` (${action.amount})`;
-          }
-          return text;
-        })
-        .join("\n");
+        decoded.startingStacks.forEach((stack: number, index: number) => {
+          const seatIndex = sortedSeats[index];
+          const playerId = hand.player_manifest[String(seatIndex)];
+          const isMe = playerId === currentUserId;
+          const playerLabel = isMe ? "HERO" : `Seat ${seatIndex}`;
+          logLines.push(`${playerLabel}: ${stack.toLocaleString()} chips`);
+        });
+
+        logLines.push(""); // Empty line separator
+      }
+
+      // 2. Format Actions to Text
+      const actionLines = decoded.actions.map((action: any, i: number) => {
+        let text = `[${i.toString().padStart(2, "0")}] `;
+
+        if (action.type === ActionType.NEXT_STREET) {
+          text += `--- ${action.street?.toUpperCase() || "NEXT STREET"} ---`;
+        } else {
+          // Identify Actor - map manifest index back to seat
+          const seatIndex = sortedSeats[action.seatIndex];
+          const playerId = hand.player_manifest[String(seatIndex)];
+          const isMe = playerId === currentUserId;
+          const actorLabel = isMe ? "HERO" : `Seat ${seatIndex}`;
+
+          text += `${actorLabel} ${getActionLabel(action.type)}`;
+          if (action.amount) text += ` (${action.amount})`;
+        }
+        return text;
+      });
+
+      logLines.push(...actionLines);
+      return logLines.join("\n");
     } catch (e: any) {
       console.error("Codec Error:", e);
       return `Failed to decode hand: ${e.message}`;
