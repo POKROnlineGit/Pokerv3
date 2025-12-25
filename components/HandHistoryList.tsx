@@ -2,11 +2,14 @@
 
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
-import { Trophy, Clock, Coins, FileText } from "lucide-react";
+import { Trophy, Clock, Coins, Play } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { createClientComponentClient } from "@/lib/supabaseClient";
+import { ReplayViewer } from "@/components/ReplayViewer";
 // @ts-ignore - Importing from shared backend
-import { PokerCodec, ActionType } from "@backend/game/handHistory/PokerCodec";
-import { useMemo } from "react";
+import { PokerCodec, indexToCard } from "@backend/game/handHistory/PokerCodec";
 
 interface HandSummary {
   id: string;
@@ -17,6 +20,12 @@ interface HandSummary {
   played_at: string;
   replay_data: string;
   player_manifest: Record<string, string>;
+  config?: {
+    gameType?: string;
+    sb?: number;
+    bb?: number;
+    [key: string]: any;
+  };
 }
 
 interface HandHistoryListProps {
@@ -24,122 +33,115 @@ interface HandHistoryListProps {
   currentUserId: string;
 }
 
-// Helper to map ActionType enum to readable string
-const getActionLabel = (type: number): string => {
-  const map: Record<number, string> = {
-    [ActionType.FOLD]: "FOLD",
-    [ActionType.CHECK]: "CHECK",
-    [ActionType.CALL]: "CALL",
-    [ActionType.BET_OR_RAISE]: "BET/RAISE",
-    [ActionType.WIN_POT]: "WIN POT",
-    [ActionType.SHOW_CARDS]: "SHOW CARDS",
-    [ActionType.POST_SMALL_BLIND]: "SMALL BLIND",
-    [ActionType.POST_BIG_BLIND]: "BIG BLIND",
-    [ActionType.POST_ANTE]: "ANTE",
-    [ActionType.NEXT_STREET]: "-- STREET --",
-  };
-  return map[type] || `UNKNOWN(${type})`;
+// Helper to convert card index to display string
+const indexToCardString = (index: number): string => {
+  try {
+    return indexToCard(index);
+  } catch {
+    return "??";
+  }
 };
 
-// Individual hand card component to allow useMemo usage
+// Individual hand card component
 function HandCard({
   hand,
   currentUserId,
+  playerNames,
+  onWatchReplay,
 }: {
   hand: HandSummary;
   currentUserId: string;
+  playerNames: Record<string, string>;
+  onWatchReplay: () => void;
 }) {
   const isWinner = hand.winner_id === currentUserId;
 
-  // --- CODEC TEST LOGIC ---
-  const decodedLog = useMemo(() => {
+  // Extract board cards from decoded data
+  const boardCards = useMemo(() => {
     try {
-      if (!hand.replay_data) return "No replay data found.";
-
-      // Use Universal Codec helper to parse hex string
+      if (!hand.replay_data) return [];
       const buffer = PokerCodec.fromHex(hand.replay_data);
-
-      // Decode (playerCount is now read from the header)
       const decoded = PokerCodec.decode(buffer);
-
-      // Get sorted seat indices from manifest to match codec order (calculated once)
-      const sortedSeats = Object.keys(hand.player_manifest || {})
-        .map((k) => parseInt(k, 10))
-        .sort((a, b) => a - b);
-
-      // Build the log output
-      const logLines: string[] = [];
-
-      // 1. Display Starting Stacks
-      if (decoded.startingStacks && decoded.startingStacks.length > 0) {
-        logLines.push("=== STARTING STACKS ===");
-
-        decoded.startingStacks.forEach((stack: number, index: number) => {
-          const seatIndex = sortedSeats[index];
-          const playerId = hand.player_manifest[String(seatIndex)];
-          const isMe = playerId === currentUserId;
-          const playerLabel = isMe ? "HERO" : `Seat ${seatIndex}`;
-          logLines.push(`${playerLabel}: ${stack.toLocaleString()} chips`);
-        });
-
-        logLines.push(""); // Empty line separator
-      }
-
-      // 2. Format Actions to Text
-      const actionLines = decoded.actions.map((action: any, i: number) => {
-        let text = `[${i.toString().padStart(2, "0")}] `;
-
-        if (action.type === ActionType.NEXT_STREET) {
-          text += `--- ${action.street?.toUpperCase() || "NEXT STREET"} ---`;
-        } else {
-          // Identify Actor - map manifest index back to seat
-          const seatIndex = sortedSeats[action.seatIndex];
-          const playerId = hand.player_manifest[String(seatIndex)];
-          const isMe = playerId === currentUserId;
-          const actorLabel = isMe ? "HERO" : `Seat ${seatIndex}`;
-
-          text += `${actorLabel} ${getActionLabel(action.type)}`;
-          if (action.amount) text += ` (${action.amount})`;
-        }
-        return text;
-      });
-
-      logLines.push(...actionLines);
-      return logLines.join("\n");
-    } catch (e: any) {
-      console.error("Codec Error:", e);
-      return `Failed to decode hand: ${e.message}`;
+      return (decoded.board || []).map((idx: number) => indexToCardString(idx));
+    } catch {
+      return [];
     }
-  }, [hand.replay_data, hand.player_manifest, currentUserId]);
+  }, [hand.replay_data]);
+
+  // Get winner name
+  const winnerName = hand.winner_id
+    ? playerNames[hand.winner_id] ||
+      `Seat ${
+        Object.entries(hand.player_manifest).find(
+          ([_, id]) => id === hand.winner_id
+        )?.[0] || "?"
+      }`
+    : null;
 
   return (
     <Card className="overflow-hidden border-2 border-transparent hover:border-muted-foreground/20 transition-all">
-      {/* Header Section */}
-      <div className="p-4 flex items-center justify-between bg-muted/30">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className="font-mono font-bold text-sm text-primary">
-              #{hand.hand_index}
-            </span>
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              {formatDistanceToNow(new Date(hand.played_at), {
-                addSuffix: true,
-              })}
-            </span>
+      {/* Single-row layout */}
+      <div className="p-4 flex items-center justify-between gap-4 bg-muted/30">
+        {/* Left: Hand info */}
+        <div className="flex items-center gap-4 flex-1 min-w-0">
+          <div className="flex flex-col gap-1 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="font-mono font-bold text-sm text-primary">
+                #{hand.hand_index}
+              </span>
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {formatDistanceToNow(new Date(hand.played_at), {
+                  addSuffix: true,
+                })}
+              </span>
+            </div>
+            <div className="text-xs text-muted-foreground font-mono">
+              ID: {hand.game_id.slice(0, 8)}
+            </div>
           </div>
-          <div className="text-xs text-muted-foreground font-mono">
-            ID: {hand.game_id.slice(0, 8)}
-          </div>
+
+          {/* Board Cards */}
+          {boardCards.length > 0 && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <span className="text-xs text-muted-foreground mr-1">Board:</span>
+              <div className="flex gap-1">
+                {boardCards.map((card, idx) => (
+                  <span
+                    key={idx}
+                    className="font-mono text-xs bg-background px-1.5 py-0.5 rounded border"
+                  >
+                    {card}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Winner */}
+          {winnerName && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <span className="text-xs text-muted-foreground">Winner:</span>
+              <span
+                className={`text-xs font-medium ${
+                  isWinner ? "text-emerald-400" : "text-foreground"
+                }`}
+              >
+                {isWinner ? "You" : winnerName}
+              </span>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-6">
+        {/* Right: Pot, Status, and Watch Replay button */}
+        <div className="flex items-center gap-6 flex-shrink-0">
           <div className="text-right">
             <p className="text-xs text-muted-foreground flex items-center justify-end gap-1">
               Pot <Coins className="w-3 h-3" />
             </p>
             <p className="font-mono font-medium">{hand.final_pot}</p>
           </div>
+
           <div className="text-right w-20 flex justify-end">
             {isWinner ? (
               <div className="flex items-center gap-1 text-emerald-400 font-bold text-sm">
@@ -151,17 +153,16 @@ function HandCard({
               </span>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* Codec Test Output Section */}
-      <div className="bg-black/90 p-3 font-mono text-xs text-green-500/80 border-t overflow-hidden">
-        <div className="flex items-center gap-2 mb-2 text-muted-foreground uppercase tracking-wider text-[10px] font-bold">
-          <FileText className="w-3 h-3" />
-          Decoded Action Log (Codec Test)
-        </div>
-        <div className="max-h-40 overflow-y-auto whitespace-pre-wrap leading-relaxed">
-          {decodedLog}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onWatchReplay}
+            className="flex items-center gap-2"
+          >
+            <Play className="w-4 h-4" />
+            Watch Replay
+          </Button>
         </div>
       </div>
     </Card>
@@ -172,6 +173,53 @@ export function HandHistoryList({
   hands,
   currentUserId,
 }: HandHistoryListProps) {
+  const supabase = createClientComponentClient();
+  const [selectedHand, setSelectedHand] = useState<HandSummary | null>(null);
+  const [playerNames, setPlayerNames] = useState<Record<string, string>>({});
+
+  // Fetch player names in bulk for all hands
+  useEffect(() => {
+    if (!hands || hands.length === 0) return;
+
+    const fetchPlayerNames = async () => {
+      // Collect all unique player IDs from all hands
+      const playerIds = new Set<string>();
+      hands.forEach((hand) => {
+        Object.values(hand.player_manifest).forEach((id) => {
+          playerIds.add(id);
+        });
+      });
+
+      if (playerIds.size === 0) return;
+
+      try {
+        // Fetch usernames from profiles table
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, username")
+          .in("id", Array.from(playerIds));
+
+        if (error) {
+          console.error("Error fetching player names:", error);
+          return;
+        }
+
+        // Build mapping
+        const names: Record<string, string> = {};
+        data?.forEach((profile) => {
+          names[profile.id] =
+            profile.username || `User ${profile.id.slice(0, 8)}`;
+        });
+
+        setPlayerNames(names);
+      } catch (error) {
+        console.error("Error fetching player names:", error);
+      }
+    };
+
+    fetchPlayerNames();
+  }, [hands, supabase]);
+
   if (!hands || hands.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-3 text-center border rounded-lg bg-card/50 text-muted-foreground">
@@ -182,12 +230,30 @@ export function HandHistoryList({
   }
 
   return (
-    <ScrollArea className="h-[600px] w-full rounded-md border p-4">
-      <div className="space-y-6">
-        {hands.map((hand) => (
-          <HandCard key={hand.id} hand={hand} currentUserId={currentUserId} />
-        ))}
-      </div>
-    </ScrollArea>
+    <>
+      <ScrollArea className="h-[600px] w-full rounded-md border p-4">
+        <div className="space-y-4">
+          {hands.map((hand) => (
+            <HandCard
+              key={hand.id}
+              hand={hand}
+              currentUserId={currentUserId}
+              playerNames={playerNames}
+              onWatchReplay={() => setSelectedHand(hand)}
+            />
+          ))}
+        </div>
+      </ScrollArea>
+
+      {/* Replay Viewer Modal */}
+      {selectedHand && (
+        <ReplayViewer
+          hand={selectedHand}
+          currentUserId={currentUserId}
+          playerNames={playerNames}
+          onClose={() => setSelectedHand(null)}
+        />
+      )}
+    </>
   );
 }
