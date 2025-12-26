@@ -45,8 +45,8 @@ export default function SettingsPage() {
     <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
-        <div className="container mx-auto px-4 py-8 max-w-2xl">
-          <h1 className="text-4xl font-bold mb-8">Settings</h1>
+        <div className="container mx-auto p-6 max-w-4xl">
+          <h1 className="text-3xl font-bold mb-6">Settings</h1>
           <SettingsForm
             initialUsername={profile?.username || ''}
             initialTheme={profile?.theme || 'light'}

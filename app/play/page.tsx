@@ -10,6 +10,7 @@ import { useQueue } from "@/components/providers/QueueProvider";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { MotionCard } from "@/components/motion/MotionCard";
 import { Users, User, Play, Bot } from "lucide-react";
+import { createClientComponentClient } from "@/lib/supabaseClient";
 
 // Keep this route dynamic so it always reflects current game state
 export const dynamic = "force-dynamic";
@@ -46,6 +47,9 @@ export default function PlayPage() {
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [variants, setVariants] = useState<GameVariant[]>([]);
   const [isLoadingVariants, setIsLoadingVariants] = useState(true);
+  const [userChips, setUserChips] = useState<number | null>(null);
+
+  const supabase = createClientComponentClient();
 
   // Get theme colors
   const primaryColor = currentTheme.colors.primary[0];
@@ -54,8 +58,9 @@ export default function PlayPage() {
   const centerColor =
     currentTheme.colors.primary[2] || currentTheme.colors.primary[1];
 
-  // 1. Fetch Variants on Mount (With Error Handling & Validation)
+  // 1. Fetch Variants and User Profile on Mount
   useEffect(() => {
+    // Fetch Variants
     fetch("/api/variants")
       .then((res) => {
         if (!res.ok) {
@@ -106,7 +111,29 @@ export default function PlayPage() {
         setIsLoadingVariants(false);
         setVariants([]); // Ensure variants is set to empty array on error
       });
-  }, [toast]);
+
+    // Fetch Profile (Chips)
+    const fetchProfile = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase
+            .from("profiles")
+            .select("chips")
+            .eq("id", user.id)
+            .single();
+          if (data) {
+            setUserChips(data.chips);
+          }
+        }
+      } catch (err) {
+        console.error("[PlayPage] Failed to fetch profile:", err);
+      }
+    };
+    fetchProfile();
+  }, [toast, supabase]);
 
   // 2. Track socket connection status
   useEffect(() => {
@@ -198,7 +225,7 @@ export default function PlayPage() {
     }
   }, [inQueue, queueType, router]);
 
-  const joinQueue = (slug: string) => {
+  const joinQueue = (slug: string, buyIn: number) => {
     if (inGame) {
       toast({
         title: "Cannot join queue",
@@ -209,6 +236,17 @@ export default function PlayPage() {
       });
       return;
     }
+
+    // Only enforce funds check if buyIn > 0 (free games don't need funds)
+    if (buyIn > 0 && userChips !== null && userChips < buyIn) {
+      toast({
+        title: "Insufficient Funds",
+        description: `You need ${buyIn} chips to join. Current balance: ${userChips.toLocaleString()}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (inQueue) {
       toast({
         title: "Already in queue",
@@ -235,263 +273,504 @@ export default function PlayPage() {
   return (
     <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
-      <div className="relative z-10 container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto space-y-8">
-          {/* Find a Game Section */}
-          <section>
-            <div
-              className="text-white px-6 py-4 rounded-t-xl"
-              style={{
-                background: `linear-gradient(to right, ${accentColor}, ${
-                  currentTheme.colors.accent[1] || accentColor
-                })`,
-              }}
-            >
-              <h2 className="text-2xl font-bold">Find a Game</h2>
-              <p className="text-sm text-white/80">
-                Join an online multiplayer table
-              </p>
-            </div>
-            {isLoadingVariants ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-card rounded-b-xl">
-                {[1, 2].map((i) => (
-                  <Card key={i} className="bg-card/50 animate-pulse h-48" />
-                ))}
+      <div className="relative z-10">
+        <div className="container mx-auto p-6 max-w-4xl">
+          <h1 className="text-3xl font-bold mb-6">Play Poker</h1>
+          <div className="space-y-8">
+            {/* Cash Games Section */}
+            <section>
+              <div
+                className="text-white px-6 py-4 rounded-t-xl"
+                style={{
+                  background: `linear-gradient(to right, ${accentColor}, ${
+                    currentTheme.colors.accent[1] || accentColor
+                  })`,
+                }}
+              >
+                <h2 className="text-2xl font-bold">Cash Games</h2>
+                <p className="text-sm text-white/80">
+                  Play with real chips and cash out anytime
+                </p>
               </div>
-            ) : variants.length === 0 ? (
-              <div className="p-6 bg-card rounded-b-xl">
-                <div className="text-center py-12 bg-card/20 rounded-lg border border-border/50">
-                  <p className="text-muted-foreground">
-                    No game variants available at this time.
-                  </p>
+              {isLoadingVariants ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-card rounded-b-xl">
+                  {[1, 2].map((i) => (
+                    <Card key={i} className="bg-card/50 animate-pulse h-48" />
+                  ))}
                 </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-card rounded-b-xl">
-                {variants.map((variant) => (
-                  <MotionCard
-                    key={variant.id}
-                    className={`${
-                      inGame || inQueue
-                        ? "cursor-not-allowed opacity-60"
-                        : "cursor-pointer"
-                    } bg-card rounded-xl overflow-hidden`}
-                    onClick={() =>
-                      !inGame && !inQueue && joinQueue(variant.slug)
-                    }
-                  >
-                    <CardContent className="p-6">
-                      <div className="flex items-center gap-4 mb-4">
-                        <div
-                          className="p-3 rounded-lg"
-                          style={{
-                            backgroundColor: `${accentColor}20`,
-                            color: accentColor,
-                          }}
-                        >
-                          {variant.max_players === 2 ? (
-                            <User
-                              className="h-8 w-8"
-                              style={{ color: accentColor }}
-                            />
-                          ) : (
-                            <Users
-                              className="h-8 w-8"
-                              style={{ color: accentColor }}
-                            />
-                          )}
-                        </div>
-                        <div>
-                          <h3 className="text-xl font-semibold">
-                            {variant.name}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            {variant.description ||
-                              `${variant.max_players}-Player ${
-                                variant.category === "cash"
-                                  ? "Cash Game"
-                                  : "Game"
-                              }`}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="space-y-2 text-sm text-muted-foreground mb-4">
-                        <div className="flex justify-between">
-                          <span>Blinds:</span>
-                          <span className="font-medium text-foreground">
-                            {variant.config?.blinds?.small || 1}/
-                            {variant.config?.blinds?.big || 2}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Buy-in:</span>
-                          <span className="font-medium text-foreground">
-                            {variant.config?.buyIn || 100} chips
-                          </span>
-                        </div>
-                      </div>
-                      <Button
-                        className="w-full"
-                        size="lg"
-                        disabled={
-                          inGame || inQueue || isChecking || !isSocketConnected
-                        }
-                        onClick={() => joinQueue(variant.slug)}
-                        style={{
-                          background: `linear-gradient(to right, ${accentColor}, ${
-                            currentTheme.colors.accent[1] || accentColor
-                          })`,
-                          color: "white",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = `linear-gradient(to right, ${
-                            currentTheme.colors.accent[1] || accentColor
-                          }, ${
-                            currentTheme.colors.accent[2] ||
-                            currentTheme.colors.accent[1] ||
-                            accentColor
-                          })`;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = `linear-gradient(to right, ${accentColor}, ${
-                            currentTheme.colors.accent[1] || accentColor
-                          })`;
-                        }}
-                      >
-                        <Play className="mr-2 h-4 w-4" />
-                        {inGame
-                          ? "In Game"
-                          : inQueue
-                          ? "Already in Queue"
-                          : !isSocketConnected
-                          ? "Connecting..."
-                          : "Join Queue"}
-                      </Button>
-                    </CardContent>
-                  </MotionCard>
-                ))}
-              </div>
-            )}
-          </section>
+              ) : variants.filter((v) => v.category === "cash").length === 0 ? (
+                <div className="p-6 bg-card rounded-b-xl">
+                  <div className="text-center py-12 bg-card/20 rounded-lg border border-border/50">
+                    <p className="text-muted-foreground">
+                      No cash games available at this time.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-card rounded-b-xl">
+                  {variants
+                    .filter((v) => v.category === "cash")
+                    .map((variant) => {
+                      const buyIn = variant.config?.buyIn || 0;
+                      const startingStack =
+                        variant.config?.startingStack || 1000;
+                      const isFree = buyIn === 0;
+                      const canAfford =
+                        isFree || (userChips !== null && userChips >= buyIn);
+                      const isDisabled =
+                        inGame ||
+                        inQueue ||
+                        isChecking ||
+                        !isSocketConnected ||
+                        !canAfford;
 
-          {/* Host a Game Section */}
-          <section>
-            <div
-              className="text-white px-6 py-4 rounded-t-xl"
-              style={{
-                background: `linear-gradient(to right, ${accentColor}, ${
-                  currentTheme.colors.accent[1] || accentColor
-                })`,
-              }}
-            >
-              <h2 className="text-2xl font-bold">Host a Game</h2>
-              <p className="text-sm text-white/80">
-                Play offline against AI bots
-              </p>
-            </div>
-            <div className="p-6 bg-card rounded-b-xl">
-              {inGame && activeGameId && (
-                <div className="mb-4 flex justify-between items-center">
-                  <p className="text-sm text-muted-foreground">
-                    You have an active game. You can rejoin it here:
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      router.push(`/play/game/${activeGameId}`);
-                    }}
-                    style={{
-                      borderColor: accentColor,
-                      color: accentColor,
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = accentColor;
-                      e.currentTarget.style.color = "white";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = "transparent";
-                      e.currentTarget.style.color = accentColor;
-                    }}
-                  >
-                    Rejoin Game
-                  </Button>
+                      return (
+                        <MotionCard
+                          key={variant.id}
+                          className={`${
+                            isDisabled
+                              ? "cursor-not-allowed opacity-60"
+                              : "cursor-pointer"
+                          } bg-card rounded-xl overflow-hidden`}
+                          onClick={() =>
+                            !isDisabled && joinQueue(variant.slug, buyIn)
+                          }
+                        >
+                          <CardContent className="p-6">
+                            <div className="flex items-center gap-4 mb-4">
+                              <div
+                                className="p-3 rounded-lg"
+                                style={{
+                                  backgroundColor: `${accentColor}20`,
+                                  color: accentColor,
+                                }}
+                              >
+                                {variant.max_players === 2 ? (
+                                  <User
+                                    className="h-8 w-8"
+                                    style={{ color: accentColor }}
+                                  />
+                                ) : (
+                                  <Users
+                                    className="h-8 w-8"
+                                    style={{ color: accentColor }}
+                                  />
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1">
+                                    <h3 className="text-xl font-semibold">
+                                      {variant.name}
+                                    </h3>
+                                    <p className="text-sm text-muted-foreground">
+                                      {variant.description ||
+                                        `${variant.max_players}-Player ${
+                                          variant.category === "cash"
+                                            ? "Cash Game"
+                                            : "Game"
+                                        }`}
+                                    </p>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    {variant.category === "tournament" && (
+                                      <span className="px-2 py-1 rounded text-xs bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 whitespace-nowrap">
+                                        Tournament
+                                      </span>
+                                    )}
+                                    {variant.category === "cash" && (
+                                      <span className="px-2 py-1 rounded text-xs bg-green-500/10 text-green-500 border border-green-500/20 whitespace-nowrap">
+                                        Cash
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="space-y-2 text-sm text-muted-foreground mb-4">
+                              <div className="flex justify-between">
+                                <span>Blinds:</span>
+                                <span className="font-medium text-foreground">
+                                  {variant.config?.blinds?.small || 1}/
+                                  {variant.config?.blinds?.big || 2}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Buy-in / Stack:</span>
+                                <span
+                                  className={`font-medium ${
+                                    canAfford
+                                      ? "text-foreground"
+                                      : "text-destructive"
+                                  }`}
+                                >
+                                  {isFree ? "Free" : buyIn} / {startingStack}
+                                </span>
+                              </div>
+                            </div>
+                            <Button
+                              className="w-full"
+                              size="lg"
+                              disabled={isDisabled}
+                              onClick={() => joinQueue(variant.slug, buyIn)}
+                              style={
+                                canAfford
+                                  ? {
+                                      background: `linear-gradient(to right, ${accentColor}, ${
+                                        currentTheme.colors.accent[1] ||
+                                        accentColor
+                                      })`,
+                                      color: "white",
+                                    }
+                                  : undefined
+                              }
+                              variant={canAfford ? "default" : "outline"}
+                              onMouseEnter={(e) => {
+                                if (canAfford && !isDisabled) {
+                                  e.currentTarget.style.background = `linear-gradient(to right, ${
+                                    currentTheme.colors.accent[1] || accentColor
+                                  }, ${
+                                    currentTheme.colors.accent[2] ||
+                                    currentTheme.colors.accent[1] ||
+                                    accentColor
+                                  })`;
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (canAfford && !isDisabled) {
+                                  e.currentTarget.style.background = `linear-gradient(to right, ${accentColor}, ${
+                                    currentTheme.colors.accent[1] || accentColor
+                                  })`;
+                                }
+                              }}
+                            >
+                              <Play className="mr-2 h-4 w-4" />
+                              {inGame
+                                ? "In Game"
+                                : inQueue
+                                ? "Already in Queue"
+                                : !isSocketConnected
+                                ? "Connecting..."
+                                : !canAfford
+                                ? "Insufficient Funds"
+                                : "Join Queue"}
+                            </Button>
+                          </CardContent>
+                        </MotionCard>
+                      );
+                    })}
                 </div>
               )}
-              <MotionCard
-                className="cursor-pointer bg-card rounded-xl overflow-hidden"
-                onClick={handlePlayLocal}
+            </section>
+
+            {/* Casual Games Section */}
+            <section>
+              <div
+                className="text-white px-6 py-4 rounded-t-xl"
+                style={{
+                  background: `linear-gradient(to right, ${accentColor}, ${
+                    currentTheme.colors.accent[1] || accentColor
+                  })`,
+                }}
               >
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div
-                      className="p-3 rounded-lg"
+                <h2 className="text-2xl font-bold">Casual Games</h2>
+                <p className="text-sm text-white/80">
+                  Play for fun with free chips
+                </p>
+              </div>
+              {isLoadingVariants ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-card rounded-b-xl">
+                  {[1, 2].map((i) => (
+                    <Card key={i} className="bg-card/50 animate-pulse h-48" />
+                  ))}
+                </div>
+              ) : variants.filter((v) => v.category !== "cash").length === 0 ? (
+                <div className="p-6 bg-card rounded-b-xl">
+                  <div className="text-center py-12 bg-card/20 rounded-lg border border-border/50">
+                    <p className="text-muted-foreground">
+                      No casual games available at this time.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-card rounded-b-xl">
+                  {variants
+                    .filter((v) => v.category !== "cash")
+                    .map((variant) => {
+                      const buyIn = variant.config?.buyIn || 0;
+                      const startingStack =
+                        variant.config?.startingStack || 1000;
+                      const isFree = buyIn === 0;
+                      const canAfford =
+                        isFree || (userChips !== null && userChips >= buyIn);
+                      const isDisabled =
+                        inGame ||
+                        inQueue ||
+                        isChecking ||
+                        !isSocketConnected ||
+                        !canAfford;
+
+                      return (
+                        <MotionCard
+                          key={variant.id}
+                          className={`${
+                            isDisabled
+                              ? "cursor-not-allowed opacity-60"
+                              : "cursor-pointer"
+                          } bg-card rounded-xl overflow-hidden`}
+                          onClick={() =>
+                            !isDisabled && joinQueue(variant.slug, buyIn)
+                          }
+                        >
+                          <CardContent className="p-6">
+                            <div className="flex items-center gap-4 mb-4">
+                              <div
+                                className="p-3 rounded-lg"
+                                style={{
+                                  backgroundColor: `${accentColor}20`,
+                                  color: accentColor,
+                                }}
+                              >
+                                {variant.max_players === 2 ? (
+                                  <User
+                                    className="h-8 w-8"
+                                    style={{ color: accentColor }}
+                                  />
+                                ) : (
+                                  <Users
+                                    className="h-8 w-8"
+                                    style={{ color: accentColor }}
+                                  />
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1">
+                                    <h3 className="text-xl font-semibold">
+                                      {variant.name}
+                                    </h3>
+                                    <p className="text-sm text-muted-foreground">
+                                      {variant.description ||
+                                        `${variant.max_players}-Player ${
+                                          variant.category === "cash"
+                                            ? "Cash Game"
+                                            : "Game"
+                                        }`}
+                                    </p>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    {variant.category === "tournament" && (
+                                      <span className="px-2 py-1 rounded text-xs bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 whitespace-nowrap">
+                                        Tournament
+                                      </span>
+                                    )}
+                                    {variant.category === "cash" && (
+                                      <span className="px-2 py-1 rounded text-xs bg-green-500/10 text-green-500 border border-green-500/20 whitespace-nowrap">
+                                        Cash
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="space-y-2 text-sm text-muted-foreground mb-4">
+                              <div className="flex justify-between">
+                                <span>Blinds:</span>
+                                <span className="font-medium text-foreground">
+                                  {variant.config?.blinds?.small || 1}/
+                                  {variant.config?.blinds?.big || 2}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Buy-in / Stack:</span>
+                                <span
+                                  className={`font-medium ${
+                                    canAfford
+                                      ? "text-foreground"
+                                      : "text-destructive"
+                                  }`}
+                                >
+                                  {isFree ? "Free" : buyIn} / {startingStack}
+                                </span>
+                              </div>
+                            </div>
+                            <Button
+                              className="w-full"
+                              size="lg"
+                              disabled={isDisabled}
+                              onClick={() => joinQueue(variant.slug, buyIn)}
+                              style={
+                                canAfford
+                                  ? {
+                                      background: `linear-gradient(to right, ${accentColor}, ${
+                                        currentTheme.colors.accent[1] ||
+                                        accentColor
+                                      })`,
+                                      color: "white",
+                                    }
+                                  : undefined
+                              }
+                              variant={canAfford ? "default" : "outline"}
+                              onMouseEnter={(e) => {
+                                if (canAfford && !isDisabled) {
+                                  e.currentTarget.style.background = `linear-gradient(to right, ${
+                                    currentTheme.colors.accent[1] || accentColor
+                                  }, ${
+                                    currentTheme.colors.accent[2] ||
+                                    currentTheme.colors.accent[1] ||
+                                    accentColor
+                                  })`;
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (canAfford && !isDisabled) {
+                                  e.currentTarget.style.background = `linear-gradient(to right, ${accentColor}, ${
+                                    currentTheme.colors.accent[1] || accentColor
+                                  })`;
+                                }
+                              }}
+                            >
+                              <Play className="mr-2 h-4 w-4" />
+                              {inGame
+                                ? "In Game"
+                                : inQueue
+                                ? "Already in Queue"
+                                : !isSocketConnected
+                                ? "Connecting..."
+                                : !canAfford
+                                ? "Insufficient Funds"
+                                : "Join Queue"}
+                            </Button>
+                          </CardContent>
+                        </MotionCard>
+                      );
+                    })}
+                </div>
+              )}
+            </section>
+
+            {/* Host a Game Section */}
+            <section>
+              <div
+                className="text-white px-6 py-4 rounded-t-xl"
+                style={{
+                  background: `linear-gradient(to right, ${accentColor}, ${
+                    currentTheme.colors.accent[1] || accentColor
+                  })`,
+                }}
+              >
+                <h2 className="text-2xl font-bold">Host a Game</h2>
+                <p className="text-sm text-white/80">
+                  Play offline against AI bots
+                </p>
+              </div>
+              <div className="p-6 bg-card rounded-b-xl">
+                {inGame && activeGameId && (
+                  <div className="mb-4 flex justify-between items-center">
+                    <p className="text-sm text-muted-foreground">
+                      You have an active game. You can rejoin it here:
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        router.push(`/play/game/${activeGameId}`);
+                      }}
                       style={{
-                        backgroundColor: `${accentColor}20`,
+                        borderColor: accentColor,
                         color: accentColor,
                       }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = accentColor;
+                        e.currentTarget.style.color = "white";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                        e.currentTarget.style.color = accentColor;
+                      }}
                     >
-                      <Bot className="h-8 w-8" style={{ color: accentColor }} />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold">Play Local</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Practice against 5 AI bots
-                      </p>
-                    </div>
+                      Rejoin Game
+                    </Button>
                   </div>
-                  <div className="space-y-2 text-sm text-muted-foreground mb-4">
-                    <div className="flex justify-between">
-                      <span>Mode:</span>
-                      <span className="font-medium text-foreground">
-                        Offline
-                      </span>
+                )}
+                <MotionCard
+                  className="cursor-pointer bg-card rounded-xl overflow-hidden"
+                  onClick={handlePlayLocal}
+                >
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div
+                        className="p-3 rounded-lg"
+                        style={{
+                          backgroundColor: `${accentColor}20`,
+                          color: accentColor,
+                        }}
+                      >
+                        <Bot
+                          className="h-8 w-8"
+                          style={{ color: accentColor }}
+                        />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold">Play Local</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Practice against 5 AI bots
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Opponents:</span>
-                      <span className="font-medium text-foreground">
-                        5 AI Bots
-                      </span>
+                    <div className="space-y-2 text-sm text-muted-foreground mb-4">
+                      <div className="flex justify-between">
+                        <span>Mode:</span>
+                        <span className="font-medium text-foreground">
+                          Offline
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Opponents:</span>
+                        <span className="font-medium text-foreground">
+                          5 AI Bots
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Buy-in:</span>
+                        <span className="font-medium text-foreground">
+                          Free (Practice)
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Buy-in:</span>
-                      <span className="font-medium text-foreground">
-                        Free (Practice)
-                      </span>
-                    </div>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    className="w-full"
-                    size="lg"
-                    style={{
-                      background: `linear-gradient(to right, ${accentColor}, ${
-                        currentTheme.colors.accent[1] || accentColor
-                      })`,
-                      color: "white",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = `linear-gradient(to right, ${
-                        currentTheme.colors.accent[1] || accentColor
-                      }, ${
-                        currentTheme.colors.accent[2] ||
-                        currentTheme.colors.accent[1] ||
-                        accentColor
-                      })`;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = `linear-gradient(to right, ${accentColor}, ${
-                        currentTheme.colors.accent[1] || accentColor
-                      })`;
-                    }}
-                  >
-                    <Bot className="mr-2 h-4 w-4" />
-                    Start Local Game
-                  </Button>
-                </CardContent>
-              </MotionCard>
-            </div>
-          </section>
+                    <Button
+                      variant="secondary"
+                      className="w-full"
+                      size="lg"
+                      style={{
+                        background: `linear-gradient(to right, ${accentColor}, ${
+                          currentTheme.colors.accent[1] || accentColor
+                        })`,
+                        color: "white",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = `linear-gradient(to right, ${
+                          currentTheme.colors.accent[1] || accentColor
+                        }, ${
+                          currentTheme.colors.accent[2] ||
+                          currentTheme.colors.accent[1] ||
+                          accentColor
+                        })`;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = `linear-gradient(to right, ${accentColor}, ${
+                          currentTheme.colors.accent[1] || accentColor
+                        })`;
+                      }}
+                    >
+                      <Bot className="mr-2 h-4 w-4" />
+                      Start Local Game
+                    </Button>
+                  </CardContent>
+                </MotionCard>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </div>

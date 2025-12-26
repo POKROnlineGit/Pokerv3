@@ -62,8 +62,8 @@ export default function LearnPage() {
     <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
-        <div className="container mx-auto px-4 py-8">
-          <h1 className="text-4xl font-bold mb-8">Learn Poker</h1>
+        <div className="container mx-auto p-6 max-w-4xl">
+          <h1 className="text-3xl font-bold mb-6">Learn Poker</h1>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {LESSONS.map((lesson) => {
               const userProgress = progressMap.get(lesson.id)

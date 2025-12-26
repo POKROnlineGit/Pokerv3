@@ -76,8 +76,10 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="min-h-screen relative">
-        <div className="container mx-auto max-w-4xl p-6 flex items-center justify-center min-h-screen">
-          <div className="text-white">Loading...</div>
+        <div className="relative z-10">
+          <div className="container mx-auto p-6 max-w-4xl flex items-center justify-center min-h-screen">
+            <div className="text-white">Loading...</div>
+          </div>
         </div>
       </div>
     );
@@ -111,8 +113,8 @@ export default function ProfilePage() {
     <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
-        <div className="p-6">
-        <div className="container mx-auto max-w-4xl">
+        <div className="container mx-auto p-6 max-w-4xl">
+          <h1 className="text-3xl font-bold mb-6">Profile</h1>
           {/* Profile Header */}
           <Card className="mb-6 bg-card">
             <CardHeader>
@@ -234,7 +236,6 @@ export default function ProfilePage() {
             </TabsContent>
           </Tabs>
         </div>
-      </div>
       </div>
     </div>
   );

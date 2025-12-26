@@ -268,18 +268,8 @@ export function Sidebar() {
         <div className="flex flex-col space-y-2 flex-shrink-0">
           {navItems.map((item) => {
             const Icon = item.icon;
-            // Special handling for /play to exclude /play/profile
-            let isActive = false;
-            if (item.href === "/play") {
-              // Match /play exactly or /play/game/... or /play/local/..., but not /play/profile
-              isActive =
-                pathname === "/play" ||
-                pathname.startsWith("/play/game/") ||
-                pathname.startsWith("/play/local/");
-            } else {
-              // For other routes, use startsWith but ensure /play/profile doesn't match /play
-              isActive = pathname.startsWith(item.href);
-            }
+            // Always highlight /play, other pages only on hover
+            const isActive = item.href === "/play";
             return (
               <Tooltip key={item.href} text={item.label} show={isMinimized}>
                 <Link
@@ -289,23 +279,27 @@ export function Sidebar() {
                     isMinimized
                       ? "justify-center px-3 py-3"
                       : "justify-between px-4 py-3",
-                    isActive
-                      ? "text-white"
-                      : "text-white/70 hover:text-white"
+                    isActive ? "text-white" : "text-white/70 hover:text-white"
                   )}
-                  style={isActive ? {
-                    backgroundColor: `${accentColor}CC`,
-                  } : {
-                    '--hover-bg': `${accentColor}CC`,
-                  } as React.CSSProperties}
+                  style={
+                    isActive
+                      ? {
+                          backgroundColor: `${accentColor}CC`,
+                        }
+                      : ({
+                          "--hover-bg": `${accentColor}CC`,
+                        } as React.CSSProperties)
+                  }
                   onMouseEnter={(e) => {
+                    // Only apply hover effect if not the play page (which is always active)
                     if (!isActive) {
                       e.currentTarget.style.backgroundColor = `${accentColor}CC`;
                     }
                   }}
                   onMouseLeave={(e) => {
+                    // Only remove hover effect if not the play page (which is always active)
                     if (!isActive) {
-                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.backgroundColor = "transparent";
                     }
                   }}
                 >
@@ -356,11 +350,15 @@ export function Sidebar() {
                     ? "text-white"
                     : "text-white/70 hover:text-white"
                 )}
-                style={pathname === "/play/profile" ? {
-                  backgroundColor: `${accentColor}CC`,
-                } : {
-                  '--hover-bg': `${accentColor}CC`,
-                } as React.CSSProperties}
+                style={
+                  pathname === "/play/profile"
+                    ? {
+                        backgroundColor: `${accentColor}CC`,
+                      }
+                    : ({
+                        "--hover-bg": `${accentColor}CC`,
+                      } as React.CSSProperties)
+                }
                 onMouseEnter={(e) => {
                   if (pathname !== "/play/profile") {
                     e.currentTarget.style.backgroundColor = `${accentColor}CC`;
@@ -368,7 +366,7 @@ export function Sidebar() {
                 }}
                 onMouseLeave={(e) => {
                   if (pathname !== "/play/profile") {
-                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.backgroundColor = "transparent";
                   }
                 }}
               >
@@ -410,14 +408,16 @@ export function Sidebar() {
                   : "justify-start px-4 py-3",
                 "text-white/70 hover:text-white"
               )}
-              style={{
-                '--hover-bg': `${accentColor}CC`,
-              } as React.CSSProperties}
+              style={
+                {
+                  "--hover-bg": `${accentColor}CC`,
+                } as React.CSSProperties
+              }
               onMouseEnter={(e) => {
                 e.currentTarget.style.backgroundColor = `${accentColor}CC`;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.backgroundColor = "transparent";
               }}
             >
               <div
@@ -461,14 +461,16 @@ export function Sidebar() {
                 : "justify-start px-4 py-3",
               "text-white/70 hover:text-white"
             )}
-            style={{
-              '--hover-bg': `${accentColor}CC`,
-            } as React.CSSProperties}
+            style={
+              {
+                "--hover-bg": `${accentColor}CC`,
+              } as React.CSSProperties
+            }
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = `${accentColor}CC`;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.backgroundColor = "transparent";
             }}
           >
             <LogOut className="h-5 w-5 flex-shrink-0" />
