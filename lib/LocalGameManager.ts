@@ -47,7 +47,7 @@ export class LocalGameManager {
       { id: 'bot-5', name: 'Bot 5', isBot: true, chips: 200, seat: 6 },
     ];
     
-    const players = this.engine.config.maxPlayers === 2 ? playersData.slice(0, 2) : playersData;
+    const players = (this.engine.config as any)?.maxPlayers === 2 ? playersData.slice(0, 2) : playersData;
     this.engine.addPlayers(players);
 
     const ctx = this.engine.context as any;
