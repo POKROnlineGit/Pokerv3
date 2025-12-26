@@ -2,6 +2,17 @@ import { TexasHoldemEngine } from '@backend/domain/game/engine/TexasHoldemEngine
 import { EffectType } from '@backend/domain/game/types';
 import { makeDecision } from '@backend/domain/game/bots/botStrategies.js';
 
+interface LocalGameConfig {
+  maxPlayers: number;
+  blinds: {
+    small: number;
+    big: number;
+  };
+  buyIn: number;
+  startingStack?: number;
+  variantSlug?: string;
+}
+
 export class LocalGameManager {
   public engine: TexasHoldemEngine;
   private updateUI: (state: any) => void;
@@ -10,12 +21,12 @@ export class LocalGameManager {
   private currentHeroId: string;
   private isDestroyed: boolean = false;
 
-  constructor(variant: string, heroId: string, onStateUpdate: (state: any) => void) {
+  constructor(config: LocalGameConfig, heroId: string, onStateUpdate: (state: any) => void) {
     this.updateUI = onStateUpdate;
     this.currentHeroId = heroId;
 
-    this.engine = new TexasHoldemEngine('local-game-1', variant);
-    this.setupPlayers(heroId);
+    this.engine = new TexasHoldemEngine('local-game-1', config);
+    this.setupPlayers(heroId, config.startingStack || 200);
 
     // Send initial state (empty table) so UI can mount and render
     const initialUiState = this.engine.getPlayerContext(this.currentHeroId);
@@ -37,17 +48,18 @@ export class LocalGameManager {
     this.processResult(result);
   }
 
-  private setupPlayers(heroId: string) {
+  private setupPlayers(heroId: string, startingStack: number) {
     const playersData = [
-      { id: heroId, name: 'You', isBot: false, chips: 200, seat: 1 },
-      { id: 'bot-1', name: 'Bot 1', isBot: true, chips: 200, seat: 2 },
-      { id: 'bot-2', name: 'Bot 2', isBot: true, chips: 200, seat: 3 },
-      { id: 'bot-3', name: 'Bot 3', isBot: true, chips: 200, seat: 4 },
-      { id: 'bot-4', name: 'Bot 4', isBot: true, chips: 200, seat: 5 },
-      { id: 'bot-5', name: 'Bot 5', isBot: true, chips: 200, seat: 6 },
+      { id: heroId, name: 'You', isBot: false, chips: startingStack, seat: 1 },
+      { id: 'bot-1', name: 'Bot 1', isBot: true, chips: startingStack, seat: 2 },
+      { id: 'bot-2', name: 'Bot 2', isBot: true, chips: startingStack, seat: 3 },
+      { id: 'bot-3', name: 'Bot 3', isBot: true, chips: startingStack, seat: 4 },
+      { id: 'bot-4', name: 'Bot 4', isBot: true, chips: startingStack, seat: 5 },
+      { id: 'bot-5', name: 'Bot 5', isBot: true, chips: startingStack, seat: 6 },
     ];
     
-    const players = (this.engine.config as any)?.maxPlayers === 2 ? playersData.slice(0, 2) : playersData;
+    const maxPlayers = (this.engine.config as LocalGameConfig).maxPlayers;
+    const players = maxPlayers === 2 ? playersData.slice(0, 2) : playersData;
     this.engine.addPlayers(players);
 
     const ctx = this.engine.context as any;
@@ -56,7 +68,7 @@ export class LocalGameManager {
             p.status = 'ACTIVE';
             p.folded = false;
             p.left = false;
-            p.chips = 200;
+            p.chips = startingStack;
             p.isOffline = false;
         });
     }

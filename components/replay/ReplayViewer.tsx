@@ -122,6 +122,19 @@ export function ReplayViewer({
         throw new Error(`Failed to decode replay data: ${decodeError?.message || "Unknown error"}`);
       }
 
+      // Build config from hand history if available
+      const config = hand.config
+        ? {
+            maxPlayers: variant === "heads_up" ? 2 : variant === "six_max" ? 6 : 9,
+            blinds: {
+              small: hand.config.sb || 1,
+              big: hand.config.bb || 2,
+            },
+            buyIn: hand.config.buyIn || 0,
+            variantSlug: variant,
+          }
+        : undefined;
+
       // Build ReplayInput
       const input: ReplayInput = {
         gameId: hand.game_id,
@@ -131,6 +144,7 @@ export function ReplayViewer({
         actions: decoded.actions || [],
         board: decoded.board || [],
         holeCards: decoded.holeCards || [],
+        config: config,
       };
 
       return input;

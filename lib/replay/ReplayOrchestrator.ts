@@ -31,6 +31,12 @@ export interface ReplayInput {
   }>;
   board: number[];
   holeCards: number[][];
+  config?: {
+    maxPlayers?: number;
+    blinds?: { small: number; big: number };
+    buyIn?: number;
+    variantSlug?: string;
+  };
 }
 
 export interface ReplayFrame {
@@ -68,6 +74,45 @@ const SUIT_MAP: Record<string, "hearts" | "diamonds" | "clubs" | "spades"> = {
   s: "spades",
 };
 
+/**
+ * Helper function to create engine config from variant string
+ */
+function createConfigFromVariant(
+  variant: "six_max" | "heads_up" | "full_ring",
+  providedConfig?: ReplayInput["config"]
+): {
+  maxPlayers: number;
+  blinds: { small: number; big: number };
+  buyIn: number;
+  variantSlug: string;
+  actionTimeoutMs: number;
+} {
+  // Use provided config if available, otherwise use defaults based on variant
+  if (providedConfig) {
+    return {
+      maxPlayers: providedConfig.maxPlayers || (variant === "heads_up" ? 2 : variant === "six_max" ? 6 : 9),
+      blinds: providedConfig.blinds || { small: 1, big: 2 },
+      buyIn: providedConfig.buyIn || 0,
+      variantSlug: providedConfig.variantSlug || variant,
+      actionTimeoutMs: 30000, // Default 30 seconds for replays
+    };
+  }
+
+  // Default configs based on variant
+  const variantConfigs = {
+    heads_up: { maxPlayers: 2, blinds: { small: 1, big: 2 }, buyIn: 0 },
+    six_max: { maxPlayers: 6, blinds: { small: 1, big: 2 }, buyIn: 0 },
+    full_ring: { maxPlayers: 9, blinds: { small: 1, big: 2 }, buyIn: 0 },
+  };
+
+  const config = variantConfigs[variant] || variantConfigs.six_max;
+  return {
+    ...config,
+    variantSlug: variant,
+    actionTimeoutMs: 30000, // Default 30 seconds for replays
+  };
+}
+
 export class ReplayOrchestrator {
   private engine: TexasHoldemEngine;
   private history: ReplayInput;
@@ -76,7 +121,10 @@ export class ReplayOrchestrator {
 
   constructor(history: ReplayInput, playerNames?: Record<string, string>) {
     this.history = history;
-    this.engine = new TexasHoldemEngine(history.gameId, history.variant);
+    
+    // Create config object from variant string or use provided config
+    const engineConfig = createConfigFromVariant(history.variant, history.config);
+    this.engine = new TexasHoldemEngine(history.gameId, engineConfig);
 
     // 1. Rigid Seat Mapping
     const manifestSeatKeys = Object.keys(history.manifest)
