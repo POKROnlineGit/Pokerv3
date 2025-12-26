@@ -1,124 +1,129 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { createClientComponentClient } from '@/lib/supabaseClient'
-import { X, Loader2 } from 'lucide-react'
-import { useSocket } from '@/lib/socketClient'
-import { useQueue } from '@/components/providers/QueueProvider'
-import { useTheme } from '@/components/providers/ThemeProvider'
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { createClientComponentClient } from "@/lib/supabaseClient";
+import { useSocket } from "@/lib/socketClient";
+import { useQueue } from "@/components/providers/QueueProvider";
+import { useTheme } from "@/components/providers/ThemeProvider";
+import { X, Loader2 } from "lucide-react";
 
 export default function QueuePage() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const { currentTheme } = useTheme()
-  const type = (searchParams.get('type') as 'six_max' | 'heads_up') || 'six_max'
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [isConnected, setIsConnected] = useState(false)
-  const [queueStatus, setQueueStatus] = useState<{ count: number; needed: number; target: number } | null>(null)
-  const supabase = createClientComponentClient()
-  const socket = useSocket()
-  const { leaveQueue } = useQueue()
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { currentTheme } = useTheme();
+  // Allow any string type to support dynamic variants
+  const type = searchParams.get('type') || 'six_max';
+  
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [queueStatus, setQueueStatus] = useState<{ count: number; needed: number; target: number } | null>(null);
+  
+  const supabase = createClientComponentClient();
+  const socket = useSocket();
+  const { leaveQueue } = useQueue();
 
   // Get theme colors
-  const primaryColor = currentTheme.colors.primary[0]
-  const gradientColors = currentTheme.colors.gradient
-  const centerColor = currentTheme.colors.primary[2] || currentTheme.colors.primary[1]
-  const accentColor = currentTheme.colors.accent[0]
+  const primaryColor = currentTheme.colors.primary[0];
+  const gradientColors = currentTheme.colors.gradient;
+  const centerColor = currentTheme.colors.primary[2] || currentTheme.colors.primary[1];
+  const accentColor = currentTheme.colors.accent[0];
 
   useEffect(() => {
-    let mounted = true
+    let mounted = true;
 
     const handleConnect = () => {
-      if (!mounted) return
-      setIsConnected(true)
-      setLoading(false)
-    }
+      if (!mounted) return;
+      setIsConnected(true);
+      setLoading(false); // Clear loading when socket connects
+    };
 
     const handleDisconnect = () => {
-      if (!mounted) return
-      setIsConnected(false)
-    }
+      if (!mounted) return;
+      setIsConnected(false);
+    };
 
     const handleMatchFound = (payload: { gameId: string }) => {
-      if (!mounted) return
+      if (!mounted) return;
       if (payload?.gameId) {
-        router.push(`/play/game/${payload.gameId}`)
+        router.push(`/play/game/${payload.gameId}`);
       }
-    }
+    };
 
     const handleQueueUpdate = (payload: any) => {
-      if (!mounted) return
-      setLoading(false)
-    }
+      if (!mounted) return;
+      setLoading(false); // CRITICAL: Clear loading immediately when queue_update arrives
+    };
 
     const handleQueueInfo = (data: { queueType: string; count: number; needed: number; target: number }) => {
-      if (!mounted) return
+      if (!mounted) return;
       if (data.queueType === type) {
-        setQueueStatus(data)
+        setQueueStatus(data);
       }
-    }
+    };
 
     // Initial connected state (in case socket was already connected)
-    setIsConnected(socket.connected)
+    setIsConnected(socket.connected);
 
-    socket.on('connect', handleConnect)
-    socket.on('disconnect', handleDisconnect)
-    socket.on('match_found', handleMatchFound)
-    socket.on('queue_update', handleQueueUpdate)
-    socket.on('queue_info', handleQueueInfo)
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('match_found', handleMatchFound);
+    socket.on('queue_update', handleQueueUpdate);
+    socket.on('queue_info', handleQueueInfo);
 
     // Emit join_queue once connected (or immediately if already connected)
     const emitJoinQueue = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
+        const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-          router.push('/')
-          return
+          router.push('/');
+          return;
         }
 
-        socket.emit('join_queue', { queueType: type })
+        socket.emit('join_queue', { queueType: type });
       } catch (err: any) {
-        console.error('[Queue] Error joining queue via socket:', err)
+        console.error('[Queue] Error joining queue via socket:', err);
         if (mounted) {
-          setError(err.message || 'Failed to join queue')
-          setLoading(false)
+          setError(err.message || 'Failed to join queue');
+          setLoading(false);
         }
       }
-    }
+    };
 
     if (socket.connected) {
-      emitJoinQueue()
+      emitJoinQueue();
     } else {
-      socket.once('connect', emitJoinQueue)
+      socket.once('connect', emitJoinQueue);
     }
 
     return () => {
-      mounted = false
-      socket.off('connect', handleConnect)
-      socket.off('disconnect', handleDisconnect)
-      socket.off('match_found', handleMatchFound)
-      socket.off('queue_update', handleQueueUpdate)
-      socket.off('queue_info', handleQueueInfo)
-      socket.off('connect', emitJoinQueue)
-    }
-  }, [socket, supabase, router, type])
+      mounted = false;
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+      socket.off('match_found', handleMatchFound);
+      socket.off('queue_update', handleQueueUpdate);
+      socket.off('queue_info', handleQueueInfo);
+      socket.off('connect', emitJoinQueue);
+    };
+  }, [socket, supabase, router, type]);
 
   const handleLeaveQueue = async () => {
     try {
-      leaveQueue(type) // Clears global state + emits socket event
+      leaveQueue(type); // Clears global state + emits socket event
     } catch (err: any) {
       // Error handled silently - user will be redirected anyway
     } finally {
-      router.push('/play')
+      router.push('/play');
     }
-  }
+  };
 
-  const playersNeeded = type === 'heads_up' ? 2 : 6
-  const playersWaiting = type === 'heads_up' ? 1 : 5
+  // Helper to format variant name (supports any variant type)
+  const variantName = type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const playersNeeded = type === 'heads_up' ? 2 : 6;
+  const playersWaiting = type === 'heads_up' ? 1 : 5;
 
   if (loading) {
     return (
@@ -155,7 +160,7 @@ export default function QueuePage() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -213,12 +218,12 @@ export default function QueuePage() {
                 color: accentColor,
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = accentColor
-                e.currentTarget.style.color = 'white'
+                e.currentTarget.style.backgroundColor = accentColor;
+                e.currentTarget.style.color = 'white';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent'
-                e.currentTarget.style.color = accentColor
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = accentColor;
               }}
             >
               <X className="mr-2 h-4 w-4" />
@@ -230,5 +235,5 @@ export default function QueuePage() {
       </div>
       </div>
     </div>
-  )
+  );
 }
