@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -73,7 +73,7 @@ export async function middleware(request: NextRequest) {
 
   // Log error for debugging (only in production to help diagnose)
   if (profileError) {
-    console.error("[Middleware] Profile query error:", profileError);
+    console.error("[Proxy] Profile query error:", profileError);
     // If we can't fetch the profile, deny access for security
     return NextResponse.redirect(new URL("/coming-soon", request.url));
   }
@@ -89,3 +89,4 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
+

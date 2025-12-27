@@ -410,8 +410,6 @@ export function ReplayViewer({
                 playerNames={playerNames}
                 isHeadsUp={isHeadsUp}
                 isLocalGame={false} // Replay should NOT use local game animation logic
-                runoutCards={[]} // Empty runout cards for replay (no animation)
-                isRunningOut={false} // No runout animation in replay
               />
             </div>
           ) : (

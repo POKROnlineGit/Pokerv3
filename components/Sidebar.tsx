@@ -346,28 +346,18 @@ export function Sidebar() {
                 className={cn(
                   "flex items-center gap-3 rounded-lg transition-colors min-w-0 w-full",
                   isMinimized ? "justify-center px-3 py-3" : "px-4 py-3",
-                  pathname === "/play/profile"
-                    ? "text-white"
-                    : "text-white/70 hover:text-white"
+                  "text-white/70 hover:text-white"
                 )}
                 style={
-                  pathname === "/play/profile"
-                    ? {
-                        backgroundColor: `${accentColor}CC`,
-                      }
-                    : ({
-                        "--hover-bg": `${accentColor}CC`,
-                      } as React.CSSProperties)
+                  {
+                    "--hover-bg": `${accentColor}CC`,
+                  } as React.CSSProperties
                 }
                 onMouseEnter={(e) => {
-                  if (pathname !== "/play/profile") {
-                    e.currentTarget.style.backgroundColor = `${accentColor}CC`;
-                  }
+                  e.currentTarget.style.backgroundColor = `${accentColor}CC`;
                 }}
                 onMouseLeave={(e) => {
-                  if (pathname !== "/play/profile") {
-                    e.currentTarget.style.backgroundColor = "transparent";
-                  }
+                  e.currentTarget.style.backgroundColor = "transparent";
                 }}
               >
                 <UserCircle className="h-6 w-6 flex-shrink-0" />

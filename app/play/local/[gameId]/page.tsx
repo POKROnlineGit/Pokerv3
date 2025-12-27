@@ -4,7 +4,9 @@ import { useEffect, useRef, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PokerTable } from "@/components/game/PokerTable";
 import { ActionPopup } from "@/components/game/ActionPopup";
-import { GameState, ActionType } from "@/lib/types/poker";
+import { HandRankingsSidebar } from "@/components/game/HandRankingsSidebar";
+import { GameState, ActionType, Player } from "@/lib/types/poker";
+import { getClientHandStrength } from "@backend/domain/evaluation/ClientHandEvaluator";
 import { useLocalGameStore } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { createClientComponentClient } from "@/lib/supabaseClient";
@@ -28,6 +30,8 @@ export default function LocalGamePage() {
   
   // --- Client-Side Hydration: Player Names (including hero) ---
   const [playerNames, setPlayerNames] = useState<Record<string, string>>(BOT_NAMES);
+  const [showHandRankings, setShowHandRankings] = useState(false);
+  const [cardsLoaded, setCardsLoaded] = useState(false);
 
   // Fetch hero's username from database
   useEffect(() => {
@@ -60,12 +64,63 @@ export default function LocalGamePage() {
     fetchHeroName();
   }, [heroId, supabase, playerNames]);
 
-  // Animation state - same system as online game
-  const [runoutCards, setRunoutCards] = useState<string[]>([]);
-  const [isRunningOut, setIsRunningOut] = useState(false);
-  const prevCommunityCardsRef = useRef<string[]>([]);
-  const runoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Preload card images for hand rankings (local games always use holdem)
+  useEffect(() => {
+    // Cards needed for hand rankings
+    const cards = [
+      "Ah",
+      "Kh",
+      "Qh",
+      "Jh",
+      "Th",
+      "9h",
+      "8h",
+      "7h",
+      "6h",
+      "5h",
+      "Ac",
+      "Ad",
+      "As",
+      "Kc",
+      "Kd",
+      "Qc",
+      "Qd",
+      "Qh",
+      "9c",
+      "8d",
+      "7h",
+      "6s",
+      "5c",
+      "3h",
+      "9d",
+      "6h",
+    ];
 
+    let loadedCount = 0;
+    const totalCards = cards.length;
+
+    if (totalCards === 0) {
+      setCardsLoaded(true);
+      return;
+    }
+
+    cards.forEach((card) => {
+      const img = new Image();
+      img.onload = () => {
+        loadedCount++;
+        if (loadedCount === totalCards) {
+          setCardsLoaded(true);
+        }
+      };
+      img.onerror = () => {
+        loadedCount++;
+        if (loadedCount === totalCards) {
+          setCardsLoaded(true);
+        }
+      };
+      img.src = `/cards/${card}.png`;
+    });
+  }, []);
 
   useEffect(() => {
     if (!hasInitialized.current) {
@@ -103,68 +158,38 @@ export default function LocalGamePage() {
     };
   }, [gameState]);
 
-  // Detect new community cards and trigger animations - same system as online game
-  useEffect(() => {
-    if (!gameState) return;
-    
-    const currentCards = gameState.communityCards || gameState.board || [];
-    const prevCards = prevCommunityCardsRef.current;
-    
-    // Only process if we have cards and they've actually changed
-    if (currentCards.length === 0 && prevCards.length === 0) {
-      return; // Both empty, no change
+  // Calculate current hand strength for highlighting in sidebar
+  const currentHandStrength = useMemo(() => {
+    if (!adaptedGameState || !heroId) return null;
+    const heroPlayer = adaptedGameState.players.find((p: Player) => p.id === heroId);
+    if (
+      !heroPlayer ||
+      !heroPlayer.holeCards ||
+      heroPlayer.holeCards.length < 2
+    ) {
+      return null;
     }
-    
-    // Handle reset case (new hand - cards went from some to none, or hand number changed)
-    if (currentCards.length < prevCards.length) {
-      // Cards were reset (new hand started)
-      prevCommunityCardsRef.current = currentCards;
-      setIsRunningOut(false);
-      setRunoutCards([]);
-      if (runoutTimeoutRef.current) {
-        clearTimeout(runoutTimeoutRef.current);
-        runoutTimeoutRef.current = null;
-      }
-      return;
-    }
-    
-    // Detect new cards by comparing arrays
-    const newCards = currentCards.filter(
-      (card: string) => !prevCards.includes(card)
+
+    const holeCards = heroPlayer.holeCards.filter(
+      (c: string | "HIDDEN" | null): c is string => c !== null && c !== "HIDDEN"
+    );
+    const communityCards = (adaptedGameState.communityCards || []).filter(
+      (c: string | "HIDDEN" | null): c is string => c !== null && c !== "HIDDEN"
     );
 
-    if (newCards.length > 0) {
-      // Clear any existing timeout
-      if (runoutTimeoutRef.current) {
-        clearTimeout(runoutTimeoutRef.current);
-      }
-      
-      // Set animation flags
-      setRunoutCards(newCards);
-      setIsRunningOut(true);
-      
-      // Update ref AFTER setting animation state (but before timeout)
-      prevCommunityCardsRef.current = currentCards;
+    if (holeCards.length < 2) {
+      return null;
+    }
 
-      // Clear animation flags after animation completes
-      const animationDuration = newCards.length * 300 + 500;
-      runoutTimeoutRef.current = setTimeout(() => {
-        setIsRunningOut(false);
-        setRunoutCards([]);
-        runoutTimeoutRef.current = null;
-      }, animationDuration);
-    } else if (currentCards.length === prevCards.length) {
-      // Same number of cards, but might be different cards (shouldn't happen, but handle it)
-      // Just update the ref
-      prevCommunityCardsRef.current = currentCards;
+    try {
+      return getClientHandStrength(holeCards, communityCards);
+    } catch (error) {
+      console.error("Error calculating hand strength:", error);
+      return null;
     }
-    
-    return () => {
-      if (runoutTimeoutRef.current) {
-        clearTimeout(runoutTimeoutRef.current);
-    }
-    };
-  }, [gameState?.communityCards, gameState?.board, gameState?.handNumber]);
+  }, [adaptedGameState?.players, adaptedGameState?.communityCards, heroId]);
+
+  // Animation is now handled internally by PokerTable's self-contained animation system
 
   // CRITICAL FIX: Do not render table until we have a valid Game ID and Hero ID match
   // This prevents the 'human-player' mismatch bug.
@@ -192,7 +217,7 @@ export default function LocalGamePage() {
   };
 
   return (
-    <div className="relative h-screen overflow-hidden bg-poker-felt">
+    <div className="relative h-screen overflow-hidden">
       {/* Local game banner - positioned absolutely at top */}
       <div className="absolute top-4 left-4 right-4 z-50 bg-primary-500/10 border border-primary-500/20 rounded-xl p-4 flex items-center justify-between">
         <div>
@@ -204,6 +229,15 @@ export default function LocalGamePage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {cardsLoaded && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowHandRankings(!showHandRankings)}
+            >
+              {showHandRankings ? "Hide Ranks" : "Show Hand Ranks"}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handleNewGame}>
             New Game
           </Button>
@@ -221,10 +255,15 @@ export default function LocalGamePage() {
           playerNames={playerNames}
           isLocalGame={true}
           isHeadsUp={false}
-          runoutCards={runoutCards}
-          isRunningOut={isRunningOut}
         />
       </div>
+
+      {/* Hand Rankings Sidebar */}
+      <HandRankingsSidebar
+        isVisible={showHandRankings}
+        isHoldem={true} // Local games always use Texas Hold'em
+        currentHandStrength={currentHandStrength}
+      />
 
       {/* Action Popup */}
       <ActionPopup

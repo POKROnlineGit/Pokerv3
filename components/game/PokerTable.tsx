@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, useRef, useLayoutEffect } from "react";
+import { useEffect, useState, useRef, useLayoutEffect, useMemo } from "react";
 import { GameState, Player } from "@/lib/types/poker";
 import { Card as CardType, getNextActivePlayer } from "@/lib/utils/pokerUtils";
 import { Card } from "@/components/Card";
 import { cn } from "@/lib/utils";
 import { useDebugMode } from "@/lib/hooks";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { getClientHandStrength } from "@backend/domain/evaluation/ClientHandEvaluator";
 
 interface PokerTableProps {
   gameState: GameState & {
@@ -18,8 +19,6 @@ interface PokerTableProps {
   playerNames?: Record<string, string>;
   isLocalGame?: boolean;
   isHeadsUp?: boolean;
-  runoutCards?: string[]; // Cards being animated for runout
-  isRunningOut?: boolean; // Flag for runout animation
   playerDisconnectTimers?: Record<string, number>; // Disconnect countdown timers per player
   turnTimer?: {
     deadline: number;
@@ -38,6 +37,8 @@ function calculateSeatPositions(
   radiusY: number = 42
 ) {
   const positions = [];
+  // Offset to lower all seats slightly to account for card rendering above player boxes
+  const verticalOffset = 10; // Percentage points to push seats down
   for (let i = 0; i < numSeats; i++) {
     // Start at bottom (90 degrees offset) and go clockwise
     // Each seat is 360/numSeats degrees apart
@@ -45,7 +46,7 @@ function calculateSeatPositions(
     // Apply rotation offset to shift positions
     const angle = angleInterval * i + Math.PI / 2;
     const x = 50 + radiusX * Math.cos(angle);
-    const y = 50 + radiusY * Math.sin(angle);
+    const y = 50 + radiusY * Math.sin(angle) + verticalOffset;
     positions.push({
       left: `${x}%`,
       top: `${y}%`,
@@ -62,62 +63,18 @@ export function PokerTable({
   playerNames,
   isLocalGame = false,
   isHeadsUp = false,
-  runoutCards = [],
-  isRunningOut = false,
   playerDisconnectTimers = {},
   turnTimer = null,
   isSyncing = false,
 }: PokerTableProps) {
   const { isEnabled: debugMode } = useDebugMode();
 
-  // Track cards that should be hidden (pending animation) - updated synchronously
-  const [pendingCards, setPendingCards] = useState<string[]>([]);
-  const prevCardsRef = useRef<string[]>([]);
-
-  // Use useLayoutEffect to detect new cards synchronously before paint
-  // This prevents the flash by hiding cards before they're painted
-  useLayoutEffect(() => {
-    const currentCards = gameState.communityCards || [];
-    const prevCards = prevCardsRef.current;
-
-    // Detect new cards
-    const newCards = currentCards.filter(
-      (card: string) => !prevCards.includes(card)
-    );
-
-    if (newCards.length > 0) {
-      // Immediately hide new cards (synchronously, before paint)
-      setPendingCards((prev) => [...new Set([...prev, ...newCards])]);
-      prevCardsRef.current = currentCards;
-    } else if (currentCards.length < prevCards.length) {
-      // Cards were reset (new hand)
-      setPendingCards([]);
-      prevCardsRef.current = currentCards;
-    } else {
-      prevCardsRef.current = currentCards;
-    }
-  }, [gameState.communityCards]);
-
-  // Remove cards from pending when they start animating
+  // 1. MOUNT TRACKING: Detect if this is the first render vs an update
+  // We use this to suppress animations on page load/refresh
+  const isMountedRef = useRef(false);
   useEffect(() => {
-    if (isRunningOut && runoutCards.length > 0) {
-      // Cards are now animating, remove them from pending
-      setPendingCards((prev) =>
-        prev.filter((card) => !runoutCards.includes(card))
-      );
-    }
-  }, [isRunningOut, runoutCards, isLocalGame]);
-
-  // Cards that should be hidden: pending cards OR cards in runoutCards but not animating yet
-  const cardsToHide = isLocalGame
-    ? [
-        ...new Set([
-          ...pendingCards,
-          ...runoutCards.filter((card) => !isRunningOut),
-        ]),
-      ]
-    : runoutCards.filter((card) => !isRunningOut);
-
+    isMountedRef.current = true;
+  }, []);
 
   // Turn timer state - use ref to track current timer to avoid stale closures
   const [progressPercent, setProgressPercent] = useState<number>(0);
@@ -129,6 +86,39 @@ export function PokerTable({
     Record<number, { amount: number; animating: boolean }>
   >({});
   const prevHoleCardsRef = useRef<Record<number, string[]>>({});
+  const prevBetsRef = useRef<Record<number, number>>({});
+  const betAnimationTimeoutsRef = useRef<Record<number, NodeJS.Timeout>>({});
+
+  // Calculate hand strength for hero player using client evaluator
+  const heroHandStrength = useMemo(() => {
+    const heroPlayer = gameState.players.find((p) => p.id === currentUserId);
+    if (
+      !heroPlayer ||
+      !heroPlayer.holeCards ||
+      heroPlayer.holeCards.length < 2
+    ) {
+      return null;
+    }
+
+    // Filter out HIDDEN/null cards
+    const holeCards = heroPlayer.holeCards.filter(
+      (c): c is string => c !== null && c !== "HIDDEN"
+    );
+    const communityCards = (gameState.communityCards || []).filter(
+      (c): c is string => c !== null && c !== "HIDDEN"
+    );
+
+    if (holeCards.length < 2) {
+      return null;
+    }
+
+    try {
+      return getClientHandStrength(holeCards, communityCards);
+    } catch (error) {
+      console.error("Error calculating hand strength:", error);
+      return null;
+    }
+  }, [gameState.players, gameState.communityCards, currentUserId]);
 
   // Update timer progress - use setInterval for smoother, more reliable updates
   useEffect(() => {
@@ -262,22 +252,80 @@ export function PokerTable({
     });
     prevHoleCardsRef.current = currentHoleCards;
 
-    // Build indicators directly from gameState - that's it
+    // Build indicators with animation detection - self-contained bet animation system
     const newIndicators: Record<
       number,
       { amount: number; animating: boolean }
     > = {};
+    const prevBets = prevBetsRef.current;
 
     gameState.players.forEach((player) => {
       const currentBet = player.currentBet || 0;
-      // Show bet indicators for any player with a bet - gameState handles the logic
+      const prevBet = prevBets[player.seat] || 0;
+
+      // Show bet indicators for any player with a bet
       if (currentBet > 0) {
-        newIndicators[player.seat] = { amount: currentBet, animating: false };
+        // Detect if bet changed (new bet or amount changed)
+        const betChanged = currentBet !== prevBet;
+
+        newIndicators[player.seat] = {
+          amount: currentBet,
+          animating: betChanged, // Animate if bet changed
+        };
+
+        // If bet changed, set up timeout to clear animation flag after animation completes
+        if (betChanged) {
+          // Clear any existing timeout for this seat
+          if (betAnimationTimeoutsRef.current[player.seat]) {
+            clearTimeout(betAnimationTimeoutsRef.current[player.seat]);
+          }
+
+          // Set timeout to clear animation flag after animation duration (500ms)
+          betAnimationTimeoutsRef.current[player.seat] = setTimeout(() => {
+            setBetIndicators((prev) => {
+              const updated = { ...prev };
+              if (updated[player.seat]) {
+                updated[player.seat] = {
+                  ...updated[player.seat],
+                  animating: false,
+                };
+              }
+              return updated;
+            });
+            delete betAnimationTimeoutsRef.current[player.seat];
+          }, 500);
+        }
+      }
+
+      // Update previous bet tracking
+      prevBets[player.seat] = currentBet;
+    });
+
+    // Clear previous bets for players who no longer have bets
+    Object.keys(prevBets).forEach((seatStr) => {
+      const seat = Number(seatStr);
+      const player = gameState.players.find((p) => p.seat === seat);
+      if (!player || (player.currentBet || 0) === 0) {
+        delete prevBets[seat];
+        // Clear timeout if exists
+        if (betAnimationTimeoutsRef.current[seat]) {
+          clearTimeout(betAnimationTimeoutsRef.current[seat]);
+          delete betAnimationTimeoutsRef.current[seat];
+        }
       }
     });
 
-    // Update indicators to match gameState exactly
+    // Update indicators
     setBetIndicators(newIndicators);
+    prevBetsRef.current = prevBets;
+
+    // Cleanup function to clear timeouts on unmount
+    return () => {
+      Object.values(betAnimationTimeoutsRef.current).forEach((timeout) => {
+        clearTimeout(timeout);
+      });
+      betAnimationTimeoutsRef.current = {};
+    };
   }, [gameState, isLocalGame]);
   const activePlayers = gameState.players.filter(
     (p) => !p.folded && p.chips > 0
@@ -299,7 +347,9 @@ export function PokerTable({
       {/* Syncing overlay - blocks interactions while authoritative state is being fetched */}
       {isSyncing && (
         <div className="absolute inset-0 z-[70] flex flex-col items-center justify-center bg-black/70">
-          <div className="text-white text-xl font-semibold mb-2">Syncing...</div>
+          <div className="text-white text-xl font-semibold mb-2">
+            Syncing...
+          </div>
           <div className="text-sm text-gray-200">
             Reconnecting to the server and refreshing game state
           </div>
@@ -376,69 +426,62 @@ export function PokerTable({
 
       {/* Table - Deep maroon/red oval felt with brown wooden border */}
       <div
-        className="absolute inset-0 shadow-2xl"
+        className="absolute inset-0"
         style={{
           background: "radial-gradient(circle at center, #7f1d1d, #4c0000)",
           borderRadius: "50% / 25%",
           border: "0.75rem solid #8b4513",
+          transform: "perspective(1000px) rotateX(8deg)",
+          transformStyle: "preserve-3d",
+          boxShadow:
+            "0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 0, 0, 0.1), 0 10px 40px rgba(0, 0, 0, 0.6)",
         }}
       >
         {/* Community cards area - centered, larger for heads-up - Higher z-index to appear above player status indicators */}
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex gap-2 z-30">
-          {gameState.communityCards.map((card, i) => {
-            // Check if card should be hidden/animated
-            // For local games: hide if in runoutCards OR newly detected this render
-            // For online games: only hide if in runoutCards (server controls timing)
-            const shouldHide = isLocalGame
-              ? cardsToHide.includes(card)
-              : runoutCards.includes(card);
-            const isRunoutCard = runoutCards.includes(card);
-            const runoutIndex = runoutCards.indexOf(card);
+          <AnimatePresence mode="popLayout">
+            {gameState.communityCards.map((card, i) => {
+              // 2. UNIQUE KEYS: Combine card + index + hand number
+              // This guarantees that a new deal creates new React instances
+              const uniqueKey = `comm-${card}-${i}-${
+                gameState.handNumber || 0
+              }`;
 
-            // Debug logging for local games
-            if (isLocalGame && isRunoutCard && isRunningOut) {
-              console.log(
-                "[PokerTable] Animating card:",
-                card,
-                "runoutIndex:",
-                runoutIndex,
-                "runoutCards:",
-                runoutCards,
-                "isRunningOut:",
-                isRunningOut
+              // Determine if this is flop (3 cards) or turn/river (4-5 cards)
+              // Flop: stagger animations with delay
+              // Turn/River: no delay for immediate animation
+              const isFlop = gameState.communityCards.length === 3;
+              const delay = isFlop ? i * 0.15 : 0; // Small delay for flop, no delay for turn/river
+
+              return (
+                <motion.div
+                  key={uniqueKey}
+                  initial={
+                    // 3. CONDITIONAL ANIMATION:
+                    // If mounted (update): Start off-screen with spin to animate in.
+                    // If mounting (first load): Start at final position (y: 0) to skip animation.
+                    isMountedRef.current
+                      ? { y: -80, rotate: -180, opacity: 0 }
+                      : false // 'false' tells motion to start at 'animate' state
+                  }
+                  animate={{
+                    y: 0,
+                    rotate: 0,
+                    opacity: 1,
+                  }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 400,
+                    damping: 30,
+                    delay: delay,
+                  }}
+                >
+                  <Card card={card as CardType} />
+                </motion.div>
               );
-            }
-
-            return (
-              <motion.div
-                key={`community-${card}-${i}-${gameState.handNumber || 0}`}
-                initial={
-                  // Hide immediately if card should be hidden (prevents flash)
-                  shouldHide ? { y: -80, rotate: -180, opacity: 0 } : false
-                }
-                animate={
-                  // Only animate if card is in runoutCards AND animation is running
-                  isRunoutCard && isRunningOut
-                    ? { y: 0, rotate: 0, opacity: 1 }
-                    : shouldHide
-                    ? { y: -80, rotate: -180, opacity: 0 } // Keep hidden if should be hidden
-                    : { y: 0, rotate: 0, opacity: 1 } // Normal state
-                }
-                transition={
-                  isRunoutCard && isRunningOut
-                    ? {
-                        type: "spring",
-                        stiffness: 400,
-                        damping: 30,
-                        delay: runoutIndex * 0.3,
-                      }
-                    : {}
-                }
-              >
-                <Card card={card as CardType} />
-              </motion.div>
-            );
-          })}
+            })}
+          </AnimatePresence>
         </div>
 
         {/* Waiting for opponent banner - prominent message on table felt */}
@@ -478,77 +521,151 @@ export function PokerTable({
             </div>
           ) : null;
         })()}
-
-        {/* Bet indicators - positioned near center, around community cards */}
-        {Object.entries(betIndicators).map(([seatStr, indicator]) => {
-          const seat = Number(seatStr);
-          const player = gameState.players.find((p) => p.seat === seat);
-          if (!player || indicator.amount === 0) return null;
-
-          // Calculate position around center based on seat
-          // Find the correct seat index by matching seat numbers
-          let seatIndex = -1;
-          for (let i = 0; i < NUM_SEATS; i++) {
-            if (getSeatForPosition(i) === seat) {
-              seatIndex = i;
-              break;
-            }
-          }
-          if (seatIndex === -1) return null; // Skip if seat not found
-
-          // Use the exact same angle calculation as player boxes
-          // This ensures perfect alignment
-          const angleInterval = (2 * Math.PI) / NUM_SEATS;
-          const angle = angleInterval * seatIndex + Math.PI / 2;
-
-          // Position bets closer to player boxes using the same angle
-          const betRadiusX = 60; // Increased from 25 to move closer to player boxes
-          const betRadiusY = 53; // Increased from 22 to move closer to player boxes
-          const x = 50 + betRadiusX * Math.cos(angle);
-          const y = 50 + betRadiusY * Math.sin(angle);
-
-          return (
-            <motion.div
-              key={`bet-${seat}`}
-              className="absolute z-[60]"
-              style={{
-                left: `calc(${x}% - 1.5rem)`,
-                top: `calc(${y}% - 0.5rem)`,
-                transform: "translate(-50%, -50%)",
-              }}
-              initial={
-                indicator.animating
-                  ? {
-                      opacity: 0,
-                      scale: 0.3,
-                    }
-                  : {
-                      opacity: 1,
-                      scale: 1,
-                    }
-              }
-              animate={{
-                opacity: 1,
-                scale: 1,
-              }}
-              transition={
-                indicator.animating
-                  ? {
-                      type: "spring",
-                      stiffness: 300,
-                      damping: 25,
-                      duration: 0.5,
-                    }
-                  : {}
-              }
-            >
-              <div className="bg-yellow-500/90 text-black px-3 py-1.5 rounded-lg shadow-lg border-2 border-yellow-600 text-center">
-                <div className="text-base font-bold">${indicator.amount}</div>
-              </div>
-            </motion.div>
-          );
-        })}
       </div>
+
+      {/* Bet indicators - positioned at cardinal directions relative to player boxes */}
+      {/* Moved outside table div to avoid stacking context issues with transform */}
+      {Object.entries(betIndicators).map(([seatStr, indicator]) => {
+        const seat = Number(seatStr);
+        const player = gameState.players.find((p) => p.seat === seat);
+        if (!player || indicator.amount === 0) return null;
+
+        // Find the player's position to get their angle
+        let seatIndex = -1;
+        let playerPosition: { left: string; top: string } | null = null;
+        for (let i = 0; i < NUM_SEATS; i++) {
+          if (getSeatForPosition(i) === seat) {
+            seatIndex = i;
+            playerPosition = SEAT_POSITIONS[i];
+            break;
+          }
+        }
+        if (seatIndex === -1 || !playerPosition) return null;
+
+        // Calculate angle from player to center (in degrees, 0-360)
+        // Player position is in percentage, center is at 50%, 50%
+        const playerX = parseFloat(playerPosition.left);
+        const playerY = parseFloat(playerPosition.top);
+        const centerX = 50;
+        const centerY = 50;
+
+        // Calculate angle from center to player (we want opposite direction - from player to center)
+        const dx = centerX - playerX;
+        const dy = centerY - playerY;
+        let angleRad = Math.atan2(dy, dx);
+        let angleDeg = (angleRad * 180) / Math.PI;
+
+        // Normalize to 0-360
+        if (angleDeg < 0) angleDeg += 360;
+
+        // Map to one of 6 cardinal directions (N, NE, SE, S, SW, NW)
+        // Eliminated E and W - they're incorporated into NE/SE and NW/SW
+        // Specific angle boundaries:
+        // N: 270 ± 22.5 = 247.5° to 292.5°
+        // S: 90 ± 22.5 = 67.5° to 112.5°
+        // NE: 272.5° to 360° (wraps to 0°)
+        // SE: 0° to 67.5°
+        // NW: 180° to 247.5°
+        // SW: 112.5° to 180°
+        let directionIndex: number;
+        if (angleDeg >= 247.5 && angleDeg < 292.5) {
+          directionIndex = 0; // N
+        } else if (angleDeg >= 67.5 && angleDeg < 112.5) {
+          directionIndex = 3; // S
+        } else if (angleDeg >= 272.5) {
+          directionIndex = 1; // NE (272.5 to 360)
+        } else if (angleDeg >= 0 && angleDeg < 67.5) {
+          directionIndex = 2; // SE (0 to 67.5)
+        } else if (angleDeg >= 180 && angleDeg < 247.5) {
+          directionIndex = 5; // NW
+        } else {
+          // angleDeg >= 112.5 && angleDeg < 180
+          directionIndex = 4; // SW
+        }
+
+        // Define the 6 directions with their offsets
+        // Each direction: [xOffsetMult, yOffsetMult, anchorX, anchorY]
+        // xOffsetMult/yOffsetMult: multipliers for offset direction (-1, 0, or 1)
+        // anchorX/anchorY: anchor point (0=left/top edge, 0.5=center, 1=right/bottom edge)
+        const directions = [
+          [0, -1, 0.5, 1], // N (top) - half on top edge
+          [1, -1, 0, 1], // NE (top-right) - quarter on corner
+          [1, 1, 0, 0], // SE (bottom-right) - quarter on corner
+          [0, 1, 0.5, 0], // S (bottom) - half on bottom edge
+          [-1, 1, 1, 0], // SW (bottom-left) - quarter on corner
+          [-1, -1, 1, 1], // NW (top-left) - quarter on corner
+        ];
+
+        const [xOffsetMult, yOffsetMult, anchorX, anchorY] =
+          directions[directionIndex];
+
+        // Player box dimensions: min-w-[8.75rem] scaled by 1.15 = ~10rem width
+        // For half on/half off (edges N/S): offset by half the box size (5rem), reduced to 2.5rem
+        // For quarter on (corners NE/SE/SW/NW): offset by quarter the box size (2.5rem), reduced to 1.25rem
+        const isCorner =
+          Math.abs(xOffsetMult) === 1 && Math.abs(yOffsetMult) === 1;
+        const boxHalfWidth = 2.5; // rem (half of ~10rem scaled box, reduced by half)
+        const boxQuarterWidth = 1.25; // rem (quarter of ~10rem scaled box, reduced by half)
+        const offsetDistance = isCorner ? boxQuarterWidth : boxHalfWidth;
+
+        // Calculate position: start at player box center, offset by direction
+        // The player container is positioned at playerPosition and uses flexbox to center the player box
+        // So the player box center is at playerPosition
+        // We need to offset from that center point
+        // Position bets similar to SB/BB/dealer badges - absolutely positioned relative to player container
+        // Calculate offset in rem units
+        // Increase horizontal offset slightly while keeping vertical the same
+        const offsetX = xOffsetMult * offsetDistance * 1.25;
+        const offsetY = yOffsetMult * offsetDistance;
+
+        return (
+          <motion.div
+            key={`bet-${seat}`}
+            className="absolute z-[60]"
+            style={{
+              left: playerPosition.left,
+              top: playerPosition.top,
+              transform: `translate(-50%, -50%)`,
+            }}
+            initial={
+              indicator.animating
+                ? {
+                    opacity: 0,
+                    scale: 0.3,
+                  }
+                : {
+                    opacity: 1,
+                    scale: 1,
+                  }
+            }
+            animate={{
+              opacity: 1,
+              scale: 1,
+            }}
+            transition={
+              indicator.animating
+                ? {
+                    type: "spring",
+                    stiffness: 300,
+                    damping: 25,
+                    duration: 0.5,
+                  }
+                : {}
+            }
+          >
+            <div
+              className="absolute bg-yellow-500/90 text-black px-3 py-1.5 rounded-lg shadow-lg border-2 border-yellow-600 text-center"
+              style={{
+                left: `calc(50% + ${offsetX}rem)`,
+                top: `calc(50% + ${offsetY}rem)`,
+                transform: `translate(${-anchorX * 100}%, ${-anchorY * 100}%)`,
+              }}
+            >
+              <div className="text-base font-bold">${indicator.amount}</div>
+            </div>
+          </motion.div>
+        );
+      })}
 
       {/* Player seats */}
       {SEAT_POSITIONS.map((position, index) => {
@@ -576,7 +693,11 @@ export function PokerTable({
         const hasLeft = player?.left || hasLeftFromServer;
 
         return (
-          <div key={seat} className="absolute z-20" style={position}>
+          <div
+            key={seat}
+            className="absolute z-20 flex flex-col items-center"
+            style={position}
+          >
             {isEmpty ? (
               <div className="bg-[#1a1a1a] text-white px-4 py-2 rounded-xl border-[0.1875rem] border-dashed border-gray-500 shadow-lg">
                 Empty
@@ -756,6 +877,23 @@ export function PokerTable({
                   )}
                 </div>
 
+                {/* Hand strength badge - only show for hero player, positioned below player box */}
+                {player.id === currentUserId &&
+                  heroHandStrength &&
+                  !player.folded &&
+                  !hasLeft &&
+                  !isDisconnected && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-2 z-30"
+                    >
+                      <div className="bg-accent-600/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg shadow-lg border border-accent-500/50 text-xs font-semibold whitespace-nowrap">
+                        {heroHandStrength}
+                      </div>
+                    </motion.div>
+                  )}
+
                 {/* Hole cards - positioned above the player box, angled outward */}
                 {(() => {
                   const isHero = player.id === currentUserId;
@@ -892,4 +1030,3 @@ export function PokerTable({
     </div>
   );
 }
-

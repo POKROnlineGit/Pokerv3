@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PokerTable } from "@/components/game/PokerTable";
 import { ActionPopup } from "@/components/game/ActionPopup";
 import { LeaveGameButton } from "@/components/game/LeaveGameButton";
-import { GameState, ActionType } from "@/lib/types/poker";
+import { HandRankingsSidebar } from "@/components/game/HandRankingsSidebar";
+import { GameState, ActionType, Player } from "@/lib/types/poker";
+import { getClientHandStrength } from "@backend/domain/evaluation/ClientHandEvaluator";
 import { getSocket, disconnectSocket } from "@/lib/socketClient";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 import { AlertCircle, Wifi, WifiOff } from "lucide-react";
@@ -44,10 +46,48 @@ export default function GamePage() {
     duration: number;
     activeSeat: number;
   } | null>(null); // Turn timer data from turn_timer_started event
-  // Animation state for community cards
-  const [runoutCards, setRunoutCards] = useState<string[]>([]);
-  const [isRunningOut, setIsRunningOut] = useState(false);
-  const runoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [variantInfo, setVariantInfo] = useState<{
+    name?: string;
+    maxPlayers?: number;
+    smallBlind?: number;
+    bigBlind?: number;
+    buyIn?: number;
+    startingStack?: number;
+    engineType?: string;
+  } | null>(null);
+  const [showHandRankings, setShowHandRankings] = useState(false);
+  const [cardsLoaded, setCardsLoaded] = useState(false);
+
+  // Calculate current hand strength for highlighting in sidebar
+  const currentHandStrength = useMemo(() => {
+    if (!gameState || !currentUserId) return null;
+    const heroPlayer = gameState.players.find((p: Player) => p.id === currentUserId);
+    if (
+      !heroPlayer ||
+      !heroPlayer.holeCards ||
+      heroPlayer.holeCards.length < 2
+    ) {
+      return null;
+    }
+
+    const holeCards = heroPlayer.holeCards.filter(
+      (c: string | "HIDDEN" | null): c is string => c !== null && c !== "HIDDEN"
+    );
+    const communityCards = (gameState.communityCards || []).filter(
+      (c: string | "HIDDEN" | null): c is string => c !== null && c !== "HIDDEN"
+    );
+
+    if (holeCards.length < 2) {
+      return null;
+    }
+
+    try {
+      return getClientHandStrength(holeCards, communityCards);
+    } catch (error) {
+      console.error("Error calculating hand strength:", error);
+      return null;
+    }
+  }, [gameState?.players, gameState?.communityCards, currentUserId]);
   const timeoutIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const prevPhaseRef = useRef<string | null>(null); // Track previous phase for disconnect detection
   const disconnectTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -101,6 +141,122 @@ export default function GamePage() {
 
     fetchNames();
   }, [gameState?.players, currentUserId, supabase, playerNames]);
+
+  // Fetch variant information from database
+  useEffect(() => {
+    if (!gameId || gameId.startsWith("local-")) return;
+
+    const fetchVariantInfo = async () => {
+      try {
+        // First, get game info from games table
+        const { data: gameData, error: gameError } = await supabase
+          .from("games")
+          .select("game_type, small_blind, big_blind, buy_in")
+          .eq("id", gameId)
+          .single();
+
+        if (gameError || !gameData) {
+          console.error("Error fetching game data:", gameError);
+          return;
+        }
+
+        // Then, fetch variant details from available_games
+        const { data: variantData, error: variantError } = await supabase
+          .from("available_games")
+          .select("name, max_players, config, engine_type")
+          .eq("slug", gameData.game_type)
+          .single();
+
+        if (variantError || !variantData) {
+          console.error("Error fetching variant data:", variantError);
+          return;
+        }
+
+        setVariantInfo({
+          name: variantData.name,
+          maxPlayers: variantData.max_players,
+          smallBlind: gameData.small_blind,
+          bigBlind: gameData.big_blind,
+          buyIn: gameData.buy_in,
+          startingStack:
+            variantData.config?.startingStack || variantData.config?.buyIn,
+          engineType: variantData.engine_type,
+        });
+      } catch (error) {
+        console.error("Error fetching variant info:", error);
+      }
+    };
+
+    fetchVariantInfo();
+  }, [gameId, supabase]);
+
+  // Preload card images for hand rankings
+  useEffect(() => {
+    if (!variantInfo?.engineType) return;
+
+    // Check if it's holdem using engine_type
+    const isHoldem = variantInfo.engineType === "holdem";
+
+    if (!isHoldem) {
+      setCardsLoaded(true); // No need to load cards if not holdem
+      return;
+    }
+
+    // Cards needed for hand rankings
+    const cards = [
+      "Ah",
+      "Kh",
+      "Qh",
+      "Jh",
+      "Th",
+      "9h",
+      "8h",
+      "7h",
+      "6h",
+      "5h",
+      "Ac",
+      "Ad",
+      "As",
+      "Kc",
+      "Kd",
+      "Qc",
+      "Qd",
+      "Qh",
+      "9c",
+      "8d",
+      "7h",
+      "6s",
+      "5c",
+      "3h",
+      "9d",
+      "6h",
+    ];
+
+    let loadedCount = 0;
+    const totalCards = cards.length;
+
+    if (totalCards === 0) {
+      setCardsLoaded(true);
+      return;
+    }
+
+    cards.forEach((card) => {
+      const img = new Image();
+      img.onload = () => {
+        loadedCount++;
+        if (loadedCount === totalCards) {
+          setCardsLoaded(true);
+        }
+      };
+      img.onerror = () => {
+        loadedCount++;
+        if (loadedCount === totalCards) {
+          setCardsLoaded(true);
+        }
+      };
+      img.src = `/cards/${card}.png`;
+    });
+  }, [variantInfo?.engineType]);
 
   // Redirect local games to the local game page
   useEffect(() => {
@@ -608,14 +764,12 @@ export default function GamePage() {
         }
       );
 
-      // 2. HAND_RUNOUT: Animate remaining cards to board
-      // REMOVED CLIENT-SIDE TIMEOUTS - Rely entirely on server events arriving in sequence
+      // 2. HAND_RUNOUT: Handle hand completion
       socket.on(
         "HAND_RUNOUT",
         (data: {
           winnerId: string;
           board: string[];
-          runoutCards: string[];
         }) => {
           if (!mounted) return;
 
@@ -624,28 +778,7 @@ export default function GamePage() {
           setForceHideActions(true);
           handRunoutRef.current = true; // Mark that runout has occurred
 
-          // Set animation state for runout cards
-          const runoutCardsList = data.runoutCards || [];
-          if (runoutCardsList.length > 0) {
-            setIsRunningOut(true);
-            setRunoutCards(runoutCardsList);
-
-            // Clear animation flags after animation completes
-            if (runoutTimeoutRef.current) {
-              clearTimeout(runoutTimeoutRef.current);
-            }
-            const animationDuration = runoutCardsList.length * 300 + 500;
-            runoutTimeoutRef.current = setTimeout(() => {
-              if (!mounted) return;
-              setIsRunningOut(false);
-              setRunoutCards([]);
-              runoutTimeoutRef.current = null;
-            }, animationDuration);
-          }
-
-          // Update board state immediately - server controls timing via DEAL_STREET events
-          // PokerTable will detect new cards and animate them automatically
-          // We just need to show the final board state
+          // Update board state - PokerTable will detect new cards and animate them automatically
           const finalBoard = data.board || [];
           setGameState((prevState) => {
             if (!prevState) return prevState;
@@ -743,16 +876,8 @@ export default function GamePage() {
           // round's state arrives. Fixes "Action not handled" state sync issues.
           setForceHideActions(true);
 
-          // Get new cards from the data
-          const newCards = data.cards || [];
-
-          // Set animation flags
-          if (newCards.length > 0) {
-            setIsRunningOut(true);
-            setRunoutCards(newCards);
-          }
-
           // Update board state immediately - server controls timing (2s intervals)
+          // PokerTable will detect new cards and animate them automatically
           setGameState((prevState) => {
             if (!prevState) return prevState;
 
@@ -770,19 +895,7 @@ export default function GamePage() {
             };
           });
 
-          // Clear animation flags after animation completes (cards have animated)
-          // Use a timeout to allow animation to play (staggered delays: 0.3s per card)
-          // Clear any existing timeout first
-          if (runoutTimeoutRef.current) {
-            clearTimeout(runoutTimeoutRef.current);
-          }
-          const animationDuration = newCards.length * 300 + 500; // 300ms per card + 500ms buffer
-          runoutTimeoutRef.current = setTimeout(() => {
-            if (!mounted) return;
-            setIsRunningOut(false);
-            setRunoutCards([]);
-            runoutTimeoutRef.current = null;
-          }, animationDuration);
+          // Cards will be animated automatically by PokerTable's self-contained animation system
         }
       );
 
@@ -1108,9 +1221,6 @@ export default function GamePage() {
       if (timeoutIntervalRef.current) {
         clearInterval(timeoutIntervalRef.current);
       }
-      if (runoutTimeoutRef.current) {
-        clearTimeout(runoutTimeoutRef.current);
-      }
       if (joinRetryTimeoutRef.current) {
         clearTimeout(joinRetryTimeoutRef.current);
         joinRetryTimeoutRef.current = null;
@@ -1276,10 +1386,49 @@ export default function GamePage() {
           </div>
         </div>
       ) : (
-        <div className="relative h-screen overflow-hidden bg-poker-felt">
+        <div className="relative h-screen overflow-hidden">
+          {/* Online game banner - positioned absolutely at top */}
+          <div className="absolute top-4 left-4 right-4 z-50 bg-primary-500/10 border border-primary-500/20 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-primary-500">
+                {variantInfo?.name || "Online Game"}
+                {variantInfo && (
+                  <>
+                    {variantInfo.smallBlind &&
+                      variantInfo.bigBlind &&
+                      ` • $${variantInfo.smallBlind}/${variantInfo.bigBlind} blinds`}
+                    {variantInfo.startingStack &&
+                      ` • ${variantInfo.startingStack} chips`}
+                  </>
+                )}
+                {gameState && (
+                  <>
+                    {" • "}
+                    {gameState.players?.length || 0} players
+                  </>
+                )}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Playing against real opponents
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {cardsLoaded &&
+                variantInfo?.engineType === "holdem" && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowHandRankings(!showHandRankings)}
+                  >
+                    {showHandRankings ? "Hide Ranks" : "Show Hand Ranks"}
+                  </Button>
+                )}
+              <LeaveGameButton gameId={gameId} />
+            </div>
+          </div>
+
           {/* Disconnect Banner */}
           {isDisconnected && (
-            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md bg-yellow-500/90 border-2 border-yellow-600 rounded-lg p-4 flex items-center gap-2 text-yellow-900">
+            <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 max-w-md bg-yellow-500/90 border-2 border-yellow-600 rounded-lg p-4 flex items-center gap-2 text-yellow-900">
               <WifiOff className="h-4 w-4" />
               <span>You disconnected. Reconnecting...</span>
               <Wifi className="h-4 w-4 animate-pulse ml-auto" />
@@ -1298,10 +1447,6 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* Multiplayer leave button - positioned absolutely at top */}
-          <div className="absolute top-4 left-4 z-50">
-            <LeaveGameButton gameId={gameId} />
-          </div>
 
           {/* Table container - centered vertically and horizontally */}
           <div className="h-full w-full flex items-center justify-center">
@@ -1312,13 +1457,18 @@ export default function GamePage() {
               playerNames={playerNames}
               isLocalGame={false}
               isHeadsUp={isHeadsUp}
-              runoutCards={runoutCards}
-              isRunningOut={isRunningOut}
               playerDisconnectTimers={playerDisconnectTimers}
               turnTimer={turnTimer}
               isSyncing={isSyncing}
             />
           </div>
+
+          {/* Hand Rankings Sidebar */}
+          <HandRankingsSidebar
+            isVisible={showHandRankings}
+            isHoldem={variantInfo?.engineType === "holdem"}
+            currentHandStrength={currentHandStrength}
+          />
 
           {/* Action Popup - Disabled if game finished or force hidden */}
           {!gameFinished && !forceHideActions && (
