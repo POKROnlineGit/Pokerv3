@@ -1,0 +1,22 @@
+<svg width="223" height="323" viewBox="0 0 223 323" xmlns="http://www.w3.org/2000/svg">
+  <!-- White card background -->
+  <rect width="223" height="323" fill="white" stroke="black" stroke-width="2" rx="8"/>
+  
+  <!-- Club symbol path definition (License: CC Attribution. Made by game-icons.net) -->
+  <defs>
+    <path id="club" d="M477.443 295.143a104.45 104.45 0 0 1-202.26 36.67c-.08 68.73 4.33 114.46 69.55 149h-177.57c65.22-34.53 69.63-80.25 69.55-149a104.41 104.41 0 1 1-66.34-136.28 104.45 104.45 0 1 1 171.14 0 104.5 104.5 0 0 1 135.93 99.61z" fill="black"/>
+  </defs>
+  
+  <!-- 6 and Club in top left (6 on left, club on right/outside) -->
+  <text x="20" y="55" font-family="Arial, sans-serif" font-size="79.2" font-weight="bold" fill="black" dominant-baseline="middle" text-anchor="start">6</text>
+  <g transform="translate(105, 45) scale(0.15) translate(-256, -256)">
+    <use href="#club"/>
+  </g>
+  
+  <!-- 6 and Club in bottom right (club on left/outside, 6 on right) -->
+  <g transform="translate(113, 278) scale(0.15) translate(-256, -256)">
+    <use href="#club"/>
+  </g>
+  <text x="153" y="288" font-family="Arial, sans-serif" font-size="87.12" font-weight="bold" fill="black" dominant-baseline="middle" text-anchor="start">6</text>
+</svg>
+

@@ -1,0 +1,22 @@
+<svg width="223" height="323" viewBox="0 0 223 323" xmlns="http://www.w3.org/2000/svg">
+  <!-- White card background -->
+  <rect width="223" height="323" fill="white" stroke="black" stroke-width="2" rx="8"/>
+  
+  <!-- Heart symbol path definition -->
+  <defs>
+    <path id="heart" d="M480.25 156.355c0 161.24-224.25 324.43-224.25 324.43S31.75 317.595 31.75 156.355c0-91.41 70.63-125.13 107.77-125.13 77.65 0 116.48 65.72 116.48 65.72s38.83-65.73 116.48-65.73c37.14.01 107.77 33.72 107.77 125.14z" fill="red"/>
+  </defs>
+  
+  <!-- 10 and Heart in top left (10 on left, heart on right/outside) -->
+  <text x="80" y="55" font-family="Arial, sans-serif" font-size="79.2" font-weight="bold" fill="red" dominant-baseline="middle" text-anchor="start">10</text>
+  <g transform="translate(45, 45) scale(0.15) translate(-256, -256)">
+    <use href="#heart"/>
+  </g>
+  
+  <!-- 10 and Heart in bottom right (heart on left/outside, 10 on right) -->
+  <g transform="translate(178, 278) scale(0.15) translate(-256, -256)">
+    <use href="#heart"/>
+  </g>
+  <text x="43" y="288" font-family="Arial, sans-serif" font-size="87.12" font-weight="bold" fill="red" dominant-baseline="middle" text-anchor="start">10</text>
+</svg>
+
