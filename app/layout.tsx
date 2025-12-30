@@ -9,26 +9,79 @@ import { QueueProvider } from "@/components/providers/QueueProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { ThemeBackground } from "@/components/ThemeBackground";
 
-const inter = Inter({ 
+const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
 });
-const oswald = Oswald({ 
+const oswald = Oswald({
   subsets: ["latin"],
   weight: "700",
   variable: "--font-oswald",
 });
 
+// 1. Define the Base URL
+// Make sure NEXT_PUBLIC_APP_URL is set in your .env.local / Vercel settings
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pokronline.com";
+
 export const metadata: Metadata = {
-  title: "POKROnline - Learn & Play Texas Hold'em",
-  description: "Play and learn No-Limit Texas Hold'em poker for free",
+  metadataBase: new URL(BASE_URL),
+  title: {
+    default: "pokronline - Learn & Play Poker",
+    template: "%s | Pokr",
+  },
+  description:
+    "Join pokronline for fast-paced, real-time Texas Holdem action. Suitable for players of all skill levels. Learn the rules, practice with curated puzzles, and play online to test your skill. No download required.",
+  keywords: [
+    "poker",
+    "pokr",
+    "texas holdem",
+    "online poker",
+    "multiplayer card game",
+    "poker bots",
+    "web poker",
+    "learn poker",
+    "gto",
+    "game theory optimal",
+    "poker strategy",
+    "poker training",
+    "poker practice",
+    "poker lessons",
+    "poker tips",
+    "poker tricks",
+    "poker secrets",
+  ],
+  applicationName: "pokronline",
+  authors: [{ name: "pokronline Team" }],
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: BASE_URL,
+    siteName: "pokronline",
+    title: "pokronline - Learn & Play Poker",
+    description: "Play Texas Holdem instantly in your browser.",
+    images: [
+      {
+        url: "/icon.png",
+        width: 512,
+        height: 512,
+        alt: "Pokr Game Table",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "pokronline - Learn & Play Poker",
+    description: "Real-time multiplayer poker in your browser.",
+  },
   icons: {
     icon: [
+      // Google prefers PNG for search results
+      { url: "/icon.png", type: "image/png", sizes: "any" },
       { url: "/favicon.ico", sizes: "any" },
       { url: "/logo/POKROnlineLogoSVG.svg", type: "image/svg+xml" },
     ],
-    shortcut: "/favicon.ico",
-    apple: "/logo/POKROnlineLogoSVG.svg",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
   },
 };
 
@@ -68,7 +121,38 @@ export default async function RootLayout({
   const showSidebar = Boolean(user && isSuperUser);
 
   return (
-    <html lang="en" className={theme}>
+    <html lang="en" className={theme} suppressHydrationWarning>
+      <head>
+        {/* Structure Data for Rich Snippets (VideoGame Schema) */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "VideoGame",
+              name: "pokronline",
+              genre: [
+                "Card Game",
+                "Poker",
+                "Casino Game",
+                "Learn Poker",
+                "Game Theory",
+              ],
+              description:
+                "A platform to learn the rules of poker, develop your skills with puzzles and lessons, and play online with our beautiful interface.",
+              applicationCategory: "Game",
+              operatingSystem: "Any",
+              playMode: "MultiPlayer",
+              url: BASE_URL,
+              offers: {
+                "@type": "Offer",
+                price: "0",
+                priceCurrency: "USD",
+              },
+            }),
+          }}
+        />
+      </head>
       <body className={inter.className}>
         <ThemeProvider>
           <ThemeBackground />
