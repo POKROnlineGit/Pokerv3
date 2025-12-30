@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Oswald } from "next/font/google";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { createServerComponentClient } from "@/lib/supabaseClient";
@@ -170,6 +171,7 @@ export default async function RootLayout({
             </ToastProvider>
           </QueueProvider>
         </ThemeProvider>
+        <GoogleAnalytics gaId="G-TP41LB8QH9" />
       </body>
     </html>
   );
