@@ -7,6 +7,8 @@ import { createServerComponentClient } from "@/lib/supabaseClient";
 import { ToastProvider } from "@/components/providers/ToastProvider";
 import { GameRedirectProvider } from "@/components/GameRedirectProvider";
 import { QueueProvider } from "@/components/providers/QueueProvider";
+import { StatusProvider } from "@/components/providers/StatusProvider";
+import { StatusOverlay } from "@/components/ui/StatusOverlay";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { ThemeBackground } from "@/components/ThemeBackground";
 
@@ -158,18 +160,21 @@ export default async function RootLayout({
         <ThemeProvider>
           <ThemeBackground />
           <GameRedirectProvider />
-          <QueueProvider>
-            <ToastProvider>
-              {showSidebar ? (
-                <div className="flex h-screen">
-                  <Sidebar />
-                  <main className="flex-1 overflow-auto">{children}</main>
-                </div>
-              ) : (
-                <main>{children}</main>
-              )}
-            </ToastProvider>
-          </QueueProvider>
+          <StatusProvider>
+            <QueueProvider>
+              <ToastProvider>
+                {showSidebar ? (
+                  <div className="flex h-screen">
+                    <Sidebar />
+                    <main className="flex-1 overflow-auto">{children}</main>
+                  </div>
+                ) : (
+                  <main>{children}</main>
+                )}
+                <StatusOverlay />
+              </ToastProvider>
+            </QueueProvider>
+          </StatusProvider>
         </ThemeProvider>
         <GoogleAnalytics gaId="G-TP41LB8QH9" />
       </body>

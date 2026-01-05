@@ -28,6 +28,13 @@ export function LeaveGameButton({ gameId }: LeaveGameButtonProps) {
       if (socket && !socket.connected) {
         socket.connect();
       }
+      
+      // Track this game as recently left to prevent race condition redirects
+      if (gameId && typeof window !== "undefined") {
+        sessionStorage.setItem("recentlyLeftGame", gameId);
+        sessionStorage.setItem("recentlyLeftTime", Date.now().toString());
+      }
+      
       socket.emit("leaveGame", gameId);
     } catch (error) {
       // Error handled silently - user will be redirected anyway

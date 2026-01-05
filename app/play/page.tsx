@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useSocket } from "@/lib/socketClient";
@@ -35,6 +35,7 @@ interface GameVariant {
 
 export default function PlayPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const startLocalGame = useLocalGameStore((state) => state.startLocalGame);
   const { toast } = useToast();
   const { inQueue, queueType } = useQueue();
@@ -43,8 +44,12 @@ export default function PlayPage() {
 
   const [inGame, setInGame] = useState(false);
   const [activeGameId, setActiveGameId] = useState<string | null>(null);
-  const [isChecking, setIsChecking] = useState(true);
+  const [isCheckingGame, setIsCheckingGame] = useState(true);
+  const [isCheckingQueue, setIsCheckingQueue] = useState(true);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
+
+  // Combined check state - buttons disabled until both checks complete
+  const isChecking = isCheckingGame || isCheckingQueue;
   const [variants, setVariants] = useState<GameVariant[]>([]);
   const [isLoadingVariants, setIsLoadingVariants] = useState(true);
   const [userChips, setUserChips] = useState<number | null>(null);
@@ -156,26 +161,71 @@ export default function PlayPage() {
     };
   }, [socket]);
 
-  // 3. Check for active session
+  // 3. Check for active session (runs on mount and when navigating to /play)
   useEffect(() => {
+    if (!socket || pathname !== "/play") {
+      // Reset game check state when not on /play page
+      setIsCheckingGame(false);
+      return;
+    }
+
     let mounted = true;
     let connectHandler: (() => void) | null = null;
 
     const handleSessionStatus = (payload: {
-      active?: boolean;
+      inGame?: boolean;
+      active?: boolean; // Support both formats
       gameId?: string | null;
+      status?: string;
     }) => {
       if (!mounted) return;
-      const isActive = !!payload?.active && !!payload?.gameId;
-      setInGame(isActive);
-      setActiveGameId(isActive ? String(payload!.gameId) : null);
-      if (socket.connected) {
-        setIsChecking(false);
+
+      // Support both response formats: { inGame, gameId } or { active, gameId }
+      const isActiveGame = payload?.inGame ?? payload?.active ?? false;
+      const gameId = payload?.gameId;
+
+      // Mark game check as complete immediately
+      setIsCheckingGame(false);
+
+      // Check if this is a recently left game (race condition prevention)
+      if (gameId && typeof window !== "undefined") {
+        const recentlyLeftGame = sessionStorage.getItem("recentlyLeftGame");
+        const recentlyLeftTime = sessionStorage.getItem("recentlyLeftTime");
+        const timeSinceLeave = recentlyLeftTime
+          ? Date.now() - parseInt(recentlyLeftTime)
+          : Infinity;
+
+        // Ignore check if this game was left within last 3 seconds
+        if (gameId === recentlyLeftGame && timeSinceLeave < 3000) {
+          setInGame(false);
+          setActiveGameId(null);
+          // Clear the flag after delay
+          setTimeout(() => {
+            if (typeof window !== "undefined") {
+              sessionStorage.removeItem("recentlyLeftGame");
+              sessionStorage.removeItem("recentlyLeftTime");
+            }
+          }, 3000);
+          return;
+        }
       }
 
-      // Automatic redirect to active game
-      if (isActive && payload?.gameId) {
-        router.push(`/play/game/${payload.gameId}`);
+      // Don't redirect if game is finished
+      if (payload?.status === "finished" || payload?.status === "complete") {
+        setInGame(false);
+        setActiveGameId(null);
+        return;
+      }
+
+      // Set game state
+      const isActive = isActiveGame && !!gameId;
+      setInGame(isActive);
+      setActiveGameId(isActive ? String(gameId) : null);
+
+      // Automatic redirect to active game (only if not finished and active)
+      // Redirect immediately when active game is found
+      if (isActive && gameId) {
+        router.push(`/play/game/${gameId}`);
       }
     };
 
@@ -183,7 +233,7 @@ export default function PlayPage() {
 
     const emitCheckSession = () => {
       if (!mounted) return;
-      setIsChecking(true);
+      setIsCheckingGame(true);
       socket.emit("check_active_session");
     };
 
@@ -198,14 +248,11 @@ export default function PlayPage() {
       socket.once("connect", connectHandler);
     }
 
+    // Timeout fallback - mark check as complete after 5 seconds
     const timeoutId = setTimeout(() => {
       if (!mounted) return;
-      if (socket.connected) {
-        setInGame(false);
-        setActiveGameId(null);
-        setIsChecking(false);
-        socket.off("session_status", handleSessionStatus);
-      }
+      setIsCheckingGame(false);
+      // Don't clear listeners on timeout - response might still come
     }, 5000);
 
     return () => {
@@ -216,22 +263,95 @@ export default function PlayPage() {
         socket.off("connect", connectHandler);
       }
     };
-  }, [socket, router]);
+  }, [socket, router, pathname]);
 
-  // 4. Redirect if already in queue
+  // 4. Check queue status when landing on /play page
   useEffect(() => {
-    if (inQueue && queueType) {
+    if (!socket || pathname !== "/play") {
+      // Reset queue check state when not on /play page
+      setIsCheckingQueue(false);
+      return;
+    }
+
+    let mounted = true;
+
+    const handleQueueStatus = (data: {
+      inQueue: boolean;
+      queueType: string | null;
+    }) => {
+      if (!mounted) return;
+      // Mark queue check as complete
+      setIsCheckingQueue(false);
+      // QueueProvider will handle setting the status and state
+      // This just ensures we check when landing on /play
+    };
+
+    socket.on("queue_status", handleQueueStatus);
+
+    // Check queue status when landing on /play page
+    setIsCheckingQueue(true);
+    if (socket.connected) {
+      socket.emit("check_queue_status");
+    } else {
+      const connectHandler = () => {
+        if (mounted && socket.connected) {
+          setIsCheckingQueue(true);
+          socket.emit("check_queue_status");
+        }
+      };
+      socket.once("connect", connectHandler);
+    }
+
+    // Timeout fallback - mark check as complete after 5 seconds
+    const timeoutId = setTimeout(() => {
+      if (mounted) {
+        setIsCheckingQueue(false);
+      }
+    }, 5000);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeoutId);
+      socket.off("queue_status", handleQueueStatus);
+    };
+  }, [socket, pathname]);
+
+  // 5. Redirect if already in queue (only on /play page)
+  useEffect(() => {
+    // Only redirect if we're on /play page and have queue info
+    if (pathname === "/play" && inQueue && queueType) {
       router.push(`/play/queue?type=${queueType}`);
     }
-  }, [inQueue, queueType, router]);
+  }, [inQueue, queueType, router, pathname]);
 
   const joinQueue = (slug: string, buyIn: number) => {
+    // Prevent joining if checks are still in progress
+    if (isChecking) {
+      toast({
+        title: "Please wait",
+        description: "Checking for active games and queues...",
+        variant: "default",
+      });
+      return;
+    }
+
+    // Prevent joining if already in a game
     if (inGame) {
       toast({
         title: "Cannot join queue",
         description: activeGameId
           ? "You are already in an active game."
           : "You are currently in a game.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Prevent joining if already in a queue
+    if (inQueue) {
+      toast({
+        title: "Cannot join queue",
+        description: "You are already in a queue.",
         variant: "destructive",
       });
       return;
@@ -268,7 +388,9 @@ export default function PlayPage() {
     router.push(`/play/local/${gameId}`);
   };
 
-  const isButtonDisabled = inQueue || isChecking || !isSocketConnected;
+  // Buttons disabled until BOTH checks complete AND neither game nor queue is active
+  const isButtonDisabled =
+    inGame || inQueue || isChecking || !isSocketConnected;
 
   return (
     <div className="min-h-screen relative">

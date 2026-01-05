@@ -304,8 +304,11 @@ export function Sidebar() {
         <div className="flex flex-col space-y-2 flex-shrink-0">
           {navItems.map((item) => {
             const Icon = item.icon;
-            // Always highlight /play, other pages only on hover
-            const isActive = item.href === "/play";
+            // Check if current pathname matches the item's href
+            // For /play, also match /play/* paths (game pages, queue, etc.)
+            const isActive = item.href === "/play" 
+              ? pathname === "/play" || pathname?.startsWith("/play/")
+              : pathname === item.href || pathname?.startsWith(`${item.href}/`);
             return (
               <Tooltip key={item.href} text={item.label} show={isMinimized}>
                 <Link
@@ -327,13 +330,13 @@ export function Sidebar() {
                         } as React.CSSProperties)
                   }
                   onMouseEnter={(e) => {
-                    // Only apply hover effect if not the play page (which is always active)
+                    // Only apply hover effect if not active
                     if (!isActive) {
                       e.currentTarget.style.backgroundColor = `${accentColor}CC`;
                     }
                   }}
                   onMouseLeave={(e) => {
-                    // Only remove hover effect if not the play page (which is always active)
+                    // Only remove hover effect if not active
                     if (!isActive) {
                       e.currentTarget.style.backgroundColor = "transparent";
                     }
@@ -370,31 +373,41 @@ export function Sidebar() {
             );
           })}
           {/* Profile Link - At bottom of nav */}
-          {profile && (
-            <Tooltip
-              text={`${
-                profile.username
-              } - ${profile.chips.toLocaleString()} chips`}
-              show={isMinimized}
-            >
-              <Link
-                href="/play/profile"
-                className={cn(
-                  "flex items-center gap-3 rounded-lg transition-colors min-w-0 w-full",
-                  isMinimized ? "justify-center px-3 py-3" : "px-4 py-3",
-                  "text-white/70 hover:text-white"
-                )}
-                style={
-                  {
-                    "--hover-bg": `${accentColor}CC`,
-                  } as React.CSSProperties
-                }
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = `${accentColor}CC`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "transparent";
-                }}
+          {profile && (() => {
+            const isProfileActive = pathname === "/profile" || pathname?.startsWith("/profile/");
+            return (
+              <Tooltip
+                text={`${
+                  profile.username
+                } - ${profile.chips.toLocaleString()} chips`}
+                show={isMinimized}
+              >
+                <Link
+                  href="/profile"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg transition-colors min-w-0 w-full",
+                    isMinimized ? "justify-center px-3 py-3" : "px-4 py-3",
+                    isProfileActive ? "text-white" : "text-white/70 hover:text-white"
+                  )}
+                  style={
+                    isProfileActive
+                      ? {
+                          backgroundColor: `${accentColor}CC`,
+                        }
+                      : ({
+                          "--hover-bg": `${accentColor}CC`,
+                        } as React.CSSProperties)
+                  }
+                  onMouseEnter={(e) => {
+                    if (!isProfileActive) {
+                      e.currentTarget.style.backgroundColor = `${accentColor}CC`;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isProfileActive) {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                    }
+                  }}
               >
                 <UserCircle className="h-6 w-6 flex-shrink-0" />
                 {!isMinimized && (
@@ -416,7 +429,8 @@ export function Sidebar() {
                 )}
               </Link>
             </Tooltip>
-          )}
+            );
+          })()}
         </div>
 
         {/* Toggle Button - At bottom of nav with space */}

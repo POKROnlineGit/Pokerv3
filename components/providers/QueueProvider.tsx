@@ -1,9 +1,9 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { useSocket } from '@/lib/socketClient'
-import { QueueStatusPopup } from '@/components/game/QueueStatusPopup'
+import { useStatus } from '@/components/providers/StatusProvider'
 
 interface QueueContextType {
   inQueue: boolean
@@ -27,15 +27,18 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const [matchFound, setMatchFound] = useState(false)
   const socket = useSocket()
   const router = useRouter()
+  const pathname = usePathname()
+  const { setStatus, clearStatus } = useStatus()
 
-  const leaveQueue = (type: string) => {
+  const leaveQueue = useCallback((type: string) => {
     // Optimistic update: Clear state immediately
     setInQueue(false)
     setQueueType(null)
     setMatchFound(false)
+    clearStatus('queue')
     // Emit event to server
     socket?.emit('leave_queue', { queueType: type })
-  }
+  }, [socket, clearStatus])
 
   useEffect(() => {
     if (!socket) return
@@ -52,6 +55,21 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     socket.on('queue_status', (data: { inQueue: boolean, queueType: string | null }) => {
       setInQueue(data.inQueue)
       setQueueType(data.queueType)
+      if (data.inQueue && data.queueType) {
+        setStatus({
+          id: 'queue',
+          priority: 40,
+          type: 'info',
+          title: 'Looking for game...',
+          message: `Waiting for ${data.queueType === 'heads_up' ? 'Heads Up' : '6-Max'}...`,
+          action: {
+            label: 'Leave',
+            onClick: () => leaveQueue(data.queueType!),
+          },
+        })
+      } else {
+        clearStatus('queue')
+      }
     })
 
     // 3. Listen for live updates (join success)
@@ -59,6 +77,17 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       if (data.status === 'joined') {
         setInQueue(true)
         setQueueType(data.queueType)
+        setStatus({
+          id: 'queue',
+          priority: 40,
+          type: 'info',
+          title: 'Looking for game...',
+          message: `Waiting for ${data.queueType === 'heads_up' ? 'Heads Up' : '6-Max'}...`,
+          action: {
+            label: 'Leave',
+            onClick: () => leaveQueue(data.queueType),
+          },
+        })
       }
     })
 
@@ -70,11 +99,19 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     // 5. THE 'SUCKED BACK IN' LOGIC
     socket.on('match_found', (data: { gameId: string }) => {
       setMatchFound(true)
-      // Optional: Add a small delay so they see 'Game Found!' on the popup before navigating
+      setStatus({
+        id: 'queue',
+        priority: 60,
+        type: 'success',
+        title: 'Game Found!',
+        message: 'Joining table...',
+      })
+      // Add a small delay so they see 'Game Found!' on the popup before navigating
       setTimeout(() => {
         setInQueue(false)
         setQueueType(null)
         setMatchFound(false)
+        clearStatus('queue')
         router.push(`/play/game/${data.gameId}`)
       }, 1500)
     })
@@ -85,13 +122,18 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       socket.off('queue_update')
       socket.off('match_found')
     }
-  }, [socket, router])
+  }, [socket, router, setStatus, clearStatus, leaveQueue])
+
+  // Check queue status when navigating to /play page
+  useEffect(() => {
+    if (pathname === '/play' && socket?.connected) {
+      socket.emit('check_queue_status')
+    }
+  }, [pathname, socket])
 
   return (
     <QueueContext.Provider value={{ inQueue, queueType, matchFound, leaveQueue }}>
       {children}
-      {/* Render the Global Popup here so it appears on every page */}
-      <QueueStatusPopup inQueue={inQueue} matchFound={matchFound} queueType={queueType} />
     </QueueContext.Provider>
   )
 }

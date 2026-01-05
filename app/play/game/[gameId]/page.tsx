@@ -10,8 +10,8 @@ import { GameState, ActionType, Player } from "@/lib/types/poker";
 import { getClientHandStrength } from "@backend/domain/evaluation/ClientHandEvaluator";
 import { getSocket, disconnectSocket } from "@/lib/socketClient";
 import { createClientComponentClient } from "@/lib/supabaseClient";
-import { AlertCircle, Wifi, WifiOff } from "lucide-react";
 import { useToast } from "@/lib/hooks";
+import { useStatus } from "@/components/providers/StatusProvider";
 import {
   Dialog,
   DialogContent,
@@ -129,6 +129,7 @@ export default function GamePage() {
   const joinRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track retry timeout
   const supabase = createClientComponentClient();
   const { toast } = useToast();
+  const { setStatus, clearStatus } = useStatus();
 
   // --- Client-Side Hydration: Player Names ---
   const [playerNames, setPlayerNames] = useState<Record<string, string>>({});
@@ -1249,7 +1250,8 @@ export default function GamePage() {
         socket.off("GAME_ENDED");
         socket.off("SYNC_GAME");
         socket.off("error");
-        socket.emit("leaveGame", gameId);
+        // Note: Do NOT emit leaveGame here - socket remains subscribed to game room
+        // This allows the global listener in StatusProvider to detect active games
       }
 
       // Clear all timeouts
@@ -1261,6 +1263,63 @@ export default function GamePage() {
       joinRetryCountRef.current = 0;
     };
   }, [gameId, router, supabase, toast]);
+
+  // Status management: Disconnect
+  useEffect(() => {
+    if (isDisconnected) {
+      setStatus({
+        id: "game-disconnect",
+        priority: 100,
+        type: "error",
+        title: "Connection Lost",
+        message: "Reconnecting...",
+      });
+    } else {
+      clearStatus("game-disconnect");
+    }
+  }, [isDisconnected, setStatus, clearStatus]);
+
+  // Status management: Timeout
+  useEffect(() => {
+    if (timeoutSeconds !== null && timeoutSeconds > 0) {
+      setStatus({
+        id: "game-timeout",
+        priority: 80,
+        type: "warning",
+        title: "Action Required",
+        message: `Auto-folding in ${timeoutSeconds}s`,
+      });
+    } else {
+      clearStatus("game-timeout");
+    }
+  }, [timeoutSeconds, setStatus, clearStatus]);
+
+  // Status management: Waiting for opponent
+  useEffect(() => {
+    if (!gameState) {
+      clearStatus("waiting");
+      return;
+    }
+
+    const currentPhase =
+      (gameState as any).currentPhase || gameState.currentRound || "preflop";
+    const isWaitingPhase = currentPhase === "waiting";
+    const activePlayerCount = gameState.players.filter(
+      (p) => !p.folded && p.chips > 0 && !(p as any).left
+    ).length;
+
+    if (isWaitingPhase && activePlayerCount < 2) {
+      setStatus({
+        id: "waiting",
+        priority: 20,
+        type: "info",
+        title: "Waiting for opponent...",
+        message: "Game paused until another player joins",
+      });
+    } else {
+      clearStatus("waiting");
+    }
+  }, [gameState, setStatus, clearStatus]);
 
   const handleAction = (action: ActionType, amount?: number) => {
     // Block actions if we don't have state, no user, or we're currently syncing
@@ -1610,27 +1669,6 @@ export default function GamePage() {
               <LeaveGameButton gameId={gameId} />
             </div>
           </div>
-
-          {/* Disconnect Banner */}
-          {isDisconnected && (
-            <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 max-w-md bg-yellow-500/90 border-2 border-yellow-600 rounded-lg p-4 flex items-center gap-2 text-yellow-900">
-              <WifiOff className="h-4 w-4" />
-              <span>You disconnected. Reconnecting...</span>
-              <Wifi className="h-4 w-4 animate-pulse ml-auto" />
-            </div>
-          )}
-
-          {/* Timeout Countdown */}
-          {timeoutSeconds !== null && timeoutSeconds > 0 && (
-            <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 max-w-md bg-red-500/90 border-2 border-red-600 rounded-lg p-4 flex items-center gap-2 text-red-50">
-              <AlertCircle className="h-4 w-4" />
-              <span>
-                Time remaining:{" "}
-                <span className="font-bold">{timeoutSeconds}s</span> -
-                Auto-folding soon
-              </span>
-            </div>
-          )}
 
           {/* Table container - centered vertically and horizontally */}
           <div className="h-full w-full flex items-center justify-center">

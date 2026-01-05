@@ -331,7 +331,6 @@ export function PokerTable({
     (p) => !p.folded && p.chips > 0
   );
   const activePlayerCount = activePlayers.length;
-  const isWaitingForOpponent = isWaitingPhase && activePlayerCount < 2;
 
   // Determine if this is a Heads-Up game (exactly 2 active players)
   const isHeadsUpGame = activePlayerCount === 2;
@@ -484,26 +483,12 @@ export function PokerTable({
           </AnimatePresence>
         </div>
 
-        {/* Waiting for opponent banner - prominent message on table felt */}
-        {isWaitingForOpponent && (
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-yellow-500/95 border-4 border-yellow-600 text-yellow-900 px-8 py-6 rounded-xl z-20 shadow-2xl">
-            <div className="text-2xl font-bold text-center mb-2">
-              Waiting for opponent...
-            </div>
-            <div className="text-sm text-center text-yellow-800">
-              Game paused until another player joins
-            </div>
-          </div>
-        )}
-
         {/* Street indicator - Above cards with equal spacing */}
-        {!isWaitingForOpponent && (
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[6rem] bg-black/80 text-white px-4 py-2 rounded-lg z-10">
-            <div className="text-sm font-semibold uppercase">
-              {gameState.currentRound}
-            </div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[6rem] bg-black/80 text-white px-4 py-2 rounded-lg z-10">
+          <div className="text-sm font-semibold uppercase">
+            {gameState.currentRound}
           </div>
-        )}
+        </div>
 
         {/* Pot display - Below cards with equal spacing */}
         {(() => {
@@ -804,13 +789,6 @@ export function PokerTable({
                         </div>
                       );
                     })()}
-
-                  {/* Left indicator - Lower z-index to not block board during runout */}
-                  {hasLeft && (
-                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-gray-700 text-white text-xs px-2 py-0.5 rounded-full z-25">
-                      Left Game
-                    </div>
-                  )}
 
                   {/* Hand type indicator - only show for current player */}
                   {player.playerHandType &&
