@@ -105,18 +105,22 @@ export function ActionPopup({
   // - For raises: lastRaiseAmount = raiseAmount (betAmount - currentBet)
   const lastRaiseAmount = useMemo(() => {
     // Use lastRaiseAmount from gameState (backend sends this)
-    if (gameState?.lastRaiseAmount && typeof gameState.lastRaiseAmount === "number" && gameState.lastRaiseAmount > 0) {
+    if (
+      gameState?.lastRaiseAmount &&
+      typeof gameState.lastRaiseAmount === "number" &&
+      gameState.lastRaiseAmount > 0
+    ) {
       return gameState.lastRaiseAmount;
     }
-    
+
     // If not available, calculate from betting state as fallback
     // Find the difference between the highest bet and the second highest bet
     if (gameState?.players && gameState.players.length > 0) {
       const bets = gameState.players
-        .map(p => p.currentBet || 0)
-        .filter(bet => bet > 0)
+        .map((p) => p.currentBet || 0)
+        .filter((bet) => bet > 0)
         .sort((a, b) => b - a); // Sort descending
-      
+
       if (bets.length >= 2) {
         // Last raise = highest bet - second highest bet
         const calculatedRaise = bets[0] - bets[1];
@@ -129,7 +133,7 @@ export function ActionPopup({
         return bets[0];
       }
     }
-    
+
     return 0;
   }, [gameState, bigBlind]);
 
@@ -142,9 +146,8 @@ export function ActionPopup({
     // The lastRaiseAmount is calculated from the betting state (difference between highest and second highest bet)
     // If there's no prior raise (lastRaiseAmount is 0), use bigBlind
     // If there's a prior raise, use the max of that and bigBlind
-    const minRaiseOnTop = lastRaiseAmount > 0 
-      ? Math.max(lastRaiseAmount, bigBlind)
-      : bigBlind;
+    const minRaiseOnTop =
+      lastRaiseAmount > 0 ? Math.max(lastRaiseAmount, bigBlind) : bigBlind;
 
     // Maximum raise amount on top = player's remaining chips after calling
     // Player needs chipsToCall to call, so max raise = hero.chips - chipsToCall
@@ -216,7 +219,6 @@ export function ActionPopup({
     prevRoundRef.current = currentRound;
   }, [gameState?.currentRound]);
 
-
   // Safety cleanup: Clear queue if player leaves hand
   useEffect(() => {
     if (!isPlayerInGame || !hero || hero.folded || hero.chips === 0) {
@@ -245,15 +247,43 @@ export function ActionPopup({
     prevChipsToCallRef.current = currentChipsToCall;
   }, [chipsToCall, gameState, hero, queuedAction]);
 
+  // Check if it's showdown phase (must be before conditional return for hooks)
+  const isShowdown = gameState
+    ? gameState.currentPhase === "showdown" ||
+      gameState.currentRound === "showdown"
+    : false;
+
+  // Check if it's a contested showdown (hero hasn't folded and multiple players remaining)
+  // Must be before conditional return to satisfy React Hooks rules
+  const isContestedShowdown = useMemo(() => {
+    if (!isShowdown || !hero || hero.folded) return false;
+    // Count non-folded players
+    const nonFoldedPlayers = gameState?.players?.filter((p) => !p.folded) || [];
+    return nonFoldedPlayers.length > 1; // More than just the hero
+  }, [isShowdown, hero, gameState]);
+
   // Hide component if player not in game or no game state
-  if (!gameState || !isPlayerInGame || !hero) {
+  // Show popup if there is an Active Actor, even if it's not me (enables Action Queuing)
+  // Hide during Runouts, Showdowns, and Transitions (when currentActorSeat === null)
+  // Hide if hero is all-in (cannot queue Fold/Check)
+  if (
+    !gameState ||
+    !isPlayerInGame ||
+    !hero ||
+    gameState.currentActorSeat === null ||
+    hero.allIn
+  ) {
     return null;
   }
+
+  // Allow folded players to see reveal controls during showdown
+  // But hide betting controls if folded
+  const showBettingControls = !hero.folded;
 
   // Handle button clicks
   const handleFold = () => {
     if (isMyTurn) {
-    onAction("fold");
+      onAction("fold");
     } else {
       // Toggle queue
       setQueuedAction(queuedAction === "fold" ? null : "fold");
@@ -262,7 +292,7 @@ export function ActionPopup({
 
   const handleCheck = () => {
     if (isMyTurn) {
-    onAction("check");
+      onAction("check");
     } else {
       // Toggle queue
       setQueuedAction(queuedAction === "check" ? null : "check");
@@ -288,7 +318,7 @@ export function ActionPopup({
 
   const handleBetSubmit = () => {
     if (!hero) return;
-    
+
     // Validation: Ensure raise amount is valid
     if (
       raiseAmount >= raiseLimits.min &&
@@ -299,7 +329,7 @@ export function ActionPopup({
       // Calculate total bet amount: prior bet (highestBet) + raise amount on top
       // This is the total bet that will be sent to the server
       const totalBetAmount = highestBet + raiseAmount;
-      
+
       // Always send unified "bet" action with total bet amount
       onAction("bet", totalBetAmount);
       setShowBetMenu(false);
@@ -342,10 +372,9 @@ export function ActionPopup({
   const callQueued = queuedAction === "call";
   const checkDisabled = !canCheck && !isMyTurn;
 
-  // Check if it's showdown - show reveal mode instead of betting actions
-  const isShowdown = gameState.currentRound === "showdown";
+  // heroCards is already available from earlier in the component
   const heroCards = hero?.holeCards || [];
-  
+
   // Helper function to format card display (e.g., "As" -> "A♠")
   const formatCardDisplay = (card: string | null | "HIDDEN") => {
     if (!card || card === "HIDDEN" || card === null) return "?";
@@ -361,38 +390,36 @@ export function ActionPopup({
     return `${rank}${suitSymbols[suit] || suit}`;
   };
 
-  // Check if it's a contested showdown (hero hasn't folded and multiple players remaining)
-  const isContestedShowdown = useMemo(() => {
-    if (!isShowdown || !hero || hero.folded) return false;
-    // Count non-folded players
-    const nonFoldedPlayers = gameState?.players?.filter(p => !p.folded) || [];
-    return nonFoldedPlayers.length > 1; // More than just the hero
-  }, [isShowdown, hero, gameState]);
-
   // Show reveal mode during showdown for hero if they have cards
   // Hide reveal buttons in contested showdowns (cards are shown by default)
   // This allows both folded players and winners in uncontested showdowns to reveal their cards
-  if (isShowdown && onRevealCard && heroCards.length > 0 && hero && !isContestedShowdown) {
+  if (
+    isShowdown &&
+    onRevealCard &&
+    heroCards.length > 0 &&
+    hero &&
+    !isContestedShowdown
+  ) {
     const card1 = heroCards[0];
     const card2 = heroCards[1];
     const card1Display = formatCardDisplay(card1);
     const card2Display = formatCardDisplay(card2);
-    
+
     // Use revealedIndices from hero (memoized with gameState dependency, so it's reactive)
     // Backend initializes to [] and updates when cards are revealed
     const revealedIndices = hero.revealedIndices || [];
-    
+
     const card1Revealed = revealedIndices.includes(0);
     const card2Revealed = revealedIndices.includes(1);
     const bothRevealed = card1Revealed && card2Revealed;
-    
+
     // Handler for revealing cards
     const handleReveal = (cardIndex: number) => {
       if (!revealedIndices.includes(cardIndex)) {
         onRevealCard(cardIndex);
       }
     };
-    
+
     const handleRevealBoth = () => {
       if (!card1Revealed) {
         onRevealCard(0);
@@ -402,7 +429,7 @@ export function ActionPopup({
       }
     };
 
-  return (
+    return (
       <div className="fixed bottom-6 right-6 z-50">
         {/* Visual Feedback Prompt */}
         {!hero.folded && (
@@ -416,13 +443,13 @@ export function ActionPopup({
           <Button
             onClick={() => handleReveal(1)}
             disabled={card2Revealed}
-        className={cn(
+            className={cn(
               "h-12 px-6 text-sm font-medium transition-all",
               card2Revealed
                 ? "bg-green-600/80 border-2 border-green-500 text-white cursor-not-allowed"
                 : "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
-        )}
-      >
+            )}
+          >
             {`Reveal Card 2 (${card2Display})`}
           </Button>
 
@@ -430,7 +457,7 @@ export function ActionPopup({
           <Button
             onClick={() => handleReveal(0)}
             disabled={card1Revealed}
-          className={cn(
+            className={cn(
               "h-12 px-6 text-sm font-medium transition-all",
               card1Revealed
                 ? "bg-green-600/80 border-2 border-green-500 text-white cursor-not-allowed"
@@ -441,7 +468,7 @@ export function ActionPopup({
           </Button>
 
           {/* Reveal Both Button (leftmost) */}
-                <Button
+          <Button
             onClick={handleRevealBoth}
             disabled={bothRevealed}
             className={cn(
@@ -452,7 +479,7 @@ export function ActionPopup({
             )}
           >
             Reveal Both
-                </Button>
+          </Button>
         </div>
       </div>
     );
@@ -469,7 +496,7 @@ export function ActionPopup({
             exit={{ opacity: 0, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
             className="mb-4 bg-[#1a1a1a] border border-[#9A1F40] rounded-xl shadow-xl p-4 min-w-[20rem]"
-                  >
+          >
             <div className="space-y-4">
               {/* Header */}
               <div className="text-center">
@@ -483,7 +510,7 @@ export function ActionPopup({
 
               {/* Slider */}
               <div className="space-y-2">
-                    <Slider
+                <Slider
                   value={[raiseAmount]}
                   onValueChange={([value]) => {
                     const intValue = Math.floor(value);
@@ -495,14 +522,14 @@ export function ActionPopup({
                   }}
                   min={raiseLimits.min}
                   max={raiseLimits.max}
-                      step={1}
-                      className="w-full"
-                    />
+                  step={1}
+                  className="w-full"
+                />
                 <div className="flex justify-between text-[0.625rem] text-gray-400">
                   <span>${raiseLimits.min}</span>
                   <span>${raiseLimits.max}</span>
-                    </div>
-                  </div>
+                </div>
+              </div>
 
               {/* Numeric Input */}
               <div className="space-y-1">
@@ -567,105 +594,108 @@ export function ActionPopup({
                 >
                   Pot
                 </Button>
-                  <Button
+                <Button
                   onClick={() => handleQuickSize(1, true)}
                   variant="outline"
                   size="sm"
                   className="text-xs h-8 bg-red-600 border-red-600 text-white hover:bg-red-700"
-                  >
+                >
                   All-In
-                  </Button>
-                </div>
+                </Button>
+              </div>
 
               {/* Submit Button */}
-                  <Button
+              <Button
                 onClick={handleBetSubmit}
-                    disabled={
+                disabled={
                   raiseAmount < raiseLimits.min || raiseAmount > raiseLimits.max
-                    }
+                }
                 className="w-full h-9 bg-[#9A1F40] hover:bg-[#7a182f] text-white"
-                  >
+              >
                 Raise ${raiseAmount} (Total: ${highestBet + raiseAmount})
-                  </Button>
-                </div>
+              </Button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Action Buttons - Horizontal Layout (Right to Left: Call, Raise, Check, Fold) */}
-      <div className="flex items-center gap-2 flex-row-reverse">
-        {/* Fold Button (rightmost) */}
-                <Button
-          onClick={handleFold}
-          disabled={isMyTurn && showBetMenu}
-          className={cn(
-            "h-12 px-6 text-sm font-medium transition-all",
-            foldQueued
-              ? "bg-red-600 border-2 border-red-600 text-white shadow-lg"
-              : isMyTurn
-              ? "bg-red-600 border-2 border-red-600 text-white hover:bg-red-700"
-              : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
-          )}
-        >
-          {foldQueued ? "✓ Fold" : "Fold"}
-                </Button>
-
-        {/* Check Button */}
-        <Button
-          onClick={handleCheck}
-          disabled={checkDisabled || (isMyTurn && showBetMenu)}
-          className={cn(
-            "h-12 px-6 text-sm font-medium transition-all",
-            checkQueued
-              ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
-              : isMyTurn && canCheck
-              ? "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
-              : canCheck && !isMyTurn
-              ? "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
-              : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 opacity-60 cursor-not-allowed"
-          )}
-        >
-          {checkQueued ? "✓ Check" : "Check"}
-        </Button>
-
-        {/* Raise Button */}
-                <Button
-          onClick={handleRaise}
-          disabled={
-            !isMyTurn ||
-            (highestBet > 0 && hero.chips < chipsToCall + raiseLimits.min) ||
-            (highestBet === 0 && hero.chips < bigBlind)
-          }
-                  className={cn(
-            "h-12 px-6 text-sm font-medium transition-all",
-            isMyTurn && showBetMenu
-              ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
-              : isMyTurn
-              ? "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
-              : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 opacity-30 cursor-not-allowed"
-          )}
-        >
-          Raise
-                </Button>
-
-        {/* Call Button (leftmost, conditional) */}
-        {highestBet > (hero.currentBet || 0) && (
-                <Button
-            onClick={handleCall}
+      {/* Only show betting controls if player hasn't folded */}
+      {showBettingControls && (
+        <div className="flex items-center gap-2 flex-row-reverse">
+          {/* Fold Button (rightmost) */}
+          <Button
+            onClick={handleFold}
             disabled={isMyTurn && showBetMenu}
-                  className={cn(
+            className={cn(
               "h-12 px-6 text-sm font-medium transition-all",
-              callQueued
+              foldQueued
+                ? "bg-red-600 border-2 border-red-600 text-white shadow-lg"
+                : isMyTurn
+                ? "bg-red-600 border-2 border-red-600 text-white hover:bg-red-700"
+                : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
+            )}
+          >
+            {foldQueued ? "✓ Fold" : "Fold"}
+          </Button>
+
+          {/* Check Button */}
+          <Button
+            onClick={handleCheck}
+            disabled={checkDisabled || (isMyTurn && showBetMenu)}
+            className={cn(
+              "h-12 px-6 text-sm font-medium transition-all",
+              checkQueued
+                ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
+                : isMyTurn && canCheck
+                ? "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
+                : canCheck && !isMyTurn
+                ? "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
+                : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 opacity-60 cursor-not-allowed"
+            )}
+          >
+            {checkQueued ? "✓ Check" : "Check"}
+          </Button>
+
+          {/* Raise Button */}
+          <Button
+            onClick={handleRaise}
+            disabled={
+              !isMyTurn ||
+              (highestBet > 0 && hero.chips < chipsToCall + raiseLimits.min) ||
+              (highestBet === 0 && hero.chips < bigBlind)
+            }
+            className={cn(
+              "h-12 px-6 text-sm font-medium transition-all",
+              isMyTurn && showBetMenu
                 ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
                 : isMyTurn
                 ? "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
-                : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
-                  )}
-                >
-            {callQueued ? "✓ Call" : `Call $${chipsToCall}`}
-                </Button>
+                : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 opacity-30 cursor-not-allowed"
+            )}
+          >
+            Raise
+          </Button>
+
+          {/* Call Button (leftmost, conditional) */}
+          {highestBet > (hero.currentBet || 0) && (
+            <Button
+              onClick={handleCall}
+              disabled={isMyTurn && showBetMenu}
+              className={cn(
+                "h-12 px-6 text-sm font-medium transition-all",
+                callQueued
+                  ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
+                  : isMyTurn
+                  ? "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
+                  : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
               )}
-            </div>
+            >
+              {callQueued ? "✓ Call" : `Call $${chipsToCall}`}
+            </Button>
+          )}
         </div>
+      )}
+    </div>
   );
 }

@@ -2,11 +2,22 @@
   "name": "pokeronline",
   "version": "1.0.0",
   "private": true,
+  "author": "POKROnline Team",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/POKROnlineGit/pokronline"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "audit": "npm audit --audit-level=moderate",
+    "security": "npm audit && npm outdated"
   },
   "dependencies": {
     "@next/third-parties": "^16.1.1",
@@ -20,8 +31,8 @@
     "@radix-ui/react-slot": "^1.0.2",
     "@radix-ui/react-switch": "^1.0.1",
     "@radix-ui/react-tabs": "^1.0.4",
-    "@supabase/ssr": "^0.5.1",
-    "@supabase/supabase-js": "^2.39.0",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.45.4",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "date-fns": "^4.1.0",
@@ -38,8 +49,8 @@
   },
   "devDependencies": {
     "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.4.16",
     "eslint": "^9.39.1",

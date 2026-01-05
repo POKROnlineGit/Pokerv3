@@ -74,6 +74,42 @@ export function Sidebar() {
     });
   }, [supabase]);
 
+  // Subscribe to realtime profile updates (chips, username, etc.)
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel("profile_updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          // Update profile state when chips or other profile data changes
+          if (payload.new) {
+            setProfile((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                username: (payload.new as any).username || prev.username,
+                chips: (payload.new as any).chips ?? prev.chips,
+                created_at: (payload.new as any).created_at || prev.created_at,
+              };
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, supabase]);
+
   useEffect(() => {
     if (!user) return;
 

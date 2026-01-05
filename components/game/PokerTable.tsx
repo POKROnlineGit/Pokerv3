@@ -439,7 +439,7 @@ export function PokerTable({
       >
         {/* Community cards area - centered, larger for heads-up - Higher z-index to appear above player status indicators */}
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex gap-2 z-30">
-          <AnimatePresence mode="popLayout">
+          <AnimatePresence>
             {gameState.communityCards.map((card, i) => {
               // 2. UNIQUE KEYS: Combine card + index + hand number
               // This guarantees that a new deal creates new React instances
@@ -508,16 +508,35 @@ export function PokerTable({
         {/* Pot display - Below cards with equal spacing */}
         {(() => {
           const mainPot = gameState.pot || 0;
-          const sidePotTotal =
-            gameState.sidePots?.reduce(
-              (sum, pot) => sum + (pot?.amount || 0),
-              0
-            ) || 0;
-          const totalPot = mainPot + sidePotTotal;
-          return totalPot > 0 ? (
+          const sidePots =
+            gameState.sidePots?.filter((pot) => (pot?.amount || 0) > 0) || [];
+          const hasPots = mainPot > 0 || sidePots.length > 0;
+
+          return hasPots ? (
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 translate-y-[4rem] bg-black/90 text-white px-4 py-2 rounded-lg z-10">
-              <div className="text-sm text-gray-300 mb-1">Pot</div>
-              <div className="text-xl font-bold">${totalPot}</div>
+              <div className="flex flex-col gap-2">
+                {/* Pot */}
+                {mainPot > 0 && (
+                  <div className="text-center">
+                    <div className="text-sm text-gray-300 mb-1">Pot</div>
+                    <div className="text-xl font-bold">${mainPot}</div>
+                  </div>
+                )}
+                {/* Side Pots */}
+                {sidePots.map((pot, index) => (
+                  <div
+                    key={index}
+                    className="text-center border-t border-gray-600 pt-2"
+                  >
+                    <div className="text-xs text-gray-400 mb-1">
+                      Side Pot {index + 1}
+                    </div>
+                    <div className="text-lg font-semibold text-yellow-400">
+                      ${pot?.amount || 0}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null;
         })()}
@@ -954,23 +973,14 @@ export function PokerTable({
                               ? revealedIndices.includes(i)
                               : !(card === "HIDDEN" || card === null)));
 
-                        const shouldShowFaceDown = (card: string | null) => {
-                          if (isHero) return false; // Hero always sees their own cards
-                          if (isShowdown) {
-                            // In showdown, rely on revealedIndices metadata when available
-                            if (revealedIndices.length > 0) {
-                              return !revealedIndices.includes(i);
-                            }
-                            // Fallback: if metadata missing, treat HIDDEN/null as face-down
-                            return card === "HIDDEN" || card === null;
-                          }
-                          // Before showdown, hide all non-hero cards (server validates visibility)
-                          return !isLocalGame || player.isBot;
-                        };
-
+                        // Trust server-sent cards: If a card value is provided, show it
+                        // The backend now selectively masks cards (sending 'HIDDEN' or 'As')
+                        // If the frontend receives 'As', it means the user is allowed to see it
+                        // (Runout/Showdown/Hero), so we should always render the face
                         const cardValue =
                           card === "HIDDEN" || card === null ? "HIDDEN" : card;
-                        const showBack = shouldShowFaceDown(card);
+                        const showBack =
+                          cardValue === "HIDDEN" || cardValue === null;
                         const revealKey = showBack ? "down" : "up";
 
                         return (

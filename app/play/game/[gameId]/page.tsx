@@ -21,6 +21,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
+import { Trophy, TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
 
 export default function GamePage() {
   const params = useParams();
@@ -34,13 +47,30 @@ export default function GamePage() {
   const [isInitializing, setIsInitializing] = useState(true); // Track initial game table initialization
   const [timeoutSeconds, setTimeoutSeconds] = useState<number | null>(null);
   const [isHeadsUp, setIsHeadsUp] = useState(false);
-  const [gameFinished, setGameFinished] = useState<{ reason: string } | null>(
+  // Game finished modal with full payload structure
+  interface GameFinishedPayload {
+    reason: string;
+    winnerId: string | null;
+    returnUrl: string;
+    timestamp: string;
+    stats?: {
+      totalHands: number;
+      startingStacks: { [playerId: string]: number };
+      finalStacks: { [playerId: string]: number };
+      chipChanges: { [playerId: string]: number };
+      stackHistoryByPlayer: {
+        [playerId: string]: {
+          [hand: number]: number;
+        };
+      };
+    };
+  }
+  const [gameFinished, setGameFinished] = useState<GameFinishedPayload | null>(
     null
-  ); // Game finished modal
+  );
   const [playerDisconnectTimers, setPlayerDisconnectTimers] = useState<
     Record<string, number>
   >({}); // Track disconnect countdowns per player
-  const [forceHideActions, setForceHideActions] = useState(false); // Force hide action controls
   const [turnTimer, setTurnTimer] = useState<{
     deadline: number;
     duration: number;
@@ -61,7 +91,9 @@ export default function GamePage() {
   // Calculate current hand strength for highlighting in sidebar
   const currentHandStrength = useMemo(() => {
     if (!gameState || !currentUserId) return null;
-    const heroPlayer = gameState.players.find((p: Player) => p.id === currentUserId);
+    const heroPlayer = gameState.players.find(
+      (p: Player) => p.id === currentUserId
+    );
     if (
       !heroPlayer ||
       !heroPlayer.holeCards ||
@@ -107,35 +139,35 @@ export default function GamePage() {
     const fetchNames = async () => {
       // Collect all player IDs (non-bots) from gameState
       const playerIds = new Set<string>();
-      
+
       if (gameState?.players) {
         gameState.players
-          .filter(p => !p.isBot)
-          .forEach(p => playerIds.add(p.id));
+          .filter((p) => !p.isBot)
+          .forEach((p) => playerIds.add(p.id));
       }
-      
+
       // Explicitly include current user ID (same system as opponents)
       if (currentUserId) {
         playerIds.add(currentUserId);
       }
 
       // Find IDs we don't have names for yet
-      const missingIds = Array.from(playerIds).filter(id => !playerNames[id]);
+      const missingIds = Array.from(playerIds).filter((id) => !playerNames[id]);
 
       if (missingIds.length === 0) return;
 
       // DIRECT DB CALL - Same system for all players including current user
       const { data } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .in('id', missingIds);
+        .from("profiles")
+        .select("id, username")
+        .in("id", missingIds);
 
       if (data) {
         const newNames: Record<string, string> = {};
         data.forEach((p: any) => {
           if (p.username) newNames[p.id] = p.username;
         });
-        setPlayerNames(prev => ({ ...prev, ...newNames }));
+        setPlayerNames((prev) => ({ ...prev, ...newNames }));
       }
     };
 
@@ -309,15 +341,17 @@ export default function GamePage() {
       const handleGameEnded = (data: { message?: string; reason?: string }) => {
         if (!mounted) return;
 
-        // IMMEDIATE ACTION CLEANUP: Force hide action controls
-        setForceHideActions(true);
         gameEndedRef.current = true;
 
         // Set game finished state - this will show the modal
         // Do NOT redirect immediately - user stays on table view
-        setGameFinished({
+        const payload: GameFinishedPayload = {
           reason: data.reason || data.message || "GAME_ENDED",
-        });
+          winnerId: null,
+          returnUrl: "/play",
+          timestamp: new Date().toISOString(),
+        };
+        setGameFinished(payload);
       };
 
       // Listen for game state
@@ -362,28 +396,10 @@ export default function GamePage() {
             return prevTimer;
           });
 
-          // Reset force hide flag if we get a new hand (handNumber changed)
+          // Reset flags if we get a new hand (handNumber changed)
           if (gameState && state.handNumber !== gameState.handNumber) {
             gameEndedRef.current = false;
             handRunoutRef.current = false;
-            setForceHideActions(false);
-          }
-
-          // Reset force hide flag when new round state arrives (after DEAL_STREET)
-          // This allows action controls to show again for the new betting round
-          // Only reset if game hasn't ended and we're not in a runout
-          if (!gameEndedRef.current && !handRunoutRef.current) {
-            // Check if we're entering a new betting round (Flop, Turn, or River)
-            const newRound = state.currentRound || (state as any).currentPhase;
-            const isBettingRound = [
-              "flop",
-              "turn",
-              "river",
-              "preflop",
-            ].includes(newRound);
-            if (isBettingRound) {
-              setForceHideActions(false);
-            }
           }
 
           // CRITICAL: Fully replace local state on every gameState event
@@ -692,11 +708,6 @@ export default function GamePage() {
                 (p) => !p.folded && p.chips > 0 && !(p as any).left
               );
 
-              // IMMEDIATE ACTION CLEANUP: Force hide action controls if only 1 active player
-              if (activePlayers.length <= 1) {
-                setForceHideActions(true);
-              }
-
               // Get player name for toast (before state update)
               const player = prevState.players.find(
                 (p) => p.id === data.playerId
@@ -767,15 +778,9 @@ export default function GamePage() {
       // 2. HAND_RUNOUT: Handle hand completion
       socket.on(
         "HAND_RUNOUT",
-        (data: {
-          winnerId: string;
-          board: string[];
-        }) => {
+        (data: { winnerId: string; board: string[] }) => {
           if (!mounted) return;
 
-          // IMMEDIATE ACTION CLEANUP: Clear action controls immediately
-          // This event is a definitive signal that betting is over
-          setForceHideActions(true);
           handRunoutRef.current = true; // Mark that runout has occurred
 
           // Update board state - PokerTable will detect new cards and animate them automatically
@@ -871,10 +876,6 @@ export default function GamePage() {
           if (!mounted) return;
 
           // CRITICAL: Force hide action controls and clear any stale betting UI
-          // This ensures that when new cards arrive (Flop/Turn/River), any stale
-          // action controls from the previous round are wiped clean before the new
-          // round's state arrives. Fixes "Action not handled" state sync issues.
-          setForceHideActions(true);
 
           // Update board state immediately - server controls timing (2s intervals)
           // PokerTable will detect new cards and animate them automatically
@@ -899,7 +900,35 @@ export default function GamePage() {
         }
       );
 
-      // 5. GAME_FINISHED: Show modal when game ends (DO NOT redirect immediately)
+      // 5. PLAYER_ELIMINATED: Handle individual player eliminations
+      socket.on("PLAYER_ELIMINATED", (data: { playerId: string }) => {
+        if (!mounted) return;
+
+        if (data.playerId === currentUserId) {
+          // Current user was eliminated - show game over modal
+          setGameFinished({
+            reason: "You have been eliminated",
+            winnerId: null,
+            returnUrl: "/play",
+            timestamp: new Date().toISOString(),
+            stats: undefined,
+          });
+        } else {
+          // Another player was eliminated - show toast notification
+          const eliminatedPlayer = gameState?.players.find(
+            (p) => p.id === data.playerId
+          );
+          toast({
+            title: "Player eliminated",
+            description: `${
+              eliminatedPlayer?.name || "A player"
+            } has been eliminated`,
+            variant: "default",
+          });
+        }
+      });
+
+      // 6. GAME_FINISHED: Show modal when game ends (DO NOT redirect immediately)
       // Listen specifically for 'GAME_FINISHED' event (backend sends this exact string)
       socket.on(
         "GAME_FINISHED",
@@ -907,78 +936,56 @@ export default function GamePage() {
           gameId?: string;
           reason?: string;
           message?: string;
-          payload?: any;
+          payload?: GameFinishedPayload;
           winnerId?: string | null;
           returnUrl?: string;
           timestamp?: string;
+          stats?: GameFinishedPayload["stats"];
         }) => {
           if (!mounted) return;
 
-          // IMMEDIATE ACTION CLEANUP: Force hide action controls
-          setForceHideActions(true);
           gameEndedRef.current = true; // Mark that game has ended
 
-          // Set game finished state - this will show the modal
-          // Extract reason/message from payload (backend sends reason directly or in payload)
-          const reason =
-            data.reason ||
-            data.message ||
-            data.payload?.reason ||
-            data.payload?.message ||
-            "GAME_FINISHED";
+          // Extract payload - backend may send directly or nested in payload
+          const payload: GameFinishedPayload = data.payload || {
+            reason: data.reason || data.message || "The game has ended.",
+            winnerId: data.winnerId ?? null,
+            returnUrl: data.returnUrl || "/play",
+            timestamp: data.timestamp || new Date().toISOString(),
+            stats: data.stats,
+          };
 
-          // Handle specific reasons with user-friendly messages
-          let message: string;
-          if (
-            reason === "ALL_PLAYERS_LEFT" ||
-            reason?.includes("ALL_PLAYERS_LEFT")
-          ) {
-            message = "Game Ended. All players have left.";
-          } else if (
-            reason?.includes("inactivity") ||
-            reason?.includes("closed due to inactivity")
-          ) {
-            // Display inactivity reason directly from backend
-            message = reason;
-          } else {
-            // Use reason directly, or fallback to generic message
-            message =
-              data.message ||
-              data.reason ||
-              data.payload?.reason ||
-              data.payload?.message ||
-              "The game has ended.";
-          }
-
-          // Safety: Don't try to display winner if winnerId is null (e.g., ALL_PLAYERS_LEFT, inactivity closures)
-          // The message above already handles this case
-
-          setGameFinished({ reason: message });
+          // Set game finished state with full payload
+          setGameFinished(payload);
         }
       );
 
       // Also listen for GAME_ENDED (alternative event name) for backward compatibility
       socket.on(
         "GAME_ENDED",
-        (data: { reason?: string; message?: string; payload?: any }) => {
+        (data: {
+          reason?: string;
+          message?: string;
+          payload?: GameFinishedPayload;
+          winnerId?: string | null;
+          returnUrl?: string;
+          timestamp?: string;
+          stats?: GameFinishedPayload["stats"];
+        }) => {
           if (!mounted) return;
 
-          // IMMEDIATE ACTION CLEANUP: Force hide action controls
-          setForceHideActions(true);
           gameEndedRef.current = true;
 
-          // Set game finished state
-          const reason =
-            data.reason ||
-            data.message ||
-            data.payload?.message ||
-            "GAME_ENDED";
-          const message =
-            data.message ||
-            data.reason ||
-            data.payload?.message ||
-            "The game has ended.";
-          setGameFinished({ reason: message });
+          // Extract payload - backward compatibility with old format
+          const payload: GameFinishedPayload = data.payload || {
+            reason: data.reason || data.message || "The game has ended.",
+            winnerId: data.winnerId ?? null,
+            returnUrl: data.returnUrl || "/play",
+            timestamp: data.timestamp || new Date().toISOString(),
+            stats: data.stats,
+          };
+
+          setGameFinished(payload);
         }
       );
 
@@ -1315,25 +1322,39 @@ export default function GamePage() {
       <Dialog
         open={!!gameFinished}
         onOpenChange={(open) => {
-          // Prevent closing modal by clicking outside - user must click "Return to Lobby"
+          // Allow closing via X button or clicking outside
           if (!open && gameFinished) {
-            return;
+            // Clean exit: disconnect socket and redirect
+            const socket = getSocket();
+            if (socket) {
+              socket.removeAllListeners();
+              disconnectSocket();
+            }
+            setGameFinished(null);
+            router.push("/play");
           }
         }}
       >
         <DialogContent
-          className="sm:max-w-md !z-[10000]"
+          className="sm:max-w-2xl max-h-[90vh] overflow-y-auto !z-[10000]"
           style={{ zIndex: 10000 }}
         >
           <DialogHeader>
-            <DialogTitle>
-              {gameFinished?.reason === "OPPONENT_LEFT" ||
-              gameFinished?.reason?.includes("opponent") ||
-              gameFinished?.reason?.includes("Opponent")
-                ? "Game Over"
-                : "Game Finished"}
+            <DialogTitle className="flex items-center gap-2 text-2xl">
+              {gameFinished?.winnerId === currentUserId ? (
+                <>
+                  <Trophy className="h-6 w-6 text-yellow-500" />
+                  Victory!
+                </>
+              ) : gameFinished?.reason === "OPPONENT_LEFT" ||
+                gameFinished?.reason?.includes("opponent") ||
+                gameFinished?.reason?.includes("Opponent") ? (
+                "Game Over"
+              ) : (
+                "Game Finished"
+              )}
             </DialogTitle>
-            <DialogDescription className="text-lg">
+            <DialogDescription className="text-base">
               {gameFinished?.reason === "OPPONENT_LEFT" ||
               gameFinished?.reason?.includes("opponent") ||
               gameFinished?.reason?.includes("Opponent")
@@ -1346,7 +1367,173 @@ export default function GamePage() {
                 : gameFinished?.reason || "The game has ended."}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+
+          <div className="space-y-4 mt-4">
+            {/* Winner and Stats on Same Row - Two Separate Boxes */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Winner Card */}
+              {gameFinished?.winnerId && (
+                <Card className="bg-primary-500/10 border-primary-500/20">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-center gap-3">
+                      <Trophy className="h-6 w-6 text-yellow-500" />
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">Winner</p>
+                        <p className="text-lg font-semibold">
+                          {gameFinished.winnerId === currentUserId
+                            ? "You won!"
+                            : playerNames[gameFinished.winnerId] ||
+                              "Player " + gameFinished.winnerId.slice(0, 8)}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Performance Stats Card */}
+              {gameFinished?.stats &&
+                currentUserId &&
+                gameFinished.stats.startingStacks[currentUserId] !==
+                  undefined && (
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-center gap-6">
+                        <div className="text-center">
+                          <p className="text-xs text-muted-foreground">Hands</p>
+                          <p className="text-lg font-bold">
+                            {gameFinished.stats.totalHands}
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-muted-foreground">
+                            Final Stack
+                          </p>
+                          <p className="text-lg font-bold">
+                            {gameFinished.stats?.finalStacks[
+                              currentUserId
+                            ]?.toLocaleString() || "0"}
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-muted-foreground">
+                            Net Change
+                          </p>
+                          <div className="flex items-center justify-center gap-1">
+                            {gameFinished.stats.chipChanges[currentUserId] >=
+                            0 ? (
+                              <TrendingUp className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <TrendingDown className="h-4 w-4 text-red-500" />
+                            )}
+                            <p
+                              className={`text-lg font-bold ${
+                                gameFinished.stats.chipChanges[currentUserId] >=
+                                0
+                                  ? "text-green-500"
+                                  : "text-red-500"
+                              }`}
+                            >
+                              {gameFinished.stats.chipChanges[currentUserId] >=
+                              0
+                                ? "+"
+                                : ""}
+                              {gameFinished.stats.chipChanges[
+                                currentUserId
+                              ].toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+            </div>
+
+            {/* Stack History Graph - Only Current User */}
+            {gameFinished?.stats?.stackHistoryByPlayer &&
+              currentUserId &&
+              gameFinished.stats.stackHistoryByPlayer[currentUserId] &&
+              Object.keys(
+                gameFinished.stats.stackHistoryByPlayer[currentUserId]
+              ).length > 0 && (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="h-64 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={(() => {
+                            // Only get current user's stack history
+                            const userHistory =
+                              gameFinished.stats.stackHistoryByPlayer[
+                                currentUserId
+                              ];
+                            const sortedHands = Object.keys(userHistory)
+                              .map(Number)
+                              .sort((a, b) => a - b);
+
+                            return sortedHands.map((hand) => ({
+                              hand,
+                              stack: userHistory[hand],
+                            }));
+                          })()}
+                          margin={{
+                            top: 5,
+                            right: 30,
+                            left: 50,
+                            bottom: 30,
+                          }}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            className="opacity-30"
+                          />
+                          <XAxis
+                            dataKey="hand"
+                            label={{
+                              value: "Hand Number",
+                              position: "insideBottom",
+                              offset: -5,
+                            }}
+                          />
+                          <YAxis
+                            label={{
+                              value: "Stack Size",
+                              angle: -90,
+                              position: "left",
+                              offset: 10,
+                              style: { textAnchor: "middle" },
+                            }}
+                          />
+                          <Tooltip
+                            formatter={(value: number) =>
+                              value.toLocaleString()
+                            }
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="stack"
+                            stroke="hsl(var(--primary))"
+                            strokeWidth={3}
+                            dot={{ r: 4 }}
+                            activeDot={{ r: 6 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+            {/* Timestamp */}
+            {gameFinished?.timestamp && (
+              <p className="text-xs text-muted-foreground text-center">
+                Game ended: {new Date(gameFinished.timestamp).toLocaleString()}
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className="mt-6">
             <Button
               onClick={() => {
                 // Clean exit: disconnect socket and redirect
@@ -1361,9 +1548,8 @@ export default function GamePage() {
 
                 // Clear state
                 setGameFinished(null);
-                setForceHideActions(false);
 
-                // Redirect to lobby
+                // Redirect to /play (lobby)
                 router.push("/play");
               }}
               className="w-full"
@@ -1413,15 +1599,14 @@ export default function GamePage() {
               </p>
             </div>
             <div className="flex gap-2">
-              {cardsLoaded &&
-                variantInfo?.engineType === "holdem" && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowHandRankings(!showHandRankings)}
-                  >
-                    {showHandRankings ? "Hide Ranks" : "Show Hand Ranks"}
-                  </Button>
-                )}
+              {cardsLoaded && variantInfo?.engineType === "holdem" && (
+                <Button
+                  variant="outline"
+                  onClick={() => setShowHandRankings(!showHandRankings)}
+                >
+                  {showHandRankings ? "Hide Ranks" : "Show Hand Ranks"}
+                </Button>
+              )}
               <LeaveGameButton gameId={gameId} />
             </div>
           </div>
@@ -1447,7 +1632,6 @@ export default function GamePage() {
             </div>
           )}
 
-
           {/* Table container - centered vertically and horizontally */}
           <div className="h-full w-full flex items-center justify-center">
             <PokerTable
@@ -1471,7 +1655,7 @@ export default function GamePage() {
           />
 
           {/* Action Popup - Disabled if game finished or force hidden */}
-          {!gameFinished && !forceHideActions && (
+          {!gameFinished && (
             <ActionPopup
               gameState={gameState}
               currentUserId={currentUserId}

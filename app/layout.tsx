@@ -27,11 +27,11 @@ const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pokronline.com";
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
   title: {
-    default: "pokronline - Learn & Play Poker",
+    default: "POKROnline - Learn & Play Poker",
     template: "%s | Pokr",
   },
   description:
-    "Join pokronline for fast-paced, real-time Texas Holdem action. Suitable for players of all skill levels. Learn the rules, practice with curated puzzles, and play online to test your skill. No download required.",
+    "Join POKROnline for fast-paced, real-time Texas Holdem action. Suitable for players of all skill levels. Learn the rules, practice with curated puzzles, and play online to test your skill. No download required.",
   keywords: [
     "poker",
     "pokr",
@@ -51,14 +51,14 @@ export const metadata: Metadata = {
     "poker tricks",
     "poker secrets",
   ],
-  applicationName: "pokronline",
-  authors: [{ name: "pokronline Team" }],
+  applicationName: "POKROnline",
+  authors: [{ name: "POKROnline Team" }],
   openGraph: {
     type: "website",
     locale: "en_US",
     url: BASE_URL,
-    siteName: "pokronline",
-    title: "pokronline - Learn & Play Poker",
+    siteName: "POKROnline",
+    title: "POKROnline - Learn & Play Poker",
     description: "Play Texas Holdem instantly in your browser.",
     images: [
       {
@@ -71,7 +71,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "pokronline - Learn & Play Poker",
+    title: "POKROnline - Learn & Play Poker",
     description: "Real-time multiplayer poker in your browser.",
   },
   icons: {
@@ -131,7 +131,7 @@ export default async function RootLayout({
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "VideoGame",
-              name: "pokronline",
+              name: "POKROnline",
               genre: [
                 "Card Game",
                 "Poker",
