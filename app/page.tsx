@@ -137,7 +137,7 @@ export default function HomePage() {
               textShadow: `0 0 2.5rem ${primaryColor}CC, 0 0 5rem ${primaryColor}80`,
             }}
           >
-            PokerOnline
+            POKROnline
           </motion.h1>
 
           <motion.p
