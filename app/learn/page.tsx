@@ -65,12 +65,18 @@ export default function LearnPage() {
       <div className="relative z-10">
         <div className="container mx-auto p-6 max-w-4xl">
           <h1 className="text-3xl font-bold mb-6">Learn Poker</h1>
-          <div className="mb-6">
+          <div className="mb-6 flex gap-4">
             <Link 
               href="/tools/range-analysis" 
               className="text-blue-400 hover:text-blue-300 underline"
             >
               Range Analysis Tool →
+            </Link>
+            <Link 
+              href="/tools/equity-calculator" 
+              className="text-blue-400 hover:text-blue-300 underline"
+            >
+              Equity Calculator →
             </Link>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">

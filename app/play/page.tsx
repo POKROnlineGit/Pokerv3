@@ -74,19 +74,15 @@ export default function PlayPage() {
         return res.json();
       })
       .then((data) => {
-        console.log("[PlayPage] API Response:", data); // Debug log
         if (Array.isArray(data)) {
-          console.log("[PlayPage] Raw variants count:", data.length); // Debug log
           // Filter out invalid variants (Safety Check)
           const validVariants = data.filter((v) => {
             const isValid =
               v.id && v.slug && v.name && typeof v.max_players === "number";
             if (!isValid) {
-              console.warn("[PlayPage] Invalid variant:", v); // Debug log
             }
             return isValid;
           });
-          console.log("[PlayPage] Valid variants count:", validVariants.length); // Debug log
           setVariants(validVariants);
 
           if (validVariants.length < data.length) {

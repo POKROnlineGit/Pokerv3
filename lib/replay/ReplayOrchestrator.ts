@@ -90,7 +90,9 @@ function createConfigFromVariant(
   // Use provided config if available, otherwise use defaults based on variant
   if (providedConfig) {
     return {
-      maxPlayers: providedConfig.maxPlayers || (variant === "heads_up" ? 2 : variant === "six_max" ? 6 : 9),
+      maxPlayers:
+        providedConfig.maxPlayers ||
+        (variant === "heads_up" ? 2 : variant === "six_max" ? 6 : 9),
       blinds: providedConfig.blinds || { small: 1, big: 2 },
       buyIn: providedConfig.buyIn || 0,
       variantSlug: providedConfig.variantSlug || variant,
@@ -121,9 +123,12 @@ export class ReplayOrchestrator {
 
   constructor(history: ReplayInput, playerNames?: Record<string, string>) {
     this.history = history;
-    
+
     // Create config object from variant string or use provided config
-    const engineConfig = createConfigFromVariant(history.variant, history.config);
+    const engineConfig = createConfigFromVariant(
+      history.variant,
+      history.config
+    );
     this.engine = new TexasHoldemEngine(history.gameId, engineConfig);
 
     // 1. Rigid Seat Mapping
@@ -267,14 +272,41 @@ export class ReplayOrchestrator {
         // VALIDATE: Check engine state before processing
         const ctxBefore = this.engine.context as unknown as EngineContext;
         const currentActorSeat = ctxBefore.currentActorSeat;
+        const gameStatus = ctxBefore.status;
 
-        // If currentActorSeat is null, the round has completed - skip non-transition actions
-        if (currentActorSeat === null) {
+        // FIX: Skip actions if game is finished or complete
+        // The engine will reject these actions anyway
+        if (gameStatus === "finished" || gameStatus === "complete") {
+          // Skip all actions when game is finished
+          // Transitions should have already been processed
           continue;
         }
 
-        // Validate that the action's seat matches the current actor
-        if (currentActorSeat !== seat) {
+        // FIX: Allow transitions and reveals even when currentActorSeat is null (all-in runouts)
+        // Only skip betting actions when currentActorSeat is null
+        if (currentActorSeat === null) {
+          // For all-in runouts, we need to process reveal actions and transitions
+          // but skip betting actions
+          if (
+            engineActionType === "fold" ||
+            engineActionType === "check" ||
+            engineActionType === "call" ||
+            engineActionType === "bet"
+          ) {
+            continue;
+          }
+          // Allow reveal actions to proceed (for showdown)
+        }
+
+        // Validate that the action's seat matches the current actor (only for betting actions)
+        if (
+          currentActorSeat !== null &&
+          currentActorSeat !== seat &&
+          (engineActionType === "fold" ||
+            engineActionType === "check" ||
+            engineActionType === "call" ||
+            engineActionType === "bet")
+        ) {
           console.error(
             `[ReplayOrchestrator] Seat mismatch at action ${actionIndex}:`,
             {
@@ -340,8 +372,9 @@ export class ReplayOrchestrator {
 
         // EXECUTE: Auto-Transitions (Engine-Driven)
         // We listen for the engine requesting a transition via effects
-        if (result.effects) {
-          for (const effect of result.effects) {
+        // Helper function to process transitions recursively
+        const processTransitions = (effects: any[]): void => {
+          for (const effect of effects) {
             if (effect.type === "SCHEDULE_TRANSITION") {
               const targetPhase = effect.targetPhase;
 
@@ -371,8 +404,19 @@ export class ReplayOrchestrator {
                 state: this.captureState(),
                 timestamp: (currentTimestamp += 100),
               });
+
+              // FIX: After a transition, check if there are more transitions needed
+              // This handles the case where all streets need to be dealt in sequence
+              // during an all-in runout
+              if (transResult.effects && transResult.effects.length > 0) {
+                processTransitions(transResult.effects);
+              }
             }
           }
+        };
+
+        if (result.effects) {
+          processTransitions(result.effects);
         }
       }
 

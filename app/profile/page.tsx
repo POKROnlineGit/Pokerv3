@@ -17,6 +17,17 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [hands, setHands] = useState<any[]>([]);
+  const [stats, setStats] = useState<{
+    hands_played: number;
+    hands_won: number;
+    vpip_count: number;
+    pfr_count: number;
+  }>({
+    hands_played: 0,
+    hands_won: 0,
+    vpip_count: 0,
+    pfr_count: 0,
+  });
 
   // Get theme colors
   const primaryColor = currentTheme.colors.primary[0];
@@ -49,6 +60,42 @@ export default function ProfilePage() {
     };
     loadProfile();
   }, [supabase, router]);
+
+  // Fetch Player Stats via RPC
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchStats = async () => {
+      const { data, error } = await supabase.rpc("get_player_stats", {
+        target_player_id: user.id,
+      });
+
+      if (error) {
+        console.error("Error fetching player stats:", error);
+        return;
+      }
+
+      if (data) {
+        // Debug: Log the data to see what we're getting
+        console.log("RPC Stats Data:", data);
+        console.log("VPIP count type:", typeof data.vpip_count, "value:", data.vpip_count);
+        console.log("PFR count type:", typeof data.pfr_count, "value:", data.pfr_count);
+        
+        // Handle potential boolean values or different field names
+        const vpipValue = data.vpip_count !== undefined ? Number(data.vpip_count) : (data.vpip !== undefined ? Number(data.vpip) : 0);
+        const pfrValue = data.pfr_count !== undefined ? Number(data.pfr_count) : (data.pfr !== undefined ? Number(data.pfr) : 0);
+        
+        setStats({
+          hands_played: Number(data.hands_played) || 0,
+          hands_won: Number(data.hands_won) || 0,
+          vpip_count: vpipValue,
+          pfr_count: pfrValue,
+        });
+      }
+    };
+
+    fetchStats();
+  }, [user, supabase]);
 
   // Fetch Hand History (Client-Side)
   // The RLS policy on 'hand_histories' automatically ensures users only see their own hands.
@@ -93,22 +140,6 @@ export default function ProfilePage() {
       })
     : "Unknown";
 
-  // Placeholder stats (to be replaced with real data later)
-  const stats = {
-    handsPlayed: 0,
-    winRate: "0%",
-    biggestPotWon: 0,
-    bestHand: "N/A",
-  };
-
-  // Placeholder recent games (to be replaced with real data later)
-  const recentGames: Array<{
-    id: string;
-    date: string;
-    result: string;
-    chips: number;
-  }> = [];
-
   return (
     <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
@@ -152,77 +183,48 @@ export default function ProfilePage() {
 
             <TabsContent value="stats" className="space-y-4 mt-4">
               {/* Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="bg-card">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Hands Played</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold">{stats.handsPlayed.toLocaleString()}</p>
-                  </CardContent>
-                </Card>
+              {(() => {
+                // Calculate percentages
+                const vpip = stats.hands_played > 0 ? (stats.vpip_count / stats.hands_played * 100) : 0;
+                const pfr = stats.hands_played > 0 ? (stats.pfr_count / stats.hands_played * 100) : 0;
 
-                <Card className="bg-card">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Win Rate</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold">{stats.winRate}</p>
-                  </CardContent>
-                </Card>
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Card className="bg-card">
+                      <CardHeader>
+                        <CardTitle className="text-lg">Hands Played / Hands Won</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-3xl font-bold">
+                          {stats.hands_played.toLocaleString()} / {stats.hands_won.toLocaleString()}
+                        </p>
+                      </CardContent>
+                    </Card>
 
-                <Card className="bg-card">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Biggest Pot Won</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold">
-                      {stats.biggestPotWon.toLocaleString()} chips
-                    </p>
-                  </CardContent>
-                </Card>
+                    <Card className="bg-card">
+                      <CardHeader>
+                        <CardTitle className="text-lg">VPIP</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-3xl font-bold">
+                          {vpip.toFixed(1)}%
+                        </p>
+                      </CardContent>
+                    </Card>
 
-                <Card className="bg-card">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Best Hand</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold">{stats.bestHand}</p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Recent Games */}
-              <Card className="bg-card">
-                <CardHeader>
-                  <CardTitle>Recent Games</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {recentGames.length > 0 ? (
-                    <div className="space-y-2">
-                      {recentGames.map((game) => (
-                        <div
-                          key={game.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                        >
-                          <div>
-                            <p className="font-medium">{game.date}</p>
-                            <p className="text-sm text-muted-foreground">{game.result}</p>
-                          </div>
-                          <p className="font-semibold">
-                            {game.chips > 0 ? "+" : ""}
-                            {game.chips.toLocaleString()} chips
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-muted-foreground text-center py-8">
-                      No recent games. Start playing to see your game history!
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
+                    <Card className="bg-card">
+                      <CardHeader>
+                        <CardTitle className="text-lg">PFR</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-3xl font-bold">
+                          {pfr.toFixed(1)}%
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                );
+              })()}
             </TabsContent>
 
             <TabsContent value="hands" className="mt-4">
