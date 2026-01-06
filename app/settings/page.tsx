@@ -36,8 +36,8 @@ export default function SettingsPage() {
     return (
       <div className="min-h-screen relative">
         <div className="relative z-10">
-          <div className="container mx-auto p-6 max-w-4xl flex items-center justify-center min-h-screen">
-            <div className="text-white">Loading...</div>
+          <div className="container mx-auto py-6 px-14 max-w-7xl flex items-center justify-center min-h-screen">
+          <div className="text-white">Loading...</div>
           </div>
         </div>
       </div>
@@ -50,7 +50,7 @@ export default function SettingsPage() {
     <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
-        <div className="container mx-auto p-6 max-w-4xl">
+        <div className="container mx-auto py-6 px-14 max-w-7xl">
           <h1 className="text-3xl font-bold mb-6">Settings</h1>
           
           {/* Tabs */}
@@ -85,14 +85,14 @@ export default function SettingsPage() {
 
             {isSuperUser && (
               <TabsContent value="debug" className="mt-4">
-                <SettingsForm
-                  initialUsername={profile?.username || ''}
-                  initialTheme={profile?.theme || 'light'}
-                  initialColorTheme={profile?.color_theme || 'emerald_felt'}
+          <SettingsForm
+            initialUsername={profile?.username || ''}
+            initialTheme={profile?.theme || 'light'}
+            initialColorTheme={profile?.color_theme || 'emerald_felt'}
                   isSuperUser={isSuperUser}
-                  initialDebugMode={profile?.debug_mode || false}
+            initialDebugMode={profile?.debug_mode || false}
                   tab="debug"
-                />
+          />
               </TabsContent>
             )}
           </Tabs>

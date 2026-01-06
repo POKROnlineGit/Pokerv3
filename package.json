@@ -41,7 +41,6 @@
     "next": "^16.1.1",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "@radix-ui/react-popover": "^1.0.7",
     "recharts": "^2.10.3",
     "socket.io-client": "^4.7.5",
     "tailwind-merge": "^2.2.0",

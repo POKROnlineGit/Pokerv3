@@ -332,11 +332,11 @@ export default function FriendsPage() {
     <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
-        <div className="container mx-auto p-6 max-w-4xl">
+        <div className="container mx-auto py-6 px-14 max-w-7xl">
         <h1 className="text-3xl font-bold mb-6">Friends</h1>
 
         {/* Search Bar */}
-        <Card className="mb-6 bg-card">
+        <Card className="mb-6 bg-card/50 backdrop-blur-sm border">
         <CardHeader>
           <CardTitle>Add Friend</CardTitle>
         </CardHeader>
@@ -418,7 +418,7 @@ export default function FriendsPage() {
         </TabsList>
 
         <TabsContent value="friends" className="mt-4">
-          <Card className="bg-card">
+          <Card className="bg-card/50 backdrop-blur-sm border">
             <CardHeader>
               <CardTitle>Your Friends</CardTitle>
             </CardHeader>
@@ -430,7 +430,7 @@ export default function FriendsPage() {
                   {friends.map((friend) => (
                     <div
                       key={friend.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className="flex items-center justify-between p-3 border rounded-lg bg-card"
                     >
                       <div className="flex items-center gap-3">
                         <Users className="h-5 w-5 text-muted-foreground" />
@@ -465,7 +465,7 @@ export default function FriendsPage() {
         </TabsContent>
 
         <TabsContent value="pending" className="mt-4">
-          <Card className="bg-card">
+          <Card className="bg-card/50 backdrop-blur-sm border">
             <CardHeader>
               <CardTitle>Pending Friend Requests</CardTitle>
             </CardHeader>
@@ -477,7 +477,7 @@ export default function FriendsPage() {
                   {pendingRequests.map((request) => (
                     <div
                       key={request.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className="flex items-center justify-between p-3 border rounded-lg bg-card"
                     >
                       <div className="flex items-center gap-3">
                         <Users className="h-5 w-5 text-muted-foreground" />

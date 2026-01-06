@@ -10,10 +10,11 @@ export function ThemeBackground() {
 
   return (
     <div
-      className="fixed inset-0 z-0 overflow-hidden pointer-events-none"
+      className="fixed inset-0 -z-50 overflow-hidden pointer-events-none"
       style={{ 
         willChange: "contents",
         backgroundColor: backgroundColor,
+        zIndex: -50,
       }}
     />
   )

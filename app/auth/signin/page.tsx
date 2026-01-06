@@ -69,11 +69,11 @@ export default function SignInPage() {
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
     });
     if (error) {
       setError(error.message);
@@ -128,7 +128,7 @@ export default function SignInPage() {
               className="h-16 w-16 object-contain"
               priority
             />
-          </div>
+      </div>
           <CardTitle className="text-2xl font-bold">Sign In</CardTitle>
           <CardDescription>Welcome back to the table</CardDescription>
         </CardHeader>
@@ -150,10 +150,10 @@ export default function SignInPage() {
           <form onSubmit={handleEmailSignIn} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="you@example.com" 
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -161,31 +161,31 @@ export default function SignInPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input 
-                id="password" 
-                type="password" 
+              <Input
+                id="password"
+                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
-            <Button 
-              type="submit" 
+              <Button 
+                type="submit" 
               className="w-full" 
-              disabled={loading}
-              style={{
-                backgroundColor: accentColor,
-                color: 'white',
-              }}
-              onMouseEnter={(e) => {
+                disabled={loading}
+                style={{
+                  backgroundColor: accentColor,
+                  color: 'white',
+                }}
+                onMouseEnter={(e) => {
                 e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || accentColor;
-              }}
-              onMouseLeave={(e) => {
+                }}
+                onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = accentColor;
-              }}
-            >
+                }}
+              >
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Sign In"}
-            </Button>
+              </Button>
           </form>
 
           <div className="relative my-4">
@@ -197,8 +197,8 @@ export default function SignInPage() {
             </div>
           </div>
 
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="w-full h-12 text-base"
             onClick={handleGoogleSignIn}
             disabled={loading}

@@ -124,7 +124,7 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen relative">
         <div className="relative z-10">
-          <div className="container mx-auto p-6 max-w-4xl flex items-center justify-center min-h-screen">
+          <div className="container mx-auto py-6 px-14 max-w-7xl flex items-center justify-center min-h-screen">
             <div className="text-white">Loading...</div>
           </div>
         </div>
@@ -144,10 +144,10 @@ export default function ProfilePage() {
     <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
-        <div className="container mx-auto p-6 max-w-4xl">
+        <div className="container mx-auto py-6 px-14 max-w-7xl h-[calc(100vh-3rem)] flex flex-col">
           <h1 className="text-3xl font-bold mb-6">Profile</h1>
           {/* Profile Header */}
-          <Card className="mb-6 bg-card">
+          <Card className="mb-6 bg-card/50 backdrop-blur-sm border flex-shrink-0">
             <CardHeader>
               <div className="flex items-center gap-4">
                 <div className="p-4 bg-primary/10 rounded-full">
@@ -175,13 +175,13 @@ export default function ProfilePage() {
           </Card>
 
           {/* Tabs */}
-          <Tabs defaultValue="stats" className="w-full">
-            <TabsList>
+          <Tabs defaultValue="stats" className="w-full flex-1 flex flex-col min-h-0">
+            <TabsList className="flex-shrink-0 w-fit">
               <TabsTrigger value="stats">Stats</TabsTrigger>
               <TabsTrigger value="hands">Hands</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="stats" className="space-y-4 mt-4">
+            <TabsContent value="stats" className="space-y-4 mt-4 flex-shrink-0">
               {/* Stats Grid */}
               {(() => {
                 // Calculate percentages
@@ -190,7 +190,7 @@ export default function ProfilePage() {
 
                 return (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Card className="bg-card">
+                    <Card className="bg-card/50 backdrop-blur-sm border">
                       <CardHeader>
                         <CardTitle className="text-lg">Hands Played / Hands Won</CardTitle>
                       </CardHeader>
@@ -201,7 +201,7 @@ export default function ProfilePage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="bg-card">
+                    <Card className="bg-card/50 backdrop-blur-sm border">
                       <CardHeader>
                         <CardTitle className="text-lg">VPIP</CardTitle>
                       </CardHeader>
@@ -212,7 +212,7 @@ export default function ProfilePage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="bg-card">
+                    <Card className="bg-card/50 backdrop-blur-sm border">
                       <CardHeader>
                         <CardTitle className="text-lg">PFR</CardTitle>
                       </CardHeader>
@@ -227,7 +227,7 @@ export default function ProfilePage() {
               })()}
             </TabsContent>
 
-            <TabsContent value="hands" className="mt-4">
+            <TabsContent value="hands" className="mt-4 flex-1 flex flex-col min-h-0">
               {user ? (
                 <HandHistoryList hands={hands} currentUserId={user.id} />
               ) : (

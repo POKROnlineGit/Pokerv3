@@ -132,7 +132,7 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
   }
 
   return (
-    <Card className="bg-card">
+    <Card className="bg-card/50 backdrop-blur-sm border">
       <CardHeader>
         <CardTitle>{getCardTitle()}</CardTitle>
         <CardDescription>
@@ -151,6 +151,7 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
                 required
                 minLength={3}
                 maxLength={20}
+                className="bg-card"
               />
               <p className="text-sm text-muted-foreground">
                 Your username must be unique and between 3-20 characters
@@ -185,7 +186,7 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
                     setColorThemeLocal(value)
                   }}
                 >
-                  <SelectTrigger id="color-theme" className="w-full">
+                  <SelectTrigger id="color-theme" className="w-full bg-card">
                     <div className="flex items-center gap-2">
                       <div className="flex gap-1">
                         {(() => {
