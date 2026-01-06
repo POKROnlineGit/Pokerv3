@@ -37,7 +37,7 @@ export default function SignInPage() {
       })
 
       if (error) throw error
-      router.push('/play')
+      router.push('/play/online')
       router.refresh()
     } catch (err: any) {
       setError(err.message)

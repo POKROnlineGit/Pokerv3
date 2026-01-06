@@ -349,7 +349,7 @@ export default function GamePage() {
         const payload: GameFinishedPayload = {
           reason: data.reason || data.message || "GAME_ENDED",
           winnerId: null,
-          returnUrl: "/play",
+          returnUrl: "/play/online",
           timestamp: new Date().toISOString(),
         };
         setGameFinished(payload);
@@ -910,7 +910,7 @@ export default function GamePage() {
           setGameFinished({
             reason: "You have been eliminated",
             winnerId: null,
-            returnUrl: "/play",
+            returnUrl: "/play/online",
             timestamp: new Date().toISOString(),
             stats: undefined,
           });
@@ -951,7 +951,7 @@ export default function GamePage() {
           const payload: GameFinishedPayload = data.payload || {
             reason: data.reason || data.message || "The game has ended.",
             winnerId: data.winnerId ?? null,
-            returnUrl: data.returnUrl || "/play",
+            returnUrl: data.returnUrl || "/play/online",
             timestamp: data.timestamp || new Date().toISOString(),
             stats: data.stats,
           };
@@ -981,7 +981,7 @@ export default function GamePage() {
           const payload: GameFinishedPayload = data.payload || {
             reason: data.reason || data.message || "The game has ended.",
             winnerId: data.winnerId ?? null,
-            returnUrl: data.returnUrl || "/play",
+            returnUrl: data.returnUrl || "/play/online",
             timestamp: data.timestamp || new Date().toISOString(),
             stats: data.stats,
           };
@@ -1171,7 +1171,7 @@ export default function GamePage() {
             mounted = false;
             // Defer redirect to allow React to finish current render cycle
             setTimeout(() => {
-              router.replace("/play");
+              router.replace("/play/online");
             }, 0);
           }
         } else if (errorMessage.includes("Not a player in this game")) {
@@ -1180,7 +1180,7 @@ export default function GamePage() {
           mounted = false;
           // Defer redirect to allow React to finish current render cycle
           setTimeout(() => {
-            router.replace("/play");
+            router.replace("/play/online");
           }, 0);
         }
       });
@@ -1212,7 +1212,7 @@ export default function GamePage() {
           // Mark as unmounted to prevent state updates during redirect
           mounted = false;
           setTimeout(() => {
-            router.replace("/play");
+            router.replace("/play/online");
           }, 0);
         }
       }
@@ -1390,7 +1390,7 @@ export default function GamePage() {
               disconnectSocket();
             }
             setGameFinished(null);
-            router.push("/play");
+            router.push("/play/online");
           }
         }}
       >
@@ -1609,7 +1609,7 @@ export default function GamePage() {
                 setGameFinished(null);
 
                 // Redirect to /play (lobby)
-                router.push("/play");
+                router.push("/play/online");
               }}
               className="w-full"
             >

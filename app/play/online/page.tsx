@@ -5,11 +5,11 @@ import { useRouter, usePathname } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useSocket } from "@/lib/socketClient";
-import { useToast, useLocalGameStore } from "@/lib/hooks";
+import { useToast } from "@/lib/hooks";
 import { useQueue } from "@/components/providers/QueueProvider";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { MotionCard } from "@/components/motion/MotionCard";
-import { Users, User, Play, Bot } from "lucide-react";
+import { Users, User, Play } from "lucide-react";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 
 // Keep this route dynamic so it always reflects current game state
@@ -33,10 +33,9 @@ interface GameVariant {
   };
 }
 
-export default function PlayPage() {
+export default function PlayOnlinePage() {
   const router = useRouter();
   const pathname = usePathname();
-  const startLocalGame = useLocalGameStore((state) => state.startLocalGame);
   const { toast } = useToast();
   const { inQueue, queueType } = useQueue();
   const { currentTheme } = useTheme();
@@ -96,7 +95,7 @@ export default function PlayPage() {
           throw new Error(data.error);
         } else {
           // Handle case where response is not an array and has no error
-          console.error("[PlayPage] Unexpected response format:", data);
+          console.error("[PlayOnlinePage] Unexpected response format:", data);
           setVariants([]);
         }
         setIsLoadingVariants(false);
@@ -130,7 +129,7 @@ export default function PlayPage() {
           }
         }
       } catch (err) {
-        console.error("[PlayPage] Failed to fetch profile:", err);
+        console.error("[PlayOnlinePage] Failed to fetch profile:", err);
       }
     };
     fetchProfile();
@@ -157,10 +156,10 @@ export default function PlayPage() {
     };
   }, [socket]);
 
-  // 3. Check for active session (runs on mount and when navigating to /play)
+  // 3. Check for active session (runs on mount and when navigating to /play/online)
   useEffect(() => {
-    if (!socket || pathname !== "/play") {
-      // Reset game check state when not on /play page
+    if (!socket || pathname !== "/play/online") {
+      // Reset game check state when not on /play/online page
       setIsCheckingGame(false);
       return;
     }
@@ -261,10 +260,10 @@ export default function PlayPage() {
     };
   }, [socket, router, pathname]);
 
-  // 4. Check queue status when landing on /play page
+  // 4. Check queue status when landing on /play/online page
   useEffect(() => {
-    if (!socket || pathname !== "/play") {
-      // Reset queue check state when not on /play page
+    if (!socket || pathname !== "/play/online") {
+      // Reset queue check state when not on /play/online page
       setIsCheckingQueue(false);
       return;
     }
@@ -279,12 +278,12 @@ export default function PlayPage() {
       // Mark queue check as complete
       setIsCheckingQueue(false);
       // QueueProvider will handle setting the status and state
-      // This just ensures we check when landing on /play
+      // This just ensures we check when landing on /play/online
     };
 
     socket.on("queue_status", handleQueueStatus);
 
-    // Check queue status when landing on /play page
+    // Check queue status when landing on /play/online page
     setIsCheckingQueue(true);
     if (socket.connected) {
       socket.emit("check_queue_status");
@@ -312,10 +311,10 @@ export default function PlayPage() {
     };
   }, [socket, pathname]);
 
-  // 5. Redirect if already in queue (only on /play page)
+  // 5. Redirect if already in queue (only on /play/online page)
   useEffect(() => {
-    // Only redirect if we're on /play page and have queue info
-    if (pathname === "/play" && inQueue && queueType) {
+    // Only redirect if we're on /play/online page and have queue info
+    if (pathname === "/play/online" && inQueue && queueType) {
       router.push(`/play/queue?type=${queueType}`);
     }
   }, [inQueue, queueType, router, pathname]);
@@ -378,12 +377,6 @@ export default function PlayPage() {
     if (activeGameId) router.push(`/play/game/${activeGameId}`);
   };
 
-  const handlePlayLocal = () => {
-    const gameId = `local-${crypto.randomUUID()}`;
-    startLocalGame();
-    router.push(`/play/local/${gameId}`);
-  };
-
   // Buttons disabled until BOTH checks complete AND neither game nor queue is active
   const isButtonDisabled =
     inGame || inQueue || isChecking || !isSocketConnected;
@@ -393,7 +386,7 @@ export default function PlayPage() {
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
         <div className="container mx-auto p-6 max-w-4xl">
-          <h1 className="text-3xl font-bold mb-6">Play Poker</h1>
+          <h1 className="text-3xl font-bold mb-6">Play Online</h1>
           <div className="space-y-8">
             {/* Cash Games Section */}
             <section>
@@ -491,11 +484,6 @@ export default function PlayPage() {
                                     </p>
                                   </div>
                                   <div className="flex gap-2">
-                                    {variant.category === "tournament" && (
-                                      <span className="px-2 py-1 rounded text-xs bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 whitespace-nowrap">
-                                        Tournament
-                                      </span>
-                                    )}
                                     {variant.category === "cash" && (
                                       <span className="px-2 py-1 rounded text-xs bg-green-500/10 text-green-500 border border-green-500/20 whitespace-nowrap">
                                         Cash
@@ -682,11 +670,6 @@ export default function PlayPage() {
                                         Tournament
                                       </span>
                                     )}
-                                    {variant.category === "cash" && (
-                                      <span className="px-2 py-1 rounded text-xs bg-green-500/10 text-green-500 border border-green-500/20 whitespace-nowrap">
-                                        Cash
-                                      </span>
-                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -766,131 +749,10 @@ export default function PlayPage() {
                 </div>
               )}
             </section>
-
-            {/* Host a Game Section */}
-            <section>
-              <div
-                className="text-white px-6 py-4 rounded-t-xl"
-                style={{
-                  background: `linear-gradient(to right, ${accentColor}, ${
-                    currentTheme.colors.accent[1] || accentColor
-                  })`,
-                }}
-              >
-                <h2 className="text-2xl font-bold">Host a Game</h2>
-                <p className="text-sm text-white/80">
-                  Play offline against AI bots
-                </p>
-              </div>
-              <div className="p-6 bg-card rounded-b-xl">
-                {inGame && activeGameId && (
-                  <div className="mb-4 flex justify-between items-center">
-                    <p className="text-sm text-muted-foreground">
-                      You have an active game. You can rejoin it here:
-                    </p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        router.push(`/play/game/${activeGameId}`);
-                      }}
-                      style={{
-                        borderColor: accentColor,
-                        color: accentColor,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = accentColor;
-                        e.currentTarget.style.color = "white";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = "transparent";
-                        e.currentTarget.style.color = accentColor;
-                      }}
-                    >
-                      Rejoin Game
-                    </Button>
-                  </div>
-                )}
-                <MotionCard
-                  className="cursor-pointer bg-card rounded-xl overflow-hidden"
-                  onClick={handlePlayLocal}
-                >
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div
-                        className="p-3 rounded-lg"
-                        style={{
-                          backgroundColor: `${accentColor}20`,
-                          color: accentColor,
-                        }}
-                      >
-                        <Bot
-                          className="h-8 w-8"
-                          style={{ color: accentColor }}
-                        />
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-semibold">Play Local</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Practice against 5 AI bots
-                        </p>
-                      </div>
-                    </div>
-                    <div className="space-y-2 text-sm text-muted-foreground mb-4">
-                      <div className="flex justify-between">
-                        <span>Mode:</span>
-                        <span className="font-medium text-foreground">
-                          Offline
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Opponents:</span>
-                        <span className="font-medium text-foreground">
-                          5 AI Bots
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Buy-in:</span>
-                        <span className="font-medium text-foreground">
-                          Free (Practice)
-                        </span>
-                      </div>
-                    </div>
-                    <Button
-                      variant="secondary"
-                      className="w-full"
-                      size="lg"
-                      style={{
-                        background: `linear-gradient(to right, ${accentColor}, ${
-                          currentTheme.colors.accent[1] || accentColor
-                        })`,
-                        color: "white",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = `linear-gradient(to right, ${
-                          currentTheme.colors.accent[1] || accentColor
-                        }, ${
-                          currentTheme.colors.accent[2] ||
-                          currentTheme.colors.accent[1] ||
-                          accentColor
-                        })`;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = `linear-gradient(to right, ${accentColor}, ${
-                          currentTheme.colors.accent[1] || accentColor
-                        })`;
-                      }}
-                    >
-                      <Bot className="mr-2 h-4 w-4" />
-                      Start Local Game
-                    </Button>
-                  </CardContent>
-                </MotionCard>
-              </div>
-            </section>
           </div>
         </div>
       </div>
     </div>
   );
 }
+

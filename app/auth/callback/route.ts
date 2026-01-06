@@ -46,7 +46,7 @@ export async function GET(request: Request) {
       }
 
       // Super user, allow access
-      return NextResponse.redirect(new URL("/play", siteUrl));
+      return NextResponse.redirect(new URL("/play/online", siteUrl));
     }
   }
 

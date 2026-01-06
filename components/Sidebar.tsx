@@ -29,11 +29,7 @@ export function Sidebar() {
   const { currentTheme } = useTheme();
   const [pendingCount, setPendingCount] = useState(0);
   const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<{
-    username: string;
-    chips: number;
-    created_at: string;
-  } | null>(null);
+  const [hoveredSubmenu, setHoveredSubmenu] = useState<string | null>(null);
 
   // Get theme colors for sidebar elements (not background)
   const primaryColor = currentTheme.colors.primary[0];
@@ -59,56 +55,9 @@ export function Sidebar() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         setUser(user);
-        // Fetch profile data
-        supabase
-          .from("profiles")
-          .select("username, chips, created_at")
-          .eq("id", user.id)
-          .single()
-          .then(({ data, error }) => {
-            if (!error && data) {
-              setProfile(data);
-            }
-          });
       }
     });
   }, [supabase]);
-
-  // Subscribe to realtime profile updates (chips, username, etc.)
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel("profile_updates")
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "profiles",
-          filter: `id=eq.${user.id}`,
-        },
-        (payload) => {
-          // Update profile state when chips or other profile data changes
-          if (payload.new) {
-            setProfile((prev) => {
-              if (!prev) return prev;
-              return {
-                ...prev,
-                username: (payload.new as any).username || prev.username,
-                chips: (payload.new as any).chips ?? prev.chips,
-                created_at: (payload.new as any).created_at || prev.created_at,
-              };
-            });
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, supabase]);
 
   useEffect(() => {
     if (!user) return;
@@ -153,6 +102,7 @@ export function Sidebar() {
     };
   }, [user, supabase]);
 
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     // Redirect to coming-soon and force a hard refresh to clear any cached state
@@ -160,8 +110,25 @@ export function Sidebar() {
   };
 
   const navItems = [
-    { href: "/play", label: "Play Poker", icon: Play },
-    { href: "/learn", label: "Learn", icon: BookOpen },
+    { 
+      href: "/play/online", 
+      label: "Play", 
+      icon: Play,
+      submenu: [
+        { href: "/play/online", label: "Play Online" },
+        { href: "/play/bots", label: "Play Bots" },
+      ]
+    },
+    { 
+      href: "/learn", 
+      label: "Study", 
+      icon: BookOpen,
+      submenu: [
+        { href: "/learn", label: "Lessons" },
+        { href: "/tools/range-analysis", label: "Range Evaluator" },
+        { href: "/tools/equity-calculator", label: "Equity Evaluator" },
+      ]
+    },
     {
       href: "/friends",
       label: "Friends",
@@ -173,7 +140,7 @@ export function Sidebar() {
 
   const sidebarVariants = {
     expanded: {
-      width: "240px",
+      width: "180px",
       transition: {
         duration: 0, // Instant transition
       },
@@ -205,7 +172,7 @@ export function Sidebar() {
 
     return (
       <div
-        className="relative w-full flex items-center"
+        className="relative w-full"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -241,107 +208,98 @@ export function Sidebar() {
 
   return (
     <motion.aside
-      className="flex flex-col h-screen border-r bg-card flex-shrink-0 z-50 overflow-visible"
+      className="relative flex flex-col h-screen border-r bg-card flex-shrink-0 z-50 overflow-visible"
       variants={sidebarVariants}
       animate={isMinimized ? "minimized" : "expanded"}
       initial={isMinimized ? "minimized" : "expanded"}
       style={{ willChange: "width" }}
     >
       <div
-        className={cn("border-b overflow-hidden", isMinimized ? "p-4" : "p-6")}
+        className={cn("border-b overflow-hidden", isMinimized ? "p-2" : "p-3")}
       >
-        <div className="relative flex items-center justify-center min-h-[36px]">
+        <div className="relative flex items-center justify-center">
           <AnimatePresence mode="wait">
-            {!isMinimized ? (
-              <motion.div
-                key="logo-full"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, transition: { duration: 0.1 } }}
-                transition={contentTransition}
-                className="flex items-center gap-3 w-full"
-              >
-                <Link href="/play" className="flex items-center gap-3 w-full">
-                  <Image
-                    src="/logo/POKROnlineLogoSVG.svg"
-                    alt="POKROnline"
-                    width={36}
-                    height={36}
-                    className="h-9 w-9 flex-shrink-0 object-contain"
-                    priority
-                  />
-                  <span className="text-2xl font-bold whitespace-nowrap text-white">
-                    POKROnline
-                  </span>
-                </Link>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="logo-icon"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, transition: { duration: 0.1 } }}
-                transition={contentTransition}
-                className="flex justify-center items-center w-full"
-              >
-                <Link href="/play" className="flex items-center justify-center">
-                  <Image
-                    src="/logo/POKROnlineLogoSVG.svg"
-                    alt="POKROnline"
-                    width={36}
-                    height={36}
-                    className="h-9 w-9 object-contain"
-                    priority
-                  />
-                </Link>
-              </motion.div>
-            )}
+            <motion.div
+              key="logo"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, transition: { duration: 0.1 } }}
+              transition={contentTransition}
+              className="flex justify-center items-center w-full"
+            >
+              <Link href="/play/online" className="flex items-center justify-center">
+                <Image
+                  src="/logo/POKROnlineLogoSVG.svg"
+                  alt="POKROnline"
+                  width={48}
+                  height={48}
+                  className="h-12 w-12 object-contain"
+                  priority
+                />
+              </Link>
+            </motion.div>
           </AnimatePresence>
         </div>
       </div>
 
-      <nav className="flex-1 flex flex-col p-4 overflow-visible min-h-0">
-        <div className="flex flex-col space-y-2 flex-shrink-0">
+      <nav className="flex-1 flex flex-col overflow-visible min-h-0">
+        <div className="flex flex-col flex-shrink-0">
           {navItems.map((item) => {
             const Icon = item.icon;
             // Check if current pathname matches the item's href
-            // For /play, also match /play/* paths (game pages, queue, etc.)
-            const isActive = item.href === "/play" 
-              ? pathname === "/play" || pathname?.startsWith("/play/")
+            // For /play/online, also match /play/* paths (game pages, queue, etc.) except /play/bots
+            // For items with submenus, also check if any submenu item is active
+            let isActive = item.href === "/play/online" 
+              ? pathname === "/play/online" || (pathname?.startsWith("/play/") && !pathname?.startsWith("/play/bots") && pathname !== "/play")
               : pathname === item.href || pathname?.startsWith(`${item.href}/`);
-            return (
-              <Tooltip key={item.href} text={item.label} show={isMinimized}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg transition-colors min-w-0 w-full",
-                    isMinimized
-                      ? "justify-center px-3 py-3"
-                      : "justify-between px-4 py-3",
-                    isActive ? "text-white" : "text-white/70 hover:text-white"
-                  )}
-                  style={
-                    isActive
-                      ? {
-                          backgroundColor: `${accentColor}CC`,
-                        }
-                      : ({
-                          "--hover-bg": `${accentColor}CC`,
-                        } as React.CSSProperties)
+            
+            // If item has submenu, check if any submenu item is active
+            if (item.submenu && !isActive) {
+              isActive = item.submenu.some(
+                (subItem) => {
+                  // For Play Online, also match game pages and queue
+                  if (subItem.href === "/play/online") {
+                    return pathname === "/play/online" || 
+                           pathname?.startsWith("/play/game/") || 
+                           pathname?.startsWith("/play/queue") ||
+                           (pathname?.startsWith("/play/") && !pathname?.startsWith("/play/bots") && pathname !== "/play");
                   }
-                  onMouseEnter={(e) => {
-                    // Only apply hover effect if not active
-                    if (!isActive) {
-                      e.currentTarget.style.backgroundColor = `${accentColor}CC`;
+                  return pathname === subItem.href || pathname?.startsWith(`${subItem.href}/`);
+                }
+              );
+            }
+            
+            return (
+              <Tooltip key={item.href} text={item.label} show={isMinimized && !item.submenu}>
+                <div className="relative w-full">
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 min-w-0 w-full text-white hover:bg-white/5 transition-colors",
+                      isMinimized
+                        ? "justify-center px-3 py-3"
+                        : "justify-between px-4 py-3"
+                    )}
+                    style={
+                      isActive
+                        ? {
+                            backgroundColor: `${accentColor}CC`,
+                          }
+                        : undefined
                     }
-                  }}
-                  onMouseLeave={(e) => {
-                    // Only remove hover effect if not active
-                    if (!isActive) {
-                      e.currentTarget.style.backgroundColor = "transparent";
-                    }
-                  }}
-                >
+                    onMouseEnter={() => {
+                      if (item.submenu) {
+                        setHoveredSubmenu(item.href);
+                      } else {
+                        setHoveredSubmenu(null);
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      if (item.submenu) {
+                        setHoveredSubmenu(null);
+                      }
+                    }}
+                  >
                   <div
                     className={cn(
                       "flex items-center",
@@ -350,15 +308,9 @@ export function Sidebar() {
                   >
                     <Icon className="h-5 w-5 flex-shrink-0" />
                     {!isMinimized && (
-                      <motion.span
-                        initial={{ opacity: 0, width: 0 }}
-                        animate={{ opacity: 1, width: "auto" }}
-                        exit={{ opacity: 0, width: 0 }}
-                        transition={contentTransition}
-                        className="whitespace-nowrap overflow-hidden"
-                      >
+                      <span className="whitespace-nowrap overflow-hidden">
                         {item.label}
-                      </motion.span>
+                      </span>
                     )}
                   </div>
                   {!isMinimized &&
@@ -368,69 +320,49 @@ export function Sidebar() {
                         {item.badge}
                       </Badge>
                     )}
-                </Link>
+                  </Link>
+                </div>
               </Tooltip>
             );
           })}
-          {/* Profile Link - At bottom of nav */}
-          {profile && (() => {
-            const isProfileActive = pathname === "/profile" || pathname?.startsWith("/profile/");
-            return (
-              <Tooltip
-                text={`${
-                  profile.username
-                } - ${profile.chips.toLocaleString()} chips`}
-                show={isMinimized}
-              >
-                <Link
-                  href="/profile"
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg transition-colors min-w-0 w-full",
-                    isMinimized ? "justify-center px-3 py-3" : "px-4 py-3",
-                    isProfileActive ? "text-white" : "text-white/70 hover:text-white"
-                  )}
-                  style={
-                    isProfileActive
-                      ? {
-                          backgroundColor: `${accentColor}CC`,
-                        }
-                      : ({
-                          "--hover-bg": `${accentColor}CC`,
-                        } as React.CSSProperties)
-                  }
-                  onMouseEnter={(e) => {
-                    if (!isProfileActive) {
-                      e.currentTarget.style.backgroundColor = `${accentColor}CC`;
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isProfileActive) {
-                      e.currentTarget.style.backgroundColor = "transparent";
-                    }
-                  }}
-              >
-                <UserCircle className="h-6 w-6 flex-shrink-0" />
-                {!isMinimized && (
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">
-                      {profile.username}
-                    </div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {profile.chips.toLocaleString()} chips • Joined:{" "}
-                      {new Date(profile.created_at).toLocaleDateString(
-                        "en-US",
-                        {
-                          month: "short",
-                          day: "numeric",
-                        }
-                      )}
-                    </div>
-                  </div>
+          {/* Profile Link */}
+          {user && (
+            <Tooltip
+              text="Profile"
+              show={isMinimized}
+            >
+              <Link
+                href="/profile"
+                className={cn(
+                  "flex items-center gap-3 min-w-0 w-full text-white hover:bg-white/5 transition-colors",
+                  isMinimized
+                    ? "justify-center px-3 py-3"
+                    : "justify-between px-4 py-3"
                 )}
+                style={
+                  pathname === "/profile" || pathname?.startsWith("/profile/")
+                    ? {
+                        backgroundColor: `${accentColor}CC`,
+                      }
+                    : undefined
+                }
+              >
+                <div
+                  className={cn(
+                    "flex items-center",
+                    isMinimized ? "justify-center" : "gap-3"
+                  )}
+                >
+                  <UserCircle className="h-5 w-5 flex-shrink-0" />
+                  {!isMinimized && (
+                    <span className="whitespace-nowrap overflow-hidden">
+                      Profile
+                    </span>
+                  )}
+                </div>
               </Link>
             </Tooltip>
-            );
-          })()}
+          )}
         </div>
 
         {/* Toggle Button - At bottom of nav with space */}
@@ -442,23 +374,11 @@ export function Sidebar() {
             <button
               onClick={toggleSidebar}
               className={cn(
-                "flex items-center gap-3 rounded-lg transition-colors min-w-0 w-full",
+                "flex items-center gap-3 min-w-0 w-full text-white hover:bg-white/5 transition-colors",
                 isMinimized
                   ? "justify-center px-3 py-3"
-                  : "justify-start px-4 py-3",
-                "text-white/70 hover:text-white"
+                  : "justify-start px-4 py-3"
               )}
-              style={
-                {
-                  "--hover-bg": `${accentColor}CC`,
-                } as React.CSSProperties
-              }
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = `${accentColor}CC`;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "transparent";
-              }}
             >
               <div
                 className={cn(
@@ -471,15 +391,9 @@ export function Sidebar() {
                 ) : (
                   <>
                     <ChevronLeft className="h-5 w-5 flex-shrink-0" />
-                    <motion.span
-                      initial={{ opacity: 0, width: 0 }}
-                      animate={{ opacity: 1, width: "auto" }}
-                      exit={{ opacity: 0, width: 0 }}
-                      transition={contentTransition}
-                      className="whitespace-nowrap overflow-hidden"
-                    >
+                    <span className="whitespace-nowrap overflow-hidden">
                       Collapse
-                    </motion.span>
+                    </span>
                   </>
                 )}
               </div>
@@ -495,39 +409,75 @@ export function Sidebar() {
           <button
             onClick={handleSignOut}
             className={cn(
-              "flex items-center gap-3 rounded-lg transition-colors min-w-0 w-full",
+              "flex items-center gap-3 min-w-0 w-full text-white hover:bg-white/5 transition-colors",
               isMinimized
                 ? "justify-center px-3 py-3"
-                : "justify-start px-4 py-3",
-              "text-white/70 hover:text-white"
+                : "justify-start px-4 py-3"
             )}
-            style={
-              {
-                "--hover-bg": `${accentColor}CC`,
-              } as React.CSSProperties
-            }
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = `${accentColor}CC`;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "transparent";
-            }}
           >
             <LogOut className="h-5 w-5 flex-shrink-0" />
             {!isMinimized && (
-              <motion.span
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: "auto" }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={contentTransition}
-                className="whitespace-nowrap overflow-hidden"
-              >
+              <span className="whitespace-nowrap overflow-hidden">
                 Sign Out
-              </motion.span>
+              </span>
             )}
           </button>
         </Tooltip>
       </div>
+
+      {/* Submenu Sidebar */}
+      {hoveredSubmenu && (() => {
+        const item = navItems.find(nav => nav.href === hoveredSubmenu);
+        if (!item?.submenu) return null;
+        
+        return (
+          <aside
+            className="absolute top-0 h-full border-r bg-card flex-shrink-0 z-[9999] overflow-visible"
+            style={{ 
+              width: "180px",
+              left: "100%",
+              marginLeft: "1px"
+            }}
+            onMouseEnter={() => {
+              setHoveredSubmenu(hoveredSubmenu);
+            }}
+            onMouseLeave={() => {
+              setHoveredSubmenu(null);
+            }}
+          >
+            <nav className="flex flex-col h-full">
+              {item.submenu.map((subItem) => {
+                // For Play Online, also match game pages and queue
+                let isSubActive = pathname === subItem.href || pathname?.startsWith(`${subItem.href}/`);
+                if (subItem.href === "/play/online") {
+                  isSubActive = pathname === "/play/online" || 
+                                 pathname?.startsWith("/play/game/") || 
+                                 pathname?.startsWith("/play/queue") ||
+                                 (pathname?.startsWith("/play/") && !pathname?.startsWith("/play/bots") && pathname !== "/play");
+                }
+                return (
+                  <Link
+                    key={subItem.href}
+                    href={subItem.href}
+                    className={cn(
+                      "flex items-center px-4 py-3 min-w-0 w-full text-white hover:bg-white/5 transition-colors"
+                    )}
+                    style={
+                      isSubActive
+                        ? {
+                            backgroundColor: `${accentColor}CC`,
+                          }
+                        : undefined
+                    }
+                  >
+                    <span className="whitespace-nowrap">{subItem.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </aside>
+        );
+      })()}
     </motion.aside>
   );
 }

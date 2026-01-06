@@ -116,7 +116,7 @@ export default function QueuePage() {
     } catch (err: any) {
       // Error handled silently - user will be redirected anyway
     } finally {
-      router.push('/play');
+      router.push('/play/online');
     }
   };
 

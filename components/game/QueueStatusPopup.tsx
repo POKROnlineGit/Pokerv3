@@ -29,7 +29,7 @@ export function QueueStatusPopup({
     pathname || (typeof window !== "undefined" ? window.location.pathname : "");
 
   // Hide popup on lobby page (exact match only)
-  if (currentPath === "/play") return null;
+  if (currentPath === "/play/online") return null;
 
   // Hide popup on queue page (exact pathname match, handles /play/queue with or without query params)
   // Only check pathname, not full URL, to avoid false matches

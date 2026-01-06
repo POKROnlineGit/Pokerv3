@@ -213,7 +213,7 @@ export default function LocalGamePage() {
 
   const handleLeaveGame = () => {
     leaveLocalGame();
-    router.push("/play");
+    router.push("/play/online");
   };
 
   return (

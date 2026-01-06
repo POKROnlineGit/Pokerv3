@@ -51,7 +51,7 @@ export default function ProfilePage() {
         .single();
 
       if (error || !data) {
-        router.push("/play");
+        router.push("/play/online");
         return;
       }
 

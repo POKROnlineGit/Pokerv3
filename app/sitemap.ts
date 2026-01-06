@@ -11,7 +11,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
-      url: `${baseUrl}/play`,
+      url: `${baseUrl}/play/online`,
       lastModified: new Date(),
       changeFrequency: "always",
       priority: 0.8,

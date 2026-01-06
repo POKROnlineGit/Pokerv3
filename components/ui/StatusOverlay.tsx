@@ -14,7 +14,7 @@ export function StatusOverlay() {
   if (currentStatus?.id === "queue") {
     const currentPath =
       pathname || (typeof window !== "undefined" ? window.location.pathname : "");
-    if (currentPath === "/play" || currentPath.startsWith("/play/queue")) {
+    if (currentPath === "/play/online" || currentPath.startsWith("/play/queue")) {
       return null;
     }
   }
