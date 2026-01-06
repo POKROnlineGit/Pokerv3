@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { useDebugMode } from "@/lib/hooks";
 import { motion, AnimatePresence } from "framer-motion";
 import { getClientHandStrength } from "@backend/domain/evaluation/ClientHandEvaluator";
+// @ts-ignore - Importing from shared backend
+import { calculateEquity } from "@backend/domain/evaluation/EquityCalculator";
 
 interface PokerTableProps {
   gameState: GameState & {
@@ -88,6 +90,9 @@ export function PokerTable({
   const prevHoleCardsRef = useRef<Record<number, string[]>>({});
   const prevBetsRef = useRef<Record<number, number>>({});
   const betAnimationTimeoutsRef = useRef<Record<number, NodeJS.Timeout>>({});
+  const prevEquitiesRef = useRef<Record<number, number | undefined>>({});
+  const equityAnimationRef = useRef<Record<number, boolean>>({});
+  const equityAnimationTimeoutsRef = useRef<Record<number, NodeJS.Timeout>>({});
 
   // Calculate hand strength for hero player using client evaluator
   const heroHandStrength = useMemo(() => {
@@ -119,6 +124,83 @@ export function PokerTable({
       return null;
     }
   }, [gameState.players, gameState.communityCards, currentUserId]);
+
+  // Calculate equity for all players during runouts
+  const playerEquities = useMemo(() => {
+    // Check if we're in a runout state:
+    // - Multiple players have cards revealed (not HIDDEN)
+    // - Not showdown
+    // - Game is active (not waiting)
+    const isShowdown = gameState.currentRound === "showdown";
+    const isWaitingPhase = gameState.currentPhase === "waiting";
+    const isGameActive = !isWaitingPhase;
+
+    if (isShowdown || !isGameActive) {
+      return {}; // Don't calculate during showdown or when game is not active
+    }
+
+    // Find all active players with revealed cards (not folded, have 2 revealed cards)
+    const playersWithRevealedCards = gameState.players.filter((player) => {
+      if (player.folded || !player.holeCards || player.holeCards.length < 2) {
+        return false;
+      }
+      // Check if player has 2 revealed cards (not HIDDEN or null)
+      const revealedCards = player.holeCards.filter(
+        (c): c is string => c !== null && c !== "HIDDEN"
+      );
+      return revealedCards.length === 2;
+    });
+
+    // Need at least 2 players with revealed cards for equity calculation
+    if (playersWithRevealedCards.length < 2) {
+      return {};
+    }
+
+    // Prepare hands and board for equity calculation
+    const hands: string[][] = [];
+    const playerSeatMap: number[] = []; // Map from hands array index to player seat
+
+    playersWithRevealedCards.forEach((player) => {
+      const revealedCards = player.holeCards.filter(
+        (c): c is string => c !== null && c !== "HIDDEN"
+      );
+      if (revealedCards.length === 2) {
+        hands.push(revealedCards);
+        playerSeatMap.push(player.seat);
+      }
+    });
+
+    if (hands.length < 2) {
+      return {};
+    }
+
+    // Get community cards (board)
+    const board = (gameState.communityCards || []).filter(
+      (c): c is string => c !== null && c !== "HIDDEN"
+    );
+
+    try {
+      // Calculate equity
+      const result = calculateEquity(hands, board);
+
+      // Map equities back to player seats
+      const equities: Record<number, number> = {};
+      result.equities.forEach((equity, index) => {
+        const seat = playerSeatMap[index];
+        equities[seat] = equity;
+      });
+
+      return equities;
+    } catch (error) {
+      console.error("Error calculating equity:", error);
+      return {};
+    }
+  }, [
+    gameState.players,
+    gameState.communityCards,
+    gameState.currentRound,
+    gameState.currentPhase,
+  ]);
 
   // Update timer progress - use setInterval for smoother, more reliable updates
   useEffect(() => {
@@ -319,14 +401,60 @@ export function PokerTable({
     setBetIndicators(newIndicators);
     prevBetsRef.current = prevBets;
 
+    // Track equity animations - detect when equity appears or disappears
+    const currentEquities = playerEquities;
+    const prevEquities = prevEquitiesRef.current;
+
+    gameState.players.forEach((player) => {
+      const seat = player.seat;
+      const hasEquity = currentEquities[seat] !== undefined;
+      const hadEquity = prevEquities[seat] !== undefined;
+
+      // Detect if equity appeared or disappeared
+      if (hasEquity !== hadEquity) {
+        // Set animation flag immediately
+        equityAnimationRef.current[seat] = true;
+
+        // Clear animation flag after animation completes (500ms)
+        if (equityAnimationTimeoutsRef.current[seat]) {
+          clearTimeout(equityAnimationTimeoutsRef.current[seat]);
+        }
+        equityAnimationTimeoutsRef.current[seat] = setTimeout(() => {
+          equityAnimationRef.current[seat] = false;
+          delete equityAnimationTimeoutsRef.current[seat];
+        }, 500);
+      } else if (hasEquity && hadEquity) {
+        // Equity value changed but still exists - no animation needed
+        equityAnimationRef.current[seat] = false;
+      }
+    });
+
+    // Clean up animation flags for seats that no longer have equity
+    Object.keys(prevEquities).forEach((seatStr) => {
+      const seat = Number(seatStr);
+      if (currentEquities[seat] === undefined) {
+        delete equityAnimationRef.current[seat];
+        if (equityAnimationTimeoutsRef.current[seat]) {
+          clearTimeout(equityAnimationTimeoutsRef.current[seat]);
+          delete equityAnimationTimeoutsRef.current[seat];
+        }
+      }
+    });
+
+    prevEquitiesRef.current = currentEquities;
+
     // Cleanup function to clear timeouts on unmount
     return () => {
       Object.values(betAnimationTimeoutsRef.current).forEach((timeout) => {
         clearTimeout(timeout);
       });
       betAnimationTimeoutsRef.current = {};
+      Object.values(equityAnimationTimeoutsRef.current).forEach((timeout) => {
+        clearTimeout(timeout);
+      });
+      equityAnimationTimeoutsRef.current = {};
     };
-  }, [gameState, isLocalGame]);
+  }, [gameState, isLocalGame, playerEquities]);
   const activePlayers = gameState.players.filter(
     (p) => !p.folded && p.chips > 0
   );
@@ -810,7 +938,7 @@ export function PokerTable({
                               player.playerHandType === "Straight"
                             ? "text-orange-400"
                             : // Decent hands in yellow
-                            player.playerHandType === "Three of a Kind" ||
+                            player.playerHandType === "Set" ||
                               player.playerHandType === "Two Pair"
                             ? "text-yellow-400"
                             : // Weak hands in default color
@@ -872,6 +1000,45 @@ export function PokerTable({
                       BB
                     </div>
                   )}
+
+                  {/* Equity display - bottom right corner during runouts */}
+                  <AnimatePresence>
+                    {playerEquities[player.seat] !== undefined &&
+                      !hasLeft &&
+                      !isDisconnected &&
+                      !player.folded && (
+                        <motion.div
+                          key={`equity-${player.seat}`}
+                          className="absolute -bottom-2 -right-2 z-50"
+                          initial={{
+                            opacity: 0,
+                            scale: 0.3,
+                          }}
+                          animate={{
+                            opacity: 1,
+                            scale: 1,
+                          }}
+                          exit={{
+                            opacity: 0,
+                            scale: 0.3,
+                          }}
+                          transition={
+                            equityAnimationRef.current[player.seat]
+                              ? {
+                                  type: "spring",
+                                  stiffness: 300,
+                                  damping: 25,
+                                  duration: 0.5,
+                                }
+                              : {}
+                          }
+                        >
+                          <div className="bg-black/90 text-white text-xs px-2 py-1 rounded-lg font-semibold shadow-lg border border-white/30">
+                            {playerEquities[player.seat].toFixed(1)}%
+                          </div>
+                        </motion.div>
+                      )}
+                  </AnimatePresence>
                 </div>
 
                 {/* Hand strength badge - only show for hero player, positioned below player box */}

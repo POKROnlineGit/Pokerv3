@@ -41,7 +41,7 @@ const HOLDEM_HAND_RANKINGS: HandRanking[] = [
     rank: 6,
   },
   {
-    name: "Three of a Kind",
+    name: "Set",
     cards: ["Ac", "Ad", "Ah", "Kc", "Qd"],
     rank: 7,
   },
@@ -73,7 +73,7 @@ interface HandRankingsSidebarProps {
  * Examples:
  * - "Pair (Kings)" -> "One Pair"
  * - "Quads (Aces)" -> "Four of a Kind"
- * - "Set (Kings)" -> "Three of a Kind"
+ * - "Set (Kings)" -> "Set"
  * - "Royal Flush" -> "Royal Flush"
  */
 function extractHandType(handStrength: string | null | undefined): string | null {
@@ -91,7 +91,7 @@ function extractHandType(handStrength: string | null | undefined): string | null
 
   // Normalize variations
   if (handStrength.startsWith("Quads")) return "Four of a Kind";
-  if (handStrength.startsWith("Set")) return "Three of a Kind";
+  if (handStrength.startsWith("Set")) return "Set";
   if (handStrength.startsWith("Pair")) return "One Pair";
 
   return null;

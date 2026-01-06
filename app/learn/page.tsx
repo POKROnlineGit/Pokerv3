@@ -5,6 +5,7 @@ import { createClientComponentClient } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useTheme } from '@/components/providers/ThemeProvider'
+import Link from 'next/link'
 
 const LESSONS = [
   { id: 1, title: 'Preflop Basics', description: 'Learn the fundamentals of preflop play, starting hand selection, and position.' },
@@ -64,6 +65,14 @@ export default function LearnPage() {
       <div className="relative z-10">
         <div className="container mx-auto p-6 max-w-4xl">
           <h1 className="text-3xl font-bold mb-6">Learn Poker</h1>
+          <div className="mb-6">
+            <Link 
+              href="/tools/range-analysis" 
+              className="text-blue-400 hover:text-blue-300 underline"
+            >
+              Range Analysis Tool →
+            </Link>
+          </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {LESSONS.map((lesson) => {
               const userProgress = progressMap.get(lesson.id)
