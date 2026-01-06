@@ -2,25 +2,53 @@
 
 import { useEffect, useState } from 'react'
 import { Moon, Sun } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { createClientComponentClient } from '@/lib/supabaseClient'
-import { useRouter } from 'next/navigation'
 
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+export function useThemeToggle() {
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark') // Default to dark
   const [mounted, setMounted] = useState(false)
   const supabase = createClientComponentClient()
-  const router = useRouter()
 
   useEffect(() => {
     setMounted(true)
-    // Get theme from localStorage or system preference
-    const stored = localStorage.getItem('theme') as 'light' | 'dark' | null
-    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    const initialTheme = stored || (systemPrefersDark ? 'dark' : 'light')
-    setTheme(initialTheme)
-    applyTheme(initialTheme)
-  }, [])
+    
+    const loadTheme = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user) {
+        // Load from Supabase profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('theme')
+          .eq('id', user.id)
+          .single()
+        
+        if (profile?.theme === 'light' || profile?.theme === 'dark') {
+          setTheme(profile.theme)
+          applyTheme(profile.theme)
+        } else {
+          // No preference set, default to dark
+          setTheme('dark')
+          applyTheme('dark')
+        }
+      } else {
+        // Not signed in, default to dark
+        setTheme('dark')
+        applyTheme('dark')
+      }
+    }
+    
+    loadTheme()
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      loadTheme()
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [supabase])
 
   const applyTheme = (newTheme: 'light' | 'dark') => {
     const root = document.documentElement
@@ -37,33 +65,39 @@ export function ThemeToggle() {
     setTheme(newTheme)
     applyTheme(newTheme)
 
-    // Save to Supabase if user is logged in
+    // Only save to Supabase if user is logged in (to avoid errors)
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      await supabase
-        .from('profiles')
-        .update({ theme: newTheme })
-        .eq('id', user.id)
+      try {
+        await supabase
+          .from('profiles')
+          .update({ theme: newTheme })
+          .eq('id', user.id)
+      } catch (error) {
+        console.error('Error saving theme preference:', error)
+      }
     }
   }
 
+  return { theme, toggleTheme, mounted }
+}
+
+// Keep the old component for backwards compatibility if needed
+export function ThemeToggle() {
+  const { theme, toggleTheme, mounted } = useThemeToggle()
+  
   if (!mounted) {
-    return <Button variant="ghost" size="icon" className="w-10 h-10" />
+    return null
   }
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={toggleTheme}
-      className="w-10 h-10"
-    >
+    <>
       {theme === 'light' ? (
-        <Moon className="h-5 w-5" />
+        <Moon className="h-5 w-5 flex-shrink-0" />
       ) : (
-        <Sun className="h-5 w-5" />
+        <Sun className="h-5 w-5 flex-shrink-0" />
       )}
-    </Button>
+    </>
   )
 }
 

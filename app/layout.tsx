@@ -101,27 +101,22 @@ export default async function RootLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Get user theme preference and check super user status
-  let theme = "light";
-  let isSuperUser = false;
+  // Get user theme preference - default to dark
+  let theme = "dark";
 
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("theme, is_superuser")
+      .select("theme")
       .eq("id", user.id)
       .single();
-    if (profile?.theme) {
+    if (profile?.theme === "light" || profile?.theme === "dark") {
       theme = profile.theme;
     }
-    isSuperUser = profile?.is_superuser || false;
   }
 
-  // Only show sidebar for authenticated super users
-  // This ensures sidebar is hidden when:
-  // - User is logged out (user is null)
-  // - User is not a super user (isSuperUser is false)
-  const showSidebar = Boolean(user && isSuperUser);
+  // Show sidebar for all users (persistent sidebar)
+  const showSidebar = true;
 
   return (
     <html lang="en" className={theme} suppressHydrationWarning>

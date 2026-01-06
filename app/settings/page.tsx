@@ -4,6 +4,7 @@ import { SettingsForm } from '@/components/SettingsForm'
 import { createClientComponentClient } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export default function SettingsPage() {
   const supabase = createClientComponentClient()
@@ -15,7 +16,7 @@ export default function SettingsPage() {
     const loadProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        router.push('/')
+        router.push('/auth/signin')
         return
       }
 
@@ -34,12 +35,16 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="min-h-screen relative">
-        <div className="container mx-auto px-4 py-8 max-w-2xl flex items-center justify-center min-h-screen">
-          <div className="text-white">Loading...</div>
+        <div className="relative z-10">
+          <div className="container mx-auto p-6 max-w-4xl flex items-center justify-center min-h-screen">
+            <div className="text-white">Loading...</div>
+          </div>
         </div>
       </div>
     )
   }
+
+  const isSuperUser = profile?.is_superuser || false
 
   return (
     <div className="min-h-screen relative">
@@ -47,13 +52,50 @@ export default function SettingsPage() {
       <div className="relative z-10">
         <div className="container mx-auto p-6 max-w-4xl">
           <h1 className="text-3xl font-bold mb-6">Settings</h1>
-          <SettingsForm
-            initialUsername={profile?.username || ''}
-            initialTheme={profile?.theme || 'light'}
-            initialColorTheme={profile?.color_theme || 'emerald_felt'}
-            isSuperUser={profile?.is_superuser || false}
-            initialDebugMode={profile?.debug_mode || false}
-          />
+          
+          {/* Tabs */}
+          <Tabs defaultValue="profile" className="w-full">
+            <TabsList>
+              <TabsTrigger value="profile">Profile</TabsTrigger>
+              <TabsTrigger value="theme">Theme</TabsTrigger>
+              {isSuperUser && <TabsTrigger value="debug">Debug</TabsTrigger>}
+            </TabsList>
+
+            <TabsContent value="profile" className="mt-4">
+              <SettingsForm
+                initialUsername={profile?.username || ''}
+                initialTheme={profile?.theme || 'light'}
+                initialColorTheme={profile?.color_theme || 'emerald_felt'}
+                isSuperUser={isSuperUser}
+                initialDebugMode={profile?.debug_mode || false}
+                tab="profile"
+              />
+            </TabsContent>
+
+            <TabsContent value="theme" className="mt-4">
+              <SettingsForm
+                initialUsername={profile?.username || ''}
+                initialTheme={profile?.theme || 'light'}
+                initialColorTheme={profile?.color_theme || 'emerald_felt'}
+                isSuperUser={isSuperUser}
+                initialDebugMode={profile?.debug_mode || false}
+                tab="theme"
+              />
+            </TabsContent>
+
+            {isSuperUser && (
+              <TabsContent value="debug" className="mt-4">
+                <SettingsForm
+                  initialUsername={profile?.username || ''}
+                  initialTheme={profile?.theme || 'light'}
+                  initialColorTheme={profile?.color_theme || 'emerald_felt'}
+                  isSuperUser={isSuperUser}
+                  initialDebugMode={profile?.debug_mode || false}
+                  tab="debug"
+                />
+              </TabsContent>
+            )}
+          </Tabs>
         </div>
       </div>
     </div>

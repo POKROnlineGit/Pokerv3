@@ -24,9 +24,10 @@ interface SettingsFormProps {
   initialColorTheme?: string
   isSuperUser?: boolean
   initialDebugMode?: boolean
+  tab?: 'profile' | 'theme' | 'debug'
 }
 
-export function SettingsForm({ initialUsername, initialTheme, initialColorTheme, isSuperUser = false, initialDebugMode = false }: SettingsFormProps) {
+export function SettingsForm({ initialUsername, initialTheme, initialColorTheme, isSuperUser = false, initialDebugMode = false, tab = 'profile' }: SettingsFormProps) {
   const [username, setUsername] = useState(initialUsername)
   const [theme, setTheme] = useState(initialTheme)
   const [colorTheme, setColorThemeLocal] = useState(initialColorTheme || 'emerald_felt')
@@ -48,25 +49,26 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // Check if username is already taken
-      const { data: existing } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('username', username)
-        .neq('id', user.id)
-        .single()
+      // Update profile - only update fields relevant to the current tab
+      const updateData: { username?: string; theme?: string; color_theme?: string; debug_mode?: boolean } = {}
+      
+      if (tab === 'profile') {
+        // Check if username is already taken
+        const { data: existing } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', username)
+          .neq('id', user.id)
+          .single()
 
-      if (existing) {
-        throw new Error('Username already taken')
-      }
-
-      // Update profile
-      const updateData: { username: string; theme: string; color_theme: string; debug_mode?: boolean } = { 
-        username, 
-        theme,
-        color_theme: colorTheme
-      }
-      if (isSuperUser) {
+        if (existing) {
+          throw new Error('Username already taken')
+        }
+        updateData.username = username
+      } else if (tab === 'theme') {
+        updateData.theme = theme
+        updateData.color_theme = colorTheme
+      } else if (tab === 'debug' && isSuperUser) {
         updateData.debug_mode = debugMode
       }
 
@@ -77,17 +79,20 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
 
       if (updateError) throw updateError
 
-      // Apply light/dark theme
-      const root = document.documentElement
-      if (theme === 'dark') {
-        root.classList.add('dark')
-      } else {
-        root.classList.remove('dark')
-      }
-      localStorage.setItem('theme', theme)
+      // Apply theme changes only if we're on the theme tab
+      if (tab === 'theme') {
+        // Apply light/dark theme
+        const root = document.documentElement
+        if (theme === 'dark') {
+          root.classList.add('dark')
+        } else {
+          root.classList.remove('dark')
+        }
+        localStorage.setItem('theme', theme)
 
-      // Apply color theme via ThemeProvider (this will update the global state)
-      await setColorTheme(colorTheme)
+        // Apply color theme via ThemeProvider (this will update the global state)
+        await setColorTheme(colorTheme)
+      }
 
       setSuccess(true)
       setTimeout(() => {
@@ -100,120 +105,152 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
     }
   }
 
+  const getCardTitle = () => {
+    switch (tab) {
+      case 'profile':
+        return 'Profile Settings'
+      case 'theme':
+        return 'Theme Settings'
+      case 'debug':
+        return 'Debug Settings'
+      default:
+        return 'Settings'
+    }
+  }
+
+  const getCardDescription = () => {
+    switch (tab) {
+      case 'profile':
+        return 'Update your username'
+      case 'theme':
+        return 'Customize your theme preferences'
+      case 'debug':
+        return 'Development and debugging options'
+      default:
+        return 'Manage your settings'
+    }
+  }
+
   return (
     <Card className="bg-card">
       <CardHeader>
-        <CardTitle>Profile Settings</CardTitle>
+        <CardTitle>{getCardTitle()}</CardTitle>
         <CardDescription>
-          Update your username and theme preferences
+          {getCardDescription()}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
-            <Input
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              minLength={3}
-              maxLength={20}
-            />
-            <p className="text-sm text-muted-foreground">
-              Your username must be unique and between 3-20 characters
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="theme">Dark Mode</Label>
-              <Switch
-                id="theme"
-                checked={theme === 'dark'}
-                onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
-                style={{
-                  backgroundColor: theme === 'dark' ? currentTheme.colors.accent[0] : undefined,
-                } as React.CSSProperties}
+          {tab === 'profile' && (
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                minLength={3}
+                maxLength={20}
               />
+              <p className="text-sm text-muted-foreground">
+                Your username must be unique and between 3-20 characters
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Toggle between light and dark theme
-            </p>
-          </div>
+          )}
 
-          <div className="space-y-2">
-            <Label htmlFor="color-theme">Color Theme</Label>
-            <Select
-              value={colorTheme}
-              onValueChange={(value) => {
-                setColorThemeLocal(value)
-              }}
-            >
-              <SelectTrigger id="color-theme" className="w-full">
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1">
-                    {(() => {
-                      const selectedTheme = getTheme(colorTheme)
-                      return (
-                        <>
-                          <div
-                            className="h-4 w-4 rounded border border-border"
-                            style={{ backgroundColor: selectedTheme.colors.primary[0] }}
-                          />
-                          <div
-                            className="h-4 w-4 rounded border border-border"
-                            style={{ backgroundColor: selectedTheme.colors.gradient[0] }}
-                          />
-                          <div
-                            className="h-4 w-4 rounded border border-border"
-                            style={{ backgroundColor: selectedTheme.colors.accent[0] }}
-                          />
-                        </>
-                      )
-                    })()}
-                  </div>
-                  <SelectValue>
-                    {getTheme(colorTheme).name}
-                  </SelectValue>
+          {tab === 'theme' && (
+            <>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="theme">Dark Mode</Label>
+                  <Switch
+                    id="theme"
+                    checked={theme === 'dark'}
+                    onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+                    style={{
+                      backgroundColor: theme === 'dark' ? currentTheme.colors.accent[0] : undefined,
+                    } as React.CSSProperties}
+                  />
                 </div>
-              </SelectTrigger>
-              <SelectContent>
-                {availableThemes.map((themeOption) => (
-                  <SelectItem key={themeOption.id} value={themeOption.id}>
-                    <div className="flex items-center gap-3 w-full">
-                      <div className="flex gap-1 flex-shrink-0">
-                        <div
-                          className="h-4 w-4 rounded border border-border"
-                          style={{ backgroundColor: themeOption.colors.primary[0] }}
-                        />
-                        <div
-                          className="h-4 w-4 rounded border border-border"
-                          style={{ backgroundColor: themeOption.colors.gradient[0] }}
-                        />
-                        <div
-                          className="h-4 w-4 rounded border border-border"
-                          style={{ backgroundColor: themeOption.colors.accent[0] }}
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm">{themeOption.name}</div>
-                        <div className="text-xs text-muted-foreground truncate">
-                          {themeOption.description}
-                        </div>
-                      </div>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-sm text-muted-foreground">
-              Choose your preferred color scheme
-            </p>
-          </div>
+                <p className="text-sm text-muted-foreground">
+                  Toggle between light and dark theme
+                </p>
+              </div>
 
-          {isSuperUser && (
-            <div className="space-y-2 pt-4 border-t">
+              <div className="space-y-2">
+                <Label htmlFor="color-theme">Color Theme</Label>
+                <Select
+                  value={colorTheme}
+                  onValueChange={(value) => {
+                    setColorThemeLocal(value)
+                  }}
+                >
+                  <SelectTrigger id="color-theme" className="w-full">
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1">
+                        {(() => {
+                          const selectedTheme = getTheme(colorTheme)
+                          return (
+                            <>
+                              <div
+                                className="h-4 w-4 rounded border border-border"
+                                style={{ backgroundColor: selectedTheme.colors.primary[0] }}
+                              />
+                              <div
+                                className="h-4 w-4 rounded border border-border"
+                                style={{ backgroundColor: selectedTheme.colors.gradient[0] }}
+                              />
+                              <div
+                                className="h-4 w-4 rounded border border-border"
+                                style={{ backgroundColor: selectedTheme.colors.accent[0] }}
+                              />
+                            </>
+                          )
+                        })()}
+                      </div>
+                      <SelectValue>
+                        {getTheme(colorTheme).name}
+                      </SelectValue>
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableThemes.map((themeOption) => (
+                      <SelectItem key={themeOption.id} value={themeOption.id}>
+                        <div className="flex items-center gap-3 w-full">
+                          <div className="flex gap-1 flex-shrink-0">
+                            <div
+                              className="h-4 w-4 rounded border border-border"
+                              style={{ backgroundColor: themeOption.colors.primary[0] }}
+                            />
+                            <div
+                              className="h-4 w-4 rounded border border-border"
+                              style={{ backgroundColor: themeOption.colors.gradient[0] }}
+                            />
+                            <div
+                              className="h-4 w-4 rounded border border-border"
+                              style={{ backgroundColor: themeOption.colors.accent[0] }}
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm">{themeOption.name}</div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {themeOption.description}
+                            </div>
+                          </div>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  Choose your preferred color scheme
+                </p>
+              </div>
+            </>
+          )}
+
+          {tab === 'debug' && isSuperUser && (
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div>
                   <Label htmlFor="debug-mode">Debug Mode</Label>
@@ -254,6 +291,7 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
           <Button 
             type="submit" 
             disabled={loading}
+            className="h-9 text-sm"
             style={{
               backgroundColor: currentTheme.colors.accent[0],
               color: 'white',

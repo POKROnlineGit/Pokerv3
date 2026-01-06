@@ -1,113 +1,145 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { createClientComponentClient } from '@/lib/supabaseClient'
-import { useRouter } from 'next/navigation'
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { useTheme } from '@/components/providers/ThemeProvider'
+import React, { useState, useEffect } from "react";
+import { createClientComponentClient } from "@/lib/supabaseClient";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Loader2 } from "lucide-react";
+import { useTheme } from "@/components/providers/ThemeProvider";
+import { ThemeBackground } from "@/components/ThemeBackground";
+import Image from "next/image";
 
 export default function SignInPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const { currentTheme } = useTheme()
-  const supabase = createClientComponentClient()
-  const router = useRouter()
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { currentTheme } = useTheme();
+  const supabase = createClientComponentClient();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  
+  // Redirect to signup if view=sign_up query param is present
+  useEffect(() => {
+    if (searchParams.get("view") === "sign_up") {
+      router.replace("/auth/signup");
+    }
+  }, [searchParams, router]);
+
+  // Redirect if already signed in
+  useEffect(() => {
+    let mounted = true;
+
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (mounted) {
+        setCheckingAuth(false);
+        if (user) {
+          router.replace("/play/online");
+          return;
+        }
+      }
+    };
+
+    checkAuth();
+
+    // Listen for auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted && session?.user) {
+        router.replace("/play/online");
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase, router]);
 
   // Get theme colors
-  const primaryColor = currentTheme.colors.primary[0]
-  const gradientColors = currentTheme.colors.gradient
-  const centerColor = currentTheme.colors.primary[2] || currentTheme.colors.primary[1]
-  const accentColor = currentTheme.colors.accent[0]
+  const primaryColor = currentTheme.colors.primary[0];
+  const accentColor = currentTheme.colors.accent[0];
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+    }
+  };
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
-      })
-
-      if (error) throw error
-      router.push('/play/online')
-      router.refresh()
+      });
+      if (error) throw error;
+      router.refresh();
+      router.push('/play/online');
     } catch (err: any) {
-      setError(err.message)
+      setError(err.message || "Failed to sign in");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const handleGoogleSignIn = async () => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
-
-      if (error) throw error
-    } catch (err: any) {
-      setError(err.message)
-      setLoading(false)
-    }
-  }
-
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
-
-      if (error) throw error
-      alert('Check your email for the confirmation link!')
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+  // Don't render if checking auth or if user is authenticated (will redirect)
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen relative flex items-center justify-center p-4">
+        <ThemeBackground />
+        <div className="flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin" style={{ color: currentTheme.colors.accent[0] }} />
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4">
-
-      <div className="absolute top-4 right-4 z-10">
-        <ThemeToggle />
-      </div>
-
-      <Card className="w-full max-w-md relative z-10 bg-card">
-        <CardHeader>
-          <CardTitle className="text-2xl">Sign In to POKROnline</CardTitle>
-          <CardDescription>
-            Enter your credentials or sign in with Google
-          </CardDescription>
+      <ThemeBackground />
+      
+      <Card className="w-full max-w-md relative z-10 bg-card border-border">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4 flex items-center justify-center">
+            <Image
+              src="/logo/POKROnlineLogoSVG.svg"
+              alt="POKROnline"
+              width={64}
+              height={64}
+              className="h-16 w-16 object-contain"
+              priority
+            />
+          </div>
+          <CardTitle className="text-2xl font-bold">Sign In</CardTitle>
+          <CardDescription>Welcome back to the table</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+
+        <CardContent>
           {error && (
             <div 
-              className="text-sm p-3 rounded-md"
+              className="mb-4 p-3 rounded text-sm text-center border"
               style={{
                 backgroundColor: `${accentColor}20`,
+                borderColor: accentColor,
                 color: accentColor,
               }}
             >
@@ -118,10 +150,10 @@ export default function SignInPage() {
           <form onSubmit={handleEmailSignIn} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
+              <Input 
+                id="email" 
+                type="email" 
+                placeholder="you@example.com" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -129,69 +161,45 @@ export default function SignInPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
+              <Input 
+                id="password" 
+                type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
-            <div className="flex gap-2">
-              <Button 
-                type="submit" 
-                className="flex-1" 
-                disabled={loading}
-                style={{
-                  backgroundColor: accentColor,
-                  color: 'white',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || accentColor
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = accentColor
-                }}
-              >
-                Sign In
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={handleSignUp}
-                disabled={loading}
-                style={{
-                  borderColor: accentColor,
-                  color: accentColor,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = accentColor
-                  e.currentTarget.style.color = 'white'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent'
-                  e.currentTarget.style.color = accentColor
-                }}
-              >
-                Sign Up
-              </Button>
-            </div>
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={loading}
+              style={{
+                backgroundColor: accentColor,
+                color: 'white',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || accentColor;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = accentColor;
+              }}
+            >
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Sign In"}
+            </Button>
           </form>
 
-          <div className="relative">
+          <div className="relative my-4">
             <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
+              <span className="w-full border-t border-border" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+              <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
             </div>
           </div>
 
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
+          <Button 
+            variant="outline" 
+            className="w-full h-12 text-base"
             onClick={handleGoogleSignIn}
             disabled={loading}
             style={{
@@ -199,15 +207,15 @@ export default function SignInPage() {
               color: accentColor,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = accentColor
-              e.currentTarget.style.color = 'white'
+              e.currentTarget.style.backgroundColor = accentColor;
+              e.currentTarget.style.color = 'white';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent'
-              e.currentTarget.style.color = accentColor
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = accentColor;
             }}
           >
-            <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+            <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                 fill="#4285F4"
@@ -225,11 +233,23 @@ export default function SignInPage() {
                 fill="#EA4335"
               />
             </svg>
-            Google
+            Continue with Google
           </Button>
         </CardContent>
+
+        <CardFooter className="justify-center">
+          <div className="text-sm text-muted-foreground">
+            Don't have an account?{" "}
+            <Link 
+              href="/auth/signup" 
+              className="hover:underline"
+              style={{ color: accentColor }}
+            >
+              Sign Up
+            </Link>
+          </div>
+        </CardFooter>
       </Card>
     </div>
-  )
+  );
 }
-

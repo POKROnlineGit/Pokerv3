@@ -41,11 +41,8 @@ export async function proxy(request: NextRequest) {
 
   const url = request.nextUrl;
 
-  // Allow access to coming-soon and auth routes
-  if (
-    url.pathname.startsWith("/coming-soon") ||
-    url.pathname.startsWith("/auth")
-  ) {
+  // Allow access to auth routes
+  if (url.pathname.startsWith("/auth")) {
     return response;
   }
 
@@ -59,28 +56,22 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  // If not logged in, redirect to coming-soon
-  if (!user) {
-    return NextResponse.redirect(new URL("/coming-soon", request.url));
+  // Public routes - accessible without authentication
+  if (url.pathname === "/" || url.pathname.startsWith("/coming-soon")) {
+    return response;
   }
 
-  // If logged in, check if super user
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("is_superuser")
-    .eq("id", user.id)
-    .single();
-
-  // Log error for debugging (only in production to help diagnose)
-  if (profileError) {
-    console.error("[Proxy] Profile query error:", profileError);
-    // If we can't fetch the profile, deny access for security
-    return NextResponse.redirect(new URL("/coming-soon", request.url));
-  }
-
-  // If profile doesn't exist or not super user, redirect to coming-soon
-  if (!profile || !profile.is_superuser) {
-    return NextResponse.redirect(new URL("/coming-soon", request.url));
+  // Protected routes - require authentication
+  if (
+    url.pathname.startsWith("/play") ||
+    url.pathname.startsWith("/profile") ||
+    url.pathname.startsWith("/settings") ||
+    url.pathname.startsWith("/friends")
+  ) {
+    // If not logged in, redirect to sign in
+    if (!user) {
+      return NextResponse.redirect(new URL("/auth/signin", request.url));
+    }
   }
 
   return response;

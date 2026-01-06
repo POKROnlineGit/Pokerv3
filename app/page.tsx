@@ -1,622 +1,232 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { Play, BookOpen, TrendingUp, Zap, Users, Target } from "lucide-react";
-import { createClientComponentClient } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import Image from "next/image";
 import { useEffect, useState } from "react";
-import { useTheme } from "@/components/providers/ThemeProvider";
 
-// Floating card component for background
-function FloatingCard({
-  card,
-  index,
-  delay,
+// --- Assets & Icons ---
+
+const Icons = {
+  Learn: () => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="w-8 h-8 text-emerald-400"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+    </svg>
+  ),
+  Play: () => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="w-8 h-8 text-emerald-400"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <polygon points="10 8 16 12 10 16 10 8" />
+    </svg>
+  ),
+  Analyze: () => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="w-8 h-8 text-emerald-400"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="18" y1="20" x2="18" y2="10" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <line x1="6" y1="20" x2="6" y2="14" />
+    </svg>
+  ),
+  Practice: () => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="w-8 h-8 text-emerald-400"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  ),
+};
+
+// --- Feature Card Component ---
+
+function FeatureCard({
+  title,
+  description,
+  icon: Icon,
 }: {
-  card: string;
-  index: number;
-  delay: number;
+  title: string;
+  description: string;
+  icon: React.ElementType;
 }) {
   return (
-    <motion.div
-      className="absolute opacity-10 pointer-events-none"
-      style={{
-        left: `${(index * 15) % 100}%`,
-        top: `${(index * 20) % 100}%`,
-      }}
-      initial={{ y: 100, opacity: 0, rotate: -180 }}
-      animate={{
-        y: [0, -20, 0],
-        opacity: 0.15,
-        rotate: [0, 5, -5, 0],
-      }}
-      transition={{
-        opacity: { duration: 1.5, delay: delay },
-        y: {
-          duration: 4,
-          repeat: Infinity,
-          ease: "easeInOut",
-          delay: delay,
-        },
-        rotate: {
-          duration: 6,
-          repeat: Infinity,
-          ease: "easeInOut",
-          delay: delay,
-        },
-      }}
-    >
-      <Image
-        src={`/cards/${card}.png`}
-        alt={card}
-        width={120}
-        height={168}
-        className="drop-shadow-2xl"
-      />
-    </motion.div>
+    <div className="relative p-8 rounded-3xl border border-white/10 bg-gray-900 hover:border-emerald-400/30 hover:bg-gray-800 shadow-2xl hover:shadow-emerald-900/20 transition-all duration-300 cursor-pointer">
+      <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-100 rounded-3xl pointer-events-none" />
+
+      <div className="relative z-10 flex flex-col items-start gap-6">
+        <div className="p-4 rounded-2xl bg-emerald-950/50 border border-emerald-400/50 hover:border-emerald-300/70 scale-110 transition-all duration-300">
+          <Icon />
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="text-2xl font-bold text-emerald-300 hover:text-emerald-200 transition-colors duration-300">
+            {title}
+          </h3>
+          <p className="text-gray-400 leading-relaxed font-light text-lg">
+            {description}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
 export default function HomePage() {
   const router = useRouter();
-  const supabase = createClientComponentClient();
-  const { currentTheme } = useTheme();
-  const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  // Get theme colors
-  const primaryColor = currentTheme.colors.primary[0];
-  const gradientColors = currentTheme.colors.gradient;
-  const centerColor =
-    currentTheme.colors.primary[2] || currentTheme.colors.primary[1];
-  const accentColor = currentTheme.colors.accent[0];
-
-  // Check if user is already logged in and redirect
   useEffect(() => {
-    const checkUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        router.push("/play/online");
-      }
-    };
-    checkUser();
-  }, [router, supabase]);
-
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) throw error;
-    } catch (err: any) {
-      console.error("Sign in error:", err);
-      setLoading(false);
-    }
-  };
+    setMounted(true);
+  }, []);
 
   const handlePlayNow = () => {
-    router.push("/auth/signin");
+    router.push("/play");
   };
 
-  // Cards for floating background
-  const floatingCards = ["Ah", "Kd", "Qc", "Js", "Th", "9s", "8h"];
+  const scrollToFeatures = () => {
+    document.getElementById("features")?.scrollIntoView({ behavior: "smooth" });
+  };
 
-  // Seat positions for showcase table
-  const seatPositions = [
-    { top: "5%", left: "50%", transform: "translateX(-50%)" },
-    { top: "18%", right: "5%", transform: "translateX(50%)" },
-    { top: "50%", right: "2%", transform: "translateX(50%)" },
-    { top: "82%", right: "5%", transform: "translateX(50%)" },
-    { top: "95%", left: "50%", transform: "translateX(-50%)" },
-    { top: "18%", left: "5%", transform: "translateX(-50%)" },
-  ];
-
-  const showcaseCards = ["Ah", "Kd", "Qc", "Js", "Th", "9s"];
+  if (!mounted) return <div className="min-h-screen bg-green-950" />;
 
   return (
-    <div className="min-h-screen relative overflow-x-hidden">
+    <div className="min-h-screen relative font-sans selection:bg-emerald-500/30">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
-      <div className="relative z-10">
-        {/* Theme Toggle */}
-        <div className="absolute top-4 right-4 z-50">
-          <ThemeToggle />
-        </div>
+      <div className="relative z-10 flex flex-col">
+        {/* 1. HERO SECTION (Min Height Screen) */}
+        <div className="min-h-screen flex flex-col items-center justify-center px-4 relative">
+          <div className="relative bg-gray-900 border border-white/10 p-8 md:p-16 rounded-3xl shadow-2xl max-w-4xl w-full text-center overflow-hidden">
+            {/* Title Area */}
+            <div className="mb-8 relative flex flex-col items-center justify-center gap-6">
+              <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-emerald-600 to-green-700 drop-shadow-2xl tracking-tighter">
+                POKROnline
+              </h1>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-emerald-500/20 blur-3xl rounded-full w-64 h-64 -z-10" />
+            </div>
 
-        {/* Hero Section */}
-        <section className="relative min-h-screen flex items-center justify-center px-4 py-20">
-          {/* Floating background cards */}
-          {floatingCards.map((card, index) => (
-            <FloatingCard
-              key={card}
-              card={card}
-              index={index}
-              delay={index * 0.2}
-            />
-          ))}
+            {/* Tagline */}
+            <p className="text-xl md:text-3xl text-gray-200 mb-12 font-light leading-relaxed">
+              The <span className="font-bold text-white">Poker</span> platform
+              for players of all skill levels.
+            </p>
 
-          <div className="relative z-10 text-center max-w-5xl mx-auto">
-            <motion.h1
-              initial={{ y: -60, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ type: "spring", stiffness: 100, damping: 15 }}
-              className="text-7xl md:text-9xl font-bold text-white mb-6 drop-shadow-2xl"
-              style={{
-                textShadow: `0 0 2.5rem ${primaryColor}CC, 0 0 5rem ${primaryColor}80`,
-              }}
-            >
-              POKROnline
-            </motion.h1>
-
-            <motion.p
-              initial={{ y: -40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{
-                type: "spring",
-                stiffness: 100,
-                damping: 15,
-                delay: 0.2,
-              }}
-              className="text-2xl md:text-3xl text-green-100 mb-12 font-medium"
-            >
-              Master Texas Hold&apos;em – Play Free, Learn Fast, Win Big
-            </motion.p>
-
-            <motion.div
-              initial={{ y: 40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{
-                type: "spring",
-                stiffness: 100,
-                damping: 15,
-                delay: 0.4,
-              }}
-              className="flex flex-col sm:flex-row gap-4 justify-center items-center"
-            >
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+            {/* Action Area */}
+            <div className="flex flex-col items-center gap-6">
+              <Button
+                onClick={handlePlayNow}
+                className="px-8 py-6 text-lg font-bold bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-500 hover:to-green-600 text-white rounded-xl shadow-xl transition-all duration-300 border border-emerald-400/20"
               >
-                <Button
-                  onClick={handlePlayNow}
-                  size="lg"
-                  className="text-white text-lg px-8 py-6 rounded-2xl shadow-xl"
-                  style={{
-                    backgroundColor: accentColor,
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor =
-                      currentTheme.colors.accent[1] || accentColor;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = accentColor;
-                  }}
-                >
-                  <Play className="mr-2 h-5 w-5" />
+                <span className="flex items-center gap-2">
                   Play Now
-                </Button>
-              </motion.div>
-
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Button
-                  onClick={handleGoogleSignIn}
-                  disabled={loading}
-                  variant="outline"
-                  size="lg"
-                  className="border-2 text-white text-lg px-8 py-6 rounded-2xl shadow-xl bg-card"
-                  style={{
-                    borderColor: `${accentColor}50`,
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = `${accentColor}33`;
-                    e.currentTarget.style.borderColor = accentColor;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "";
-                    e.currentTarget.style.borderColor = `${accentColor}50`;
-                  }}
-                >
-                  <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
                     <path
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                      fill="#4285F4"
-                    />
-                    <path
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      fill="#34A853"
-                    />
-                    <path
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                      fill="#FBBC05"
-                    />
-                    <path
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                      fill="#EA4335"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 7l5 5m0 0l-5 5m5-5H6"
                     />
                   </svg>
-                  Sign In with Google
-                </Button>
-              </motion.div>
-            </motion.div>
-          </div>
-        </section>
+                </span>
+              </Button>
 
-        {/* Features Section */}
-        <section className="relative py-24 px-4 bg-gradient-to-b from-green-900/50 to-green-800/50">
-          <div className="container mx-auto max-w-6xl">
-            <motion.h2
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-              className="text-4xl md:text-5xl font-bold text-center text-white mb-16"
-            >
-              Why Players Love PokerOnline
-            </motion.h2>
-
-            <div className="grid md:grid-cols-3 gap-8">
-              <motion.div
-                whileHover={{ y: -12, scale: 1.05 }}
-                initial={{ y: 80, opacity: 0 }}
-                whileInView={{ y: 0, opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              <button
+                onClick={scrollToFeatures}
+                className="text-emerald-300 text-sm font-medium mt-4 animate-bounce"
               >
-                <Card
-                  className="border-2 rounded-2xl shadow-xl h-full bg-card"
-                  style={{ borderColor: `${accentColor}33` }}
-                >
-                  <CardHeader>
-                    <motion.div
-                      whileHover={{ rotate: 360 }}
-                      transition={{ duration: 0.6 }}
-                      className="mb-4"
-                    >
-                      <Zap
-                        className="h-16 w-16 mx-auto"
-                        style={{ color: accentColor }}
-                      />
-                    </motion.div>
-                    <CardTitle className="text-2xl text-center mb-4">
-                      Play Instantly
-                    </CardTitle>
-                    <p className="text-muted-foreground text-center">
-                      Jump into real-time 6-max games or practice against
-                      intelligent bots. No waiting, no queues—just pure poker
-                      action.
-                    </p>
-                  </CardHeader>
-                </Card>
-              </motion.div>
-
-              <motion.div
-                whileHover={{ y: -12, scale: 1.05 }}
-                initial={{ y: 80, opacity: 0 }}
-                whileInView={{ y: 0, opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{
-                  type: "spring",
-                  stiffness: 300,
-                  damping: 25,
-                  delay: 0.1,
-                }}
-              >
-                <Card
-                  className="border-2 rounded-2xl shadow-xl h-full bg-card"
-                  style={{ borderColor: `${accentColor}33` }}
-                >
-                  <CardHeader>
-                    <motion.div
-                      whileHover={{ rotate: 360 }}
-                      transition={{ duration: 0.6 }}
-                      className="mb-4"
-                    >
-                      <BookOpen
-                        className="h-16 w-16 mx-auto"
-                        style={{ color: accentColor }}
-                      />
-                    </motion.div>
-                    <CardTitle className="text-2xl text-center mb-4">
-                      Learn from Pros
-                    </CardTitle>
-                    <p className="text-muted-foreground text-center">
-                      Interactive lessons covering preflop strategy, postflop
-                      play, and advanced concepts. Master the fundamentals step
-                      by step.
-                    </p>
-                  </CardHeader>
-                </Card>
-              </motion.div>
-
-              <motion.div
-                whileHover={{ y: -12, scale: 1.05 }}
-                initial={{ y: 80, opacity: 0 }}
-                whileInView={{ y: 0, opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{
-                  type: "spring",
-                  stiffness: 300,
-                  damping: 25,
-                  delay: 0.2,
-                }}
-              >
-                <Card
-                  className="border-2 rounded-2xl shadow-xl h-full bg-card"
-                  style={{ borderColor: `${accentColor}33` }}
-                >
-                  <CardHeader>
-                    <motion.div
-                      whileHover={{ rotate: 360 }}
-                      transition={{ duration: 0.6 }}
-                      className="mb-4"
-                    >
-                      <TrendingUp className="h-16 w-16 text-primary-500 mx-auto" />
-                    </motion.div>
-                    <CardTitle className="text-2xl text-center mb-4">
-                      Track Your Progress
-                    </CardTitle>
-                    <p className="text-muted-foreground text-center">
-                      Monitor your chip stack, lesson completion, and
-                      improvement over time. Watch yourself become a better
-                      player.
-                    </p>
-                  </CardHeader>
-                </Card>
-              </motion.div>
+                Scroll to explore ▼
+              </button>
             </div>
           </div>
-        </section>
+        </div>
 
-        {/* Animated Cards Showcase */}
-        <section className="relative py-24 px-4 bg-poker-felt">
-          <div className="container mx-auto max-w-6xl">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8 }}
-              className="relative"
-            >
-              {/* Poker Table */}
-              <div className="relative w-full max-w-4xl mx-auto aspect-[4/3]">
-                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-green-800 to-green-900 border-8 border-amber-800 shadow-2xl">
-                  {/* Felt texture overlay */}
-                  <div className="absolute inset-0 rounded-full bg-green-700/20" />
-
-                  {/* Community cards area */}
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex gap-2 z-10">
-                    {["As", "Kd", "Qh"].map((card, i) => (
-                      <motion.div
-                        key={card}
-                        initial={{ x: -800, y: 200, rotate: -360, opacity: 0 }}
-                        whileInView={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
-                        viewport={{ once: true }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 260,
-                          damping: 20,
-                          delay: i * 0.12 + 0.5,
-                        }}
-                        layout
-                      >
-                        <div className="bg-white rounded-lg p-1 shadow-lg">
-                          <Image
-                            src={`/cards/${card}.png`}
-                            alt={card}
-                            width={80}
-                            height={112}
-                            className="rounded-md"
-                          />
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-
-                  {/* Pot display */}
-                  <motion.div
-                    initial={{ scale: 0, y: 100 }}
-                    whileInView={{ scale: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{
-                      type: "spring",
-                      stiffness: 500,
-                      damping: 20,
-                      delay: 1,
-                    }}
-                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[120%] bg-black/80 text-white px-6 py-3 rounded-xl shadow-xl"
-                  >
-                    <div className="text-sm text-muted-foreground">Pot</div>
-                    <div className="text-3xl font-bold">1,250</div>
-                  </motion.div>
-
-                  {/* Player Seats with Cards */}
-                  {seatPositions.map((position, index) => (
-                    <motion.div
-                      key={index}
-                      className="absolute flex flex-col items-center"
-                      style={position}
-                      initial={{ opacity: 0 }}
-                      whileInView={{ opacity: 1 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: 0.3 + index * 0.1 }}
-                    >
-                      <div className="bg-gray-800/70 text-white text-xs px-3 py-1 rounded-md mb-2">
-                        Player {index + 1}
-                      </div>
-                      <div className="flex gap-1">
-                        {[0, 1].map((cardIndex) => (
-                          <motion.div
-                            key={cardIndex}
-                            initial={{
-                              x: -800,
-                              y: 200,
-                              rotate: -360,
-                              opacity: 0,
-                            }}
-                            whileInView={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
-                            viewport={{ once: true }}
-                            transition={{
-                              type: "spring",
-                              stiffness: 260,
-                              damping: 20,
-                              delay: 0.8 + index * 0.12 + cardIndex * 0.06,
-                            }}
-                            layout
-                          >
-                            <div className="bg-white rounded-lg p-0.5 shadow-lg">
-                              <Image
-                                src={`/cards/${
-                                  showcaseCards[index] || "back"
-                                }.png`}
-                                alt="card"
-                                width={60}
-                                height={84}
-                                className="rounded-md"
-                              />
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Text Overlay */}
-              <motion.div
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 1.5 }}
-                className="text-center mt-12"
-              >
-                <h3 className="text-3xl md:text-4xl font-bold text-white mb-4">
-                  Real-time 6-max No-Limit Hold&apos;em
-                </h3>
-                <p className="text-xl text-green-100">
-                  Experience authentic poker gameplay with smooth animations and
-                  instant updates
-                </p>
-              </motion.div>
-            </motion.div>
-          </div>
-        </section>
-
-        {/* How It Works Timeline */}
-        <section className="relative py-24 px-4 bg-gradient-to-b from-green-800/50 to-green-900/50">
-          <div className="container mx-auto max-w-4xl">
-            <motion.h2
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-              className="text-4xl md:text-5xl font-bold text-center text-white mb-16"
-            >
-              How It Works
-            </motion.h2>
-
-            <div className="space-y-12">
-              {[
-                {
-                  step: 1,
-                  title: "Sign Up in Seconds",
-                  description:
-                    "Create your account with Google or email. Get 10,000 free chips to start playing immediately.",
-                  icon: Users,
-                },
-                {
-                  step: 2,
-                  title: "Jump Into a Game",
-                  description:
-                    "Join a real-time 6-max table or practice against intelligent bots. No waiting, instant action.",
-                  icon: Play,
-                },
-                {
-                  step: 3,
-                  title: "Improve with Lessons",
-                  description:
-                    "Master poker fundamentals through interactive lessons. Track your progress and become a better player.",
-                  icon: Target,
-                },
-              ].map((item, index) => (
-                <motion.div
-                  key={item.step}
-                  initial={{ opacity: 0, x: index % 2 === 0 ? -100 : 100 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 200,
-                    damping: 25,
-                    delay: index * 0.2,
-                  }}
-                  className="flex gap-6 items-start"
-                >
-                  <motion.div
-                    whileHover={{ scale: 1.1, rotate: 360 }}
-                    transition={{ duration: 0.5 }}
-                    className="flex-shrink-0 w-16 h-16 rounded-full flex items-center justify-center shadow-xl"
-                    style={{ backgroundColor: accentColor }}
-                  >
-                    <item.icon className="h-8 w-8 text-white" />
-                  </motion.div>
-                  <div className="flex-1">
-                    <h3 className="text-2xl font-bold text-white mb-2">
-                      {item.title}
-                    </h3>
-                    <p className="text-lg text-green-100">{item.description}</p>
-                  </div>
-                  <div className="text-6xl font-bold text-primary-500/30">
-                    {item.step}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Final CTA */}
-        <section className="relative py-24 px-4 bg-gradient-to-b from-green-900 to-green-950">
-          <div className="container mx-auto max-w-4xl text-center">
-            <motion.div
-              initial={{ opacity: 0, y: 60 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ type: "spring", stiffness: 100, damping: 15 }}
-            >
-              <h2 className="text-5xl md:text-6xl font-bold text-white mb-6">
-                Ready to Play Poker Like a Pro?
+        {/* 2. FEATURES SECTION (Scrolls over background) */}
+        <div
+          id="features"
+          className="min-h-screen py-20 px-6 flex flex-col items-center justify-center pb-12"
+        >
+          <div className="max-w-7xl mx-auto w-full">
+            <div className="text-center mb-20">
+              <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+                Master the Game
               </h2>
-              <p className="text-2xl text-green-100 mb-12">
-                Join thousands of players mastering Texas Hold&apos;em
+              <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+                Built for enthusiasts, by enthusiasts. POKROnline provides the
+                complete suite of tools to elevate your game.
               </p>
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Button
-                  onClick={handlePlayNow}
-                  size="lg"
-                  className="bg-primary-500 hover:bg-primary-600 text-white text-xl px-12 py-8 rounded-2xl shadow-2xl"
-                >
-                  <Play className="mr-3 h-6 w-6" />
-                  Start Playing Free
-                </Button>
-              </motion.div>
-            </motion.div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <FeatureCard
+                title="Learn"
+                icon={Icons.Learn}
+                description="New to poker? Interested in learning the rules? We offer comprehensive tutorials and interactive lessons covering everything from hand rankings to advanced game theory concepts."
+              />
+
+              <FeatureCard
+                title="Play"
+                icon={Icons.Play}
+                description="Jump into the action instantly. Host private games for your friends or queue up for online matchmaking in 6-Max and Heads-Up formats with zero latency."
+              />
+
+              <FeatureCard
+                title="Analyze"
+                icon={Icons.Analyze}
+                description="Don't just play—improve. Analyze your game history after the fact to identify leaks, visualize your win-rate, and understand the mathematics behind your biggest pots."
+              />
+
+              <FeatureCard
+                title="Practice"
+                icon={Icons.Practice}
+                description="Refine your strategy without the risk. Get placed in specific scenarios—like navigating a 3-bet pot out of position—and see how you perform against optimal play."
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="mt-12 text-center border-t border-white/10 pt-6">
+              <p className="text-emerald-500/40 text-sm">
+                © 2025 POKROnline. All cards dealt fairly.
+              </p>
+            </div>
           </div>
-        </section>
+        </div>
       </div>
     </div>
   );

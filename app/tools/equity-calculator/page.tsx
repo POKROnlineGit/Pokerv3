@@ -9,7 +9,7 @@ import { calculateEquity } from "@backend/domain/evaluation/EquityCalculator";
 // @ts-ignore - Importing from shared backend
 import { parseRange } from "@backend/domain/evaluation/RangeParser";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -552,6 +552,11 @@ export default function EquityCalculatorPage() {
               {/* RIGHT SIDE: Equity Results - Exact same styling as range evaluator */}
               <div className="w-64 flex-shrink-0 flex flex-col">
                 <Card className="flex-1 flex flex-col min-h-0">
+                  <CardHeader className="pb-1 pt-3">
+                    <CardTitle className="text-center text-xl font-bold">
+                      Equity Evaluator
+                    </CardTitle>
+                  </CardHeader>
                   <CardContent className="pt-3 pb-3 flex-1 flex flex-col">
                     {heroEquity !== null ? (
                       <div className="space-y-2">

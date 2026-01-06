@@ -5,7 +5,8 @@
 @layer base {
   html,
   body {
-    background-color: #000000;
+    /* Background is handled by ThemeBackground component */
+    background-color: transparent;
   }
 
   :root {
