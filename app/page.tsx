@@ -169,7 +169,7 @@ export default function HomePage() {
 
               <button
                 onClick={scrollToFeatures}
-                className="text-emerald-300 text-sm font-medium mt-4 animate-bounce"
+                className="text-sm font-medium mt-4 animate-bounce bg-gradient-to-b from-emerald-600 to-green-700 bg-clip-text text-transparent"
               >
                 Scroll to explore ▼
               </button>
