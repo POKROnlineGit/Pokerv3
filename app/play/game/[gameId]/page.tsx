@@ -6,34 +6,16 @@ import { PokerTable } from "@/components/game/PokerTable";
 import { ActionPopup } from "@/components/game/ActionPopup";
 import { LeaveGameButton } from "@/components/game/LeaveGameButton";
 import { HandRankingsSidebar } from "@/components/game/HandRankingsSidebar";
+import { PlayLayout } from "@/components/play/PlayLayout";
 import { GameState, ActionType, Player } from "@/lib/types/poker";
 import { getClientHandStrength } from "@backend/domain/evaluation/ClientHandEvaluator";
 import { getSocket, disconnectSocket } from "@/lib/socketClient";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 import { useToast } from "@/lib/hooks";
 import { useStatus } from "@/components/providers/StatusProvider";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
-import { Trophy, TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
+import { Trophy, TrendingUp, TrendingDown } from "lucide-react";
 
 export default function GamePage() {
   const params = useParams();
@@ -1375,254 +1357,12 @@ export default function GamePage() {
     socket.emit("action", payload);
   };
 
-  return (
+  // Prepare table content
+  const tableContent = (
     <>
-      {/* Game Finished Modal - RENDERED AT TOP LEVEL to persist when table state changes */}
-      <Dialog
-        open={!!gameFinished}
-        onOpenChange={(open) => {
-          // Allow closing via X button or clicking outside
-          if (!open && gameFinished) {
-            // Clean exit: disconnect socket and redirect
-            const socket = getSocket();
-            if (socket) {
-              socket.removeAllListeners();
-              disconnectSocket();
-            }
-            setGameFinished(null);
-            router.push("/play/online");
-          }
-        }}
-      >
-        <DialogContent
-          className="sm:max-w-2xl max-h-[90vh] overflow-y-auto !z-[10000]"
-          style={{ zIndex: 10000 }}
-        >
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-2xl">
-              {gameFinished?.winnerId === currentUserId ? (
-                <>
-                  <Trophy className="h-6 w-6 text-yellow-500" />
-                  Victory!
-                </>
-              ) : gameFinished?.reason === "OPPONENT_LEFT" ||
-                gameFinished?.reason?.includes("opponent") ||
-                gameFinished?.reason?.includes("Opponent") ? (
-                "Game Over"
-              ) : (
-                "Game Finished"
-              )}
-            </DialogTitle>
-            <DialogDescription className="text-base">
-              {gameFinished?.reason === "OPPONENT_LEFT" ||
-              gameFinished?.reason?.includes("opponent") ||
-              gameFinished?.reason?.includes("Opponent")
-                ? "Game Complete! No opponents remaining."
-                : gameFinished?.reason === "ALL_PLAYERS_LEFT" ||
-                  gameFinished?.reason?.includes("ALL_PLAYERS_LEFT")
-                ? "Game Ended. All players have left."
-                : gameFinished?.reason === "NOT_ENOUGH_PLAYERS"
-                ? "The game has ended because there are not enough players to continue."
-                : gameFinished?.reason || "The game has ended."}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 mt-4">
-            {/* Winner and Stats on Same Row - Two Separate Boxes */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Winner Card */}
-              {gameFinished?.winnerId && (
-                <Card className="bg-primary-500/10 border-primary-500/20">
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-center gap-3">
-                      <Trophy className="h-6 w-6 text-yellow-500" />
-                      <div className="text-center">
-                        <p className="text-xs text-muted-foreground">Winner</p>
-                        <p className="text-lg font-semibold">
-                          {gameFinished.winnerId === currentUserId
-                            ? "You won!"
-                            : playerNames[gameFinished.winnerId] ||
-                              "Player " + gameFinished.winnerId.slice(0, 8)}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Performance Stats Card */}
-              {gameFinished?.stats &&
-                currentUserId &&
-                gameFinished.stats.startingStacks[currentUserId] !==
-                  undefined && (
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-center gap-6">
-                        <div className="text-center">
-                          <p className="text-xs text-muted-foreground">Hands</p>
-                          <p className="text-lg font-bold">
-                            {gameFinished.stats.totalHands}
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-muted-foreground">
-                            Final Stack
-                          </p>
-                          <p className="text-lg font-bold">
-                            {gameFinished.stats?.finalStacks[
-                              currentUserId
-                            ]?.toLocaleString() || "0"}
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-muted-foreground">
-                            Net Change
-                          </p>
-                          <div className="flex items-center justify-center gap-1">
-                            {gameFinished.stats.chipChanges[currentUserId] >=
-                            0 ? (
-                              <TrendingUp className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <TrendingDown className="h-4 w-4 text-red-500" />
-                            )}
-                            <p
-                              className={`text-lg font-bold ${
-                                gameFinished.stats.chipChanges[currentUserId] >=
-                                0
-                                  ? "text-green-500"
-                                  : "text-red-500"
-                              }`}
-                            >
-                              {gameFinished.stats.chipChanges[currentUserId] >=
-                              0
-                                ? "+"
-                                : ""}
-                              {gameFinished.stats.chipChanges[
-                                currentUserId
-                              ].toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-            </div>
-
-            {/* Stack History Graph - Only Current User */}
-            {gameFinished?.stats?.stackHistoryByPlayer &&
-              currentUserId &&
-              gameFinished.stats.stackHistoryByPlayer[currentUserId] &&
-              Object.keys(
-                gameFinished.stats.stackHistoryByPlayer[currentUserId]
-              ).length > 0 && (
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="h-64 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                          data={(() => {
-                            // Only get current user's stack history
-                            const userHistory =
-                              gameFinished.stats.stackHistoryByPlayer[
-                                currentUserId
-                              ];
-                            const sortedHands = Object.keys(userHistory)
-                              .map(Number)
-                              .sort((a, b) => a - b);
-
-                            return sortedHands.map((hand) => ({
-                              hand,
-                              stack: userHistory[hand],
-                            }));
-                          })()}
-                          margin={{
-                            top: 5,
-                            right: 30,
-                            left: 50,
-                            bottom: 30,
-                          }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            className="opacity-30"
-                          />
-                          <XAxis
-                            dataKey="hand"
-                            label={{
-                              value: "Hand Number",
-                              position: "insideBottom",
-                              offset: -5,
-                            }}
-                          />
-                          <YAxis
-                            label={{
-                              value: "Stack Size",
-                              angle: -90,
-                              position: "left",
-                              offset: 10,
-                              style: { textAnchor: "middle" },
-                            }}
-                          />
-                          <Tooltip
-                            formatter={(value: number) =>
-                              value.toLocaleString()
-                            }
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="stack"
-                            stroke="hsl(var(--primary))"
-                            strokeWidth={3}
-                            dot={{ r: 4 }}
-                            activeDot={{ r: 6 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-            {/* Timestamp */}
-            {gameFinished?.timestamp && (
-              <p className="text-xs text-muted-foreground text-center">
-                Game ended: {new Date(gameFinished.timestamp).toLocaleString()}
-              </p>
-            )}
-          </div>
-
-          <DialogFooter className="mt-6">
-            <Button
-              onClick={() => {
-                // Clean exit: disconnect socket and redirect
-                // Do NOT emit leaveGame event (game is already over)
-                const socket = getSocket();
-                if (socket) {
-                  // Remove all listeners to prevent any further events
-                  socket.removeAllListeners();
-                  // Disconnect the socket
-                  disconnectSocket();
-                }
-
-                // Clear state
-                setGameFinished(null);
-
-                // Redirect to /play (lobby)
-                router.push("/play/online");
-              }}
-              className="w-full"
-            >
-              Return to Lobby
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Main game content - conditional rendering */}
       {isInitializing || !gameState || !currentUserId ? (
-        <div className="container mx-auto px-4 py-8 flex items-center justify-center min-h-[60vh]">
-          <div>
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
             {isInitializing
               ? "Initializing Game Table..."
               : !currentUserId
@@ -1631,45 +1371,7 @@ export default function GamePage() {
           </div>
         </div>
       ) : (
-        <div className="relative h-screen overflow-hidden">
-          {/* Online game banner - positioned absolutely at top */}
-          <div className="absolute top-4 left-4 right-4 z-50 bg-primary-500/10 border border-primary-500/20 rounded-xl p-4 flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-primary-500">
-                {variantInfo?.name || "Online Game"}
-                {variantInfo && (
-                  <>
-                    {variantInfo.smallBlind &&
-                      variantInfo.bigBlind &&
-                      ` • $${variantInfo.smallBlind}/${variantInfo.bigBlind} blinds`}
-                    {variantInfo.startingStack &&
-                      ` • ${variantInfo.startingStack} chips`}
-                  </>
-                )}
-                {gameState && (
-                  <>
-                    {" • "}
-                    {gameState.players?.length || 0} players
-                  </>
-                )}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Playing against real opponents
-              </p>
-            </div>
-            <div className="flex gap-2">
-              {cardsLoaded && variantInfo?.engineType === "holdem" && (
-                <Button
-                  variant="outline"
-                  onClick={() => setShowHandRankings(!showHandRankings)}
-                >
-                  {showHandRankings ? "Hide Ranks" : "Show Hand Ranks"}
-                </Button>
-              )}
-              <LeaveGameButton gameId={gameId} />
-            </div>
-          </div>
-
+        <>
           {/* Table container - centered vertically and horizontally */}
           <div className="h-full w-full flex items-center justify-center">
             <PokerTable
@@ -1691,19 +1393,150 @@ export default function GamePage() {
             isHoldem={variantInfo?.engineType === "holdem"}
             currentHandStrength={currentHandStrength}
           />
-
-          {/* Action Popup - Disabled if game finished or force hidden */}
-          {!gameFinished && (
-            <ActionPopup
-              gameState={gameState}
-              currentUserId={currentUserId}
-              onAction={handleAction}
-              onRevealCard={handleRevealCard}
-              isLocalGame={false}
-            />
-          )}
-        </div>
+        </>
       )}
     </>
+  );
+
+  // Prepare action popup separately to render outside stacking context
+  const actionPopupContent = !gameFinished ? (
+    <ActionPopup
+      gameState={gameState}
+      currentUserId={currentUserId}
+      onAction={handleAction}
+      onRevealCard={handleRevealCard}
+      isLocalGame={false}
+    />
+  ) : null;
+
+  // Prepare sidebar content
+  const sidebarContent = gameFinished ? (
+    <div className="space-y-4">
+      <Card className="bg-[hsl(222.2,84%,4.9%)]">
+        <CardContent className="pt-6 space-y-4">
+          {/* Winner Info - First */}
+          {gameFinished.winnerId && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Winner</p>
+              <p className="text-sm font-semibold">
+                {gameFinished.winnerId === currentUserId
+                  ? "You won!"
+                  : playerNames[gameFinished.winnerId] ||
+                    "Player " + gameFinished.winnerId.slice(0, 8)}
+              </p>
+            </div>
+          )}
+
+          {/* Stats - After Winner */}
+          {gameFinished.stats &&
+            currentUserId &&
+            gameFinished.stats.startingStacks[currentUserId] !== undefined && (
+              <>
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Hands Played</p>
+                  <p className="text-sm font-semibold">
+                    {gameFinished.stats.totalHands}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Final Stack</p>
+                  <p className="text-sm font-semibold">
+                    {gameFinished.stats?.finalStacks[
+                      currentUserId
+                    ]?.toLocaleString() || "0"}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Net Change</p>
+                  <div className="flex items-center gap-1">
+                    {gameFinished.stats.chipChanges[currentUserId] >= 0 ? (
+                      <TrendingUp className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4 text-red-500" />
+                    )}
+                    <p
+                      className={`text-sm font-semibold ${
+                        gameFinished.stats.chipChanges[currentUserId] >= 0
+                          ? "text-green-500"
+                          : "text-red-500"
+                      }`}
+                    >
+                      {gameFinished.stats.chipChanges[currentUserId] >= 0
+                        ? "+"
+                        : ""}
+                      {gameFinished.stats.chipChanges[
+                        currentUserId
+                      ].toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+        </CardContent>
+      </Card>
+
+      {/* Return to Lobby Button */}
+      <Button
+        onClick={() => {
+          // Clean exit: disconnect socket and redirect
+          const socket = getSocket();
+          if (socket) {
+            socket.removeAllListeners();
+            disconnectSocket();
+          }
+          setGameFinished(null);
+          router.push("/play");
+        }}
+        className="w-full"
+      >
+        Return to Lobby
+      </Button>
+    </div>
+  ) : (
+    <div className="space-y-4">
+      {/* Match Info - No Card, matching local page styling */}
+      <div className="space-y-2">
+        {variantInfo?.name && (
+          <div>
+            <p className="text-xs text-muted-foreground">Variant</p>
+            <p className="text-sm font-semibold">{variantInfo.name}</p>
+          </div>
+        )}
+        {variantInfo?.smallBlind && variantInfo?.bigBlind && (
+          <div>
+            <p className="text-xs text-muted-foreground">Blinds</p>
+            <p className="text-sm font-semibold">
+              ${variantInfo.smallBlind}/${variantInfo.bigBlind}
+            </p>
+          </div>
+        )}
+        {variantInfo?.startingStack && (
+          <div>
+            <p className="text-xs text-muted-foreground">Starting Stack</p>
+            <p className="text-sm font-semibold">
+              {variantInfo.startingStack.toLocaleString()}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Prepare footer content
+  const footerContent = !gameFinished ? (
+    <div className="flex justify-end">
+      <LeaveGameButton gameId={gameId} />
+    </div>
+  ) : undefined;
+
+  return (
+    <PlayLayout
+      tableContent={tableContent}
+      title={gameFinished ? "Game Over" : "Online Game"}
+      actionPopup={actionPopupContent}
+      footer={footerContent}
+    >
+      {sidebarContent}
+    </PlayLayout>
   );
 }

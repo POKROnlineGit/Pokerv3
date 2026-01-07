@@ -16,9 +16,10 @@ import { useSocket } from "@/lib/socketClient";
 
 type LeaveGameButtonProps = {
   gameId?: string;
+  className?: string;
 };
 
-export function LeaveGameButton({ gameId }: LeaveGameButtonProps) {
+export function LeaveGameButton({ gameId, className }: LeaveGameButtonProps) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const socket = useSocket();
@@ -46,7 +47,7 @@ export function LeaveGameButton({ gameId }: LeaveGameButtonProps) {
 
   return (
     <>
-      <Button variant="destructive" onClick={() => setOpen(true)}>
+      <Button variant="destructive" onClick={() => setOpen(true)} className={className}>
         Leave Game
       </Button>
 

@@ -124,9 +124,9 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     }
   }, [socket, router, setStatus, clearStatus, leaveQueue])
 
-  // Check queue status when navigating to /play/online page
+  // Check queue status when navigating to /play or /play/online page
   useEffect(() => {
-    if (pathname === '/play/online' && socket?.connected) {
+    if ((pathname === '/play' || pathname === '/play/online') && socket?.connected) {
       socket.emit('check_queue_status')
     }
   }, [pathname, socket])

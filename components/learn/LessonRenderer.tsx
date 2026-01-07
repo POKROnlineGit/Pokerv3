@@ -225,7 +225,7 @@ export function LessonRenderer({ lesson }: LessonRendererProps) {
 
   return (
     <div className="container mx-auto pt-0 pb-6 px-14 max-w-7xl relative z-10" style={{ position: 'relative', zIndex: 10 }}>
-      <Card className="bg-card/50 backdrop-blur-sm border" style={{ height: 'calc(100vh - 6rem)', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 6rem)' }}>
+      <Card className="bg-card backdrop-blur-sm border" style={{ height: 'calc(100vh - 6rem)', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 6rem)' }}>
         {/* Top Bar */}
         <CardHeader className="pb-4 border-b flex-shrink-0">
           <div className="flex items-center justify-between text-sm mb-2" style={{ color: '#ffffff' }}>

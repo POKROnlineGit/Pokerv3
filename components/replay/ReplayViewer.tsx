@@ -230,8 +230,12 @@ export function ReplayViewer({
     try {
       setIsLoading(true);
       setOrchestrationError(null);
-      // Inject the fetched names here
-      const orchestrator = new ReplayOrchestrator(replayInput, playerNames);
+      // Inject the fetched names and currentUserId here
+      const orchestrator = new ReplayOrchestrator(
+        replayInput,
+        playerNames,
+        currentUserId || undefined
+      );
       const result = orchestrator.generateReplay();
       setIsLoading(false);
       return result;

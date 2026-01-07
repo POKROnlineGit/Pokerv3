@@ -88,7 +88,7 @@ export function LessonDashboard({ initialLessons }: LessonDashboardProps) {
         </div>
 
         {/* Table */}
-        <Card className="bg-card/50 backdrop-blur-sm border flex-1 flex flex-col min-h-0 overflow-hidden">
+        <Card className="bg-card backdrop-blur-sm border flex-1 flex flex-col min-h-0 overflow-hidden">
           <CardContent className="p-0 flex-1 overflow-auto">
             <div className="relative w-full h-full">
               <table className="w-full caption-bottom text-sm">
@@ -180,7 +180,7 @@ export function LessonDashboard({ initialLessons }: LessonDashboardProps) {
       {/* Fixed Right Sidebar */}
       <div className="w-80 flex-shrink-0">
         <div className="mt-[4.5rem]">
-          <Card className="bg-card/50 backdrop-blur-sm border flex flex-col">
+          <Card className="bg-card backdrop-blur-sm border flex flex-col">
           {/* Course Progress */}
           <CardHeader className="border-b">
             <CardTitle className="text-lg">Course Progress</CardTitle>

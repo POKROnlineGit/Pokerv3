@@ -5,10 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import { PokerTable } from "@/components/game/PokerTable";
 import { ActionPopup } from "@/components/game/ActionPopup";
 import { HandRankingsSidebar } from "@/components/game/HandRankingsSidebar";
+import { PlayLayout } from "@/components/play/PlayLayout";
 import { GameState, ActionType, Player } from "@/lib/types/poker";
 import { getClientHandStrength } from "@backend/domain/evaluation/ClientHandEvaluator";
 import { useLocalGameStore } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 
 const BOT_NAMES: Record<string, string> = {
@@ -25,11 +27,19 @@ export default function LocalGamePage() {
   const gameId = params.gameId as string;
   const supabase = createClientComponentClient();
 
-  const { gameState, heroId, startLocalGame, leaveLocalGame, playerAction, newGame } = useLocalGameStore();
+  const {
+    gameState,
+    heroId,
+    startLocalGame,
+    leaveLocalGame,
+    playerAction,
+    newGame,
+  } = useLocalGameStore();
   const hasInitialized = useRef(false);
-  
+
   // --- Client-Side Hydration: Player Names (including hero) ---
-  const [playerNames, setPlayerNames] = useState<Record<string, string>>(BOT_NAMES);
+  const [playerNames, setPlayerNames] =
+    useState<Record<string, string>>(BOT_NAMES);
   const [showHandRankings, setShowHandRankings] = useState(false);
   const [cardsLoaded, setCardsLoaded] = useState(false);
 
@@ -45,19 +55,19 @@ export default function LocalGamePage() {
 
       try {
         const { data } = await supabase
-          .from('profiles')
-          .select('id, username')
-          .eq('id', heroId)
+          .from("profiles")
+          .select("id, username")
+          .eq("id", heroId)
           .single();
 
         if (data?.username) {
-          setPlayerNames(prev => ({
+          setPlayerNames((prev) => ({
             ...prev,
-            [heroId]: data.username
+            [heroId]: data.username,
           }));
         }
       } catch (error) {
-        console.error('[LocalGame] Error fetching hero username:', error);
+        console.error("[LocalGame] Error fetching hero username:", error);
       }
     };
 
@@ -124,8 +134,8 @@ export default function LocalGamePage() {
 
   useEffect(() => {
     if (!hasInitialized.current) {
-        startLocalGame();
-        hasInitialized.current = true;
+      startLocalGame();
+      hasInitialized.current = true;
     }
   }, [startLocalGame]);
 
@@ -145,15 +155,15 @@ export default function LocalGamePage() {
         chips: Number(p.chips || 0),
       })),
       // Explicit Prop Adapter: Ensure all expected properties are present
-      sidePots: gameState.sidePots || (gameState.pots?.slice(1) || []), // Map pots array to sidePots (skip first pot as main pot)
+      sidePots: gameState.sidePots || gameState.pots?.slice(1) || [], // Map pots array to sidePots (skip first pot as main pot)
       communityCards: gameState.communityCards || gameState.board || [], // Handle board vs communityCards
       buttonSeat: gameState.buttonSeat || gameState.dealerSeat || 0, // Map dealerSeat to buttonSeat
       sbSeat: gameState.sbSeat || 0,
       bbSeat: gameState.bbSeat || 0,
       currentActorSeat: gameState.currentActorSeat || null,
       // Map Phase Fields: Provide safe defaults if manager briefly sends null during transitions
-      currentRound: gameState.currentRound || 'preflop',
-      currentPhase: gameState.currentPhase || 'active',
+      currentRound: gameState.currentRound || "preflop",
+      currentPhase: gameState.currentPhase || "active",
       handNumber: gameState.handNumber || 1,
     };
   }, [gameState]);
@@ -161,7 +171,9 @@ export default function LocalGamePage() {
   // Calculate current hand strength for highlighting in sidebar
   const currentHandStrength = useMemo(() => {
     if (!adaptedGameState || !heroId) return null;
-    const heroPlayer = adaptedGameState.players.find((p: Player) => p.id === heroId);
+    const heroPlayer = adaptedGameState.players.find(
+      (p: Player) => p.id === heroId
+    );
     if (
       !heroPlayer ||
       !heroPlayer.holeCards ||
@@ -196,9 +208,20 @@ export default function LocalGamePage() {
   // NOTE: This early return must come AFTER all hooks to maintain hook order
   if (!gameState || !heroId) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-900 text-white">
-        <div className="text-xl">Initializing Game Engine...</div>
-      </div>
+      <PlayLayout
+        tableContent={
+          <div className="flex h-full items-center justify-center">
+            <div className="text-xl text-white">
+              Initializing Game Engine...
+            </div>
+          </div>
+        }
+        title="Local Game"
+      >
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">Initializing...</p>
+        </div>
+      </PlayLayout>
     );
   }
 
@@ -213,40 +236,12 @@ export default function LocalGamePage() {
 
   const handleLeaveGame = () => {
     leaveLocalGame();
-    router.push("/play/online");
+    router.push("/play");
   };
 
-  return (
-    <div className="relative h-screen overflow-hidden">
-      {/* Local game banner - positioned absolutely at top */}
-      <div className="absolute top-4 left-4 right-4 z-50 bg-primary-500/10 border border-primary-500/20 rounded-xl p-4 flex items-center justify-between">
-        <div>
-          <h3 className="font-semibold text-primary-500">
-            Local Game • 200 chips • Unlimited rebuys
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            Playing against 5 bots - perfect for testing!
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {cardsLoaded && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowHandRankings(!showHandRankings)}
-            >
-              {showHandRankings ? "Hide Ranks" : "Show Hand Ranks"}
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={handleNewGame}>
-            New Game
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleLeaveGame}>
-            Leave Game
-          </Button>
-        </div>
-      </div>
-
+  // Prepare table content
+  const tableContent = (
+    <>
       {/* Table container - centered vertically and horizontally */}
       <div className="h-full w-full flex items-center justify-center">
         <PokerTable
@@ -264,14 +259,64 @@ export default function LocalGamePage() {
         isHoldem={true} // Local games always use Texas Hold'em
         currentHandStrength={currentHandStrength}
       />
+    </>
+  );
 
-      {/* Action Popup */}
-      <ActionPopup
-        gameState={adaptedGameState}
-        currentUserId={heroId} // Pass the EXACT UUID from store
-        onAction={handleAction}
-        isLocalGame={true}
-      />
+  // Prepare action popup separately to render outside stacking context
+  const actionPopupContent = (
+    <ActionPopup
+      gameState={adaptedGameState}
+      currentUserId={heroId} // Pass the EXACT UUID from store
+      onAction={handleAction}
+      isLocalGame={true}
+    />
+  );
+
+  // Prepare sidebar content
+  const sidebarContent = (
+    <div className="space-y-4">
+      {/* Match Info - No Card */}
+      <div className="space-y-2">
+        <div>
+          <p className="text-xs text-muted-foreground">Mode</p>
+          <p className="text-sm font-semibold">Practice vs Bots</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Difficulty</p>
+          <p className="text-sm font-semibold">Medium</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Starting Chips</p>
+          <p className="text-sm font-semibold">200</p>
+        </div>
+      </div>
     </div>
+  );
+
+  // Prepare footer content
+  const footerContent = (
+    <div className="flex gap-2">
+      <Button variant="outline" className="flex-1" onClick={handleNewGame}>
+        New Game
+      </Button>
+      <Button
+        variant="destructive"
+        className="flex-1"
+        onClick={handleLeaveGame}
+      >
+        Leave Game
+      </Button>
+    </div>
+  );
+
+  return (
+    <PlayLayout
+      tableContent={tableContent}
+      title="Local Game"
+      footer={footerContent}
+      actionPopup={actionPopupContent}
+    >
+      {sidebarContent}
+    </PlayLayout>
   );
 }

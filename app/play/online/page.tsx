@@ -1,758 +1,521 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
+import React, { useEffect, useState, useMemo } from "react";
+import { PlayLayout } from "@/components/play/PlayLayout";
 import { Button } from "@/components/ui/button";
-import { useSocket } from "@/lib/socketClient";
-import { useToast } from "@/lib/hooks";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useQueue } from "@/components/providers/QueueProvider";
-import { useTheme } from "@/components/providers/ThemeProvider";
-import { MotionCard } from "@/components/motion/MotionCard";
-import { Users, User, Play } from "lucide-react";
+import { useSocket } from "@/lib/socketClient";
+import { Loader2, Search, ArrowLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 
-// Keep this route dynamic so it always reflects current game state
-export const dynamic = "force-dynamic";
-
-// Type definition based on the DB schema
 interface GameVariant {
   id: string;
   slug: string;
   name: string;
-  description?: string;
+  category: "cash" | "tournament" | "sit_and_go" | "casual";
   max_players: number;
-  category: string;
-  config: {
-    blinds?: {
-      small?: number;
-      big?: number;
-    };
-    buyIn?: number;
-    [key: string]: any;
-  };
+  engine_type: string;
+  config: any;
 }
 
-export default function PlayOnlinePage() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const { toast } = useToast();
-  const { inQueue, queueType } = useQueue();
-  const { currentTheme } = useTheme();
-  const socket = useSocket();
-
-  const [inGame, setInGame] = useState(false);
-  const [activeGameId, setActiveGameId] = useState<string | null>(null);
-  const [isCheckingGame, setIsCheckingGame] = useState(true);
-  const [isCheckingQueue, setIsCheckingQueue] = useState(true);
-  const [isSocketConnected, setIsSocketConnected] = useState(false);
-
-  // Combined check state - buttons disabled until both checks complete
-  const isChecking = isCheckingGame || isCheckingQueue;
+export default function OnlinePlayPage() {
   const [variants, setVariants] = useState<GameVariant[]>([]);
-  const [isLoadingVariants, setIsLoadingVariants] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [userChips, setUserChips] = useState<number | null>(null);
 
+  // Selection State
+  const [format, setFormat] = useState<string>("holdem"); // Default to Texas Hold'em
+  const [category, setCategory] = useState<string>("");
+  const [selectedVariantSlug, setSelectedVariantSlug] = useState<string>("");
+
+  const { inQueue, queueType, matchFound, leaveQueue } = useQueue();
+  const socket = useSocket();
+  const router = useRouter();
   const supabase = createClientComponentClient();
+  const [checkingGame, setCheckingGame] = useState(true);
 
-  // Get theme colors
-  const primaryColor = currentTheme.colors.primary[0];
-  const gradientColors = currentTheme.colors.gradient;
-  const accentColor = currentTheme.colors.accent[0];
-  const centerColor =
-    currentTheme.colors.primary[2] || currentTheme.colors.primary[1];
-
-  // 1. Fetch Variants and User Profile on Mount
+  // 1. Check if user is in an active game and redirect
   useEffect(() => {
-    // Fetch Variants
-    fetch("/api/variants")
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (Array.isArray(data)) {
-          // Filter out invalid variants (Safety Check)
-          const validVariants = data.filter((v) => {
-            const isValid =
-              v.id && v.slug && v.name && typeof v.max_players === "number";
-            if (!isValid) {
-            }
-            return isValid;
-          });
-          setVariants(validVariants);
-
-          if (validVariants.length < data.length) {
-            console.warn(
-              `Filtered out ${
-                data.length - validVariants.length
-              } invalid variants`
-            );
-          }
-        } else if (data.error) {
-          throw new Error(data.error);
-        } else {
-          // Handle case where response is not an array and has no error
-          console.error("[PlayOnlinePage] Unexpected response format:", data);
-          setVariants([]);
-        }
-        setIsLoadingVariants(false);
-      })
-      .catch((err) => {
-        console.error("Failed to load variants", err);
-        toast({
-          title: "Failed to load game variants",
-          description:
-            "Unable to connect to the server. Please try again later.",
-          variant: "destructive",
-        });
-        setIsLoadingVariants(false);
-        setVariants([]); // Ensure variants is set to empty array on error
-      });
-
-    // Fetch Profile (Chips)
-    const fetchProfile = async () => {
+    const checkActiveGame = async () => {
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        if (user) {
-          const { data } = await supabase
-            .from("profiles")
-            .select("chips")
-            .eq("id", user.id)
-            .single();
-          if (data) {
-            setUserChips(data.chips);
-          }
-        }
-      } catch (err) {
-        console.error("[PlayOnlinePage] Failed to fetch profile:", err);
-      }
-    };
-    fetchProfile();
-  }, [toast, supabase]);
-
-  // 2. Track socket connection status
-  useEffect(() => {
-    setIsSocketConnected(socket.connected);
-
-    const handleConnect = () => {
-      setIsSocketConnected(true);
-    };
-
-    const handleDisconnect = () => {
-      setIsSocketConnected(false);
-    };
-
-    socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
-
-    return () => {
-      socket.off("connect", handleConnect);
-      socket.off("disconnect", handleDisconnect);
-    };
-  }, [socket]);
-
-  // 3. Check for active session (runs on mount and when navigating to /play/online)
-  useEffect(() => {
-    if (!socket || pathname !== "/play/online") {
-      // Reset game check state when not on /play/online page
-      setIsCheckingGame(false);
-      return;
-    }
-
-    let mounted = true;
-    let connectHandler: (() => void) | null = null;
-
-    const handleSessionStatus = (payload: {
-      inGame?: boolean;
-      active?: boolean; // Support both formats
-      gameId?: string | null;
-      status?: string;
-    }) => {
-      if (!mounted) return;
-
-      // Support both response formats: { inGame, gameId } or { active, gameId }
-      const isActiveGame = payload?.inGame ?? payload?.active ?? false;
-      const gameId = payload?.gameId;
-
-      // Mark game check as complete immediately
-      setIsCheckingGame(false);
-
-      // Check if this is a recently left game (race condition prevention)
-      if (gameId && typeof window !== "undefined") {
-        const recentlyLeftGame = sessionStorage.getItem("recentlyLeftGame");
-        const recentlyLeftTime = sessionStorage.getItem("recentlyLeftTime");
-        const timeSinceLeave = recentlyLeftTime
-          ? Date.now() - parseInt(recentlyLeftTime)
-          : Infinity;
-
-        // Ignore check if this game was left within last 3 seconds
-        if (gameId === recentlyLeftGame && timeSinceLeave < 3000) {
-          setInGame(false);
-          setActiveGameId(null);
-          // Clear the flag after delay
-          setTimeout(() => {
-            if (typeof window !== "undefined") {
-              sessionStorage.removeItem("recentlyLeftGame");
-              sessionStorage.removeItem("recentlyLeftTime");
-            }
-          }, 3000);
+        if (!user) {
+          setCheckingGame(false);
           return;
         }
-      }
 
-      // Don't redirect if game is finished
-      if (payload?.status === "finished" || payload?.status === "complete") {
-        setInGame(false);
-        setActiveGameId(null);
-        return;
-      }
+        // Query active or starting games
+        const { data: games } = await supabase
+          .from("games")
+          .select("id, player_ids, players, left_players")
+          .in("status", ["active", "starting"]);
 
-      // Set game state
-      const isActive = isActiveGame && !!gameId;
-      setInGame(isActive);
-      setActiveGameId(isActive ? String(gameId) : null);
+        if (games && games.length > 0) {
+          // Find game where user is a player
+          const userGame = games.find((g) => {
+            const userIdStr = String(user.id);
 
-      // Automatic redirect to active game (only if not finished and active)
-      // Redirect immediately when active game is found
-      if (isActive && gameId) {
-        router.push(`/play/game/${gameId}`);
-      }
-    };
+            // Check if user left the game
+            const leftPlayers = Array.isArray(g.left_players)
+              ? g.left_players.map((id: any) => String(id))
+              : [];
+            if (leftPlayers.includes(userIdStr)) {
+              return false;
+            }
 
-    socket.on("session_status", handleSessionStatus);
+            // Check player_ids array
+            if (g.player_ids && Array.isArray(g.player_ids)) {
+              if (g.player_ids.some((id: any) => String(id) === userIdStr)) {
+                return true;
+              }
+            }
 
-    const emitCheckSession = () => {
-      if (!mounted) return;
-      setIsCheckingGame(true);
-      socket.emit("check_active_session");
-    };
+            // Fallback: check players JSONB
+            if (g.players && Array.isArray(g.players)) {
+              return g.players.some((p: any) => {
+                const playerId = p?.id || p?.user_id;
+                return playerId && String(playerId) === userIdStr;
+              });
+            }
 
-    if (socket.connected) {
-      emitCheckSession();
-    } else {
-      connectHandler = () => {
-        if (mounted) {
-          emitCheckSession();
+            return false;
+          });
+
+          if (userGame) {
+            // Skip local games
+            if (!userGame.id.startsWith("local-")) {
+              // Check if this is a recently left game (race condition prevention)
+              if (typeof window !== "undefined") {
+                const recentlyLeftGame =
+                  sessionStorage.getItem("recentlyLeftGame");
+                const recentlyLeftTime =
+                  sessionStorage.getItem("recentlyLeftTime");
+                const timeSinceLeave = recentlyLeftTime
+                  ? Date.now() - parseInt(recentlyLeftTime)
+                  : Infinity;
+
+                // Don't redirect if this game was left within last 3 seconds
+                if (userGame.id === recentlyLeftGame && timeSinceLeave < 3000) {
+                  return;
+                }
+              }
+
+              router.push(`/play/game/${userGame.id}`);
+              return;
+            }
+          }
         }
-      };
-      socket.once("connect", connectHandler);
-    }
+      } catch (error) {
+        console.error("Error checking active game:", error);
+      } finally {
+        setCheckingGame(false);
+      }
+    };
 
-    // Timeout fallback - mark check as complete after 5 seconds
-    const timeoutId = setTimeout(() => {
-      if (!mounted) return;
-      setIsCheckingGame(false);
-      // Don't clear listeners on timeout - response might still come
-    }, 5000);
+    checkActiveGame();
+  }, [supabase, router]);
+
+  // 1.1. Listen for match_found events to redirect immediately
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleMatchFound = (data: { gameId: string }) => {
+      if (data?.gameId) {
+        // Redirect immediately when match is found
+        router.push(`/play/game/${data.gameId}`);
+      }
+    };
+
+    socket.on("match_found", handleMatchFound);
 
     return () => {
-      mounted = false;
-      clearTimeout(timeoutId);
-      socket.off("session_status", handleSessionStatus);
-      if (connectHandler) {
-        socket.off("connect", connectHandler);
-      }
+      socket.off("match_found", handleMatchFound);
     };
-  }, [socket, router, pathname]);
+  }, [socket, router]);
 
-  // 4. Check queue status when landing on /play/online page
+  // 2. Fetch Variants
   useEffect(() => {
-    if (!socket || pathname !== "/play/online") {
-      // Reset queue check state when not on /play/online page
-      setIsCheckingQueue(false);
-      return;
-    }
+    fetch("/api/variants")
+      .then((res) => res.json())
+      .then((data) => {
+        setVariants(data);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load variants", err);
+        setIsLoading(false);
+      });
+  }, []);
 
-    let mounted = true;
-
-    const handleQueueStatus = (data: {
-      inQueue: boolean;
-      queueType: string | null;
-    }) => {
-      if (!mounted) return;
-      // Mark queue check as complete
-      setIsCheckingQueue(false);
-      // QueueProvider will handle setting the status and state
-      // This just ensures we check when landing on /play/online
+  // 2.5. Load user chips from localStorage
+  useEffect(() => {
+    const loadChips = () => {
+      if (typeof window !== "undefined") {
+        try {
+          const cached = localStorage.getItem("playLayout_profile");
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            setUserChips(parsed.chips ?? null);
+          }
+        } catch (e) {
+          // Ignore cache errors
+        }
+      }
     };
 
-    socket.on("queue_status", handleQueueStatus);
+    loadChips();
 
-    // Check queue status when landing on /play/online page
-    setIsCheckingQueue(true);
-    if (socket.connected) {
-      socket.emit("check_queue_status");
-    } else {
-      const connectHandler = () => {
-        if (mounted && socket.connected) {
-          setIsCheckingQueue(true);
-          socket.emit("check_queue_status");
+    // Listen for storage changes (when PlayLayout updates chips)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "playLayout_profile" && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          setUserChips(parsed.chips ?? null);
+        } catch (e) {
+          // Ignore parse errors
         }
-      };
-      socket.once("connect", connectHandler);
-    }
-
-    // Timeout fallback - mark check as complete after 5 seconds
-    const timeoutId = setTimeout(() => {
-      if (mounted) {
-        setIsCheckingQueue(false);
       }
-    }, 5000);
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
+    // Also check periodically in case localStorage is updated in the same window
+    const interval = setInterval(() => {
+      loadChips();
+    }, 1000);
 
     return () => {
-      mounted = false;
-      clearTimeout(timeoutId);
-      socket.off("queue_status", handleQueueStatus);
+      window.removeEventListener("storage", handleStorageChange);
+      clearInterval(interval);
     };
-  }, [socket, pathname]);
+  }, []);
 
-  // 5. Redirect if already in queue (only on /play/online page)
+  // 3. Extract unique formats (engine types) and categories from variants
+  const formats = useMemo(() => {
+    const unique = new Set(variants.map((v) => v.engine_type).filter(Boolean));
+    return Array.from(unique)
+      .sort()
+      .map((engineType) => ({
+        value: engineType,
+        label:
+          engineType === "holdem"
+            ? "Texas Hold'em"
+            : engineType.charAt(0).toUpperCase() + engineType.slice(1),
+      }));
+  }, [variants]);
+
+  const categories = useMemo(() => {
+    const unique = new Set(variants.map((v) => v.category));
+    return Array.from(unique).map((cat) => ({
+      value: cat,
+      label:
+        cat === "cash"
+          ? "Competitive"
+          : cat === "tournament" || cat === "casual" || cat === "sit_and_go"
+          ? "Casual"
+          : cat,
+    }));
+  }, [variants]);
+
+  // 4. Filter Logic - filter by both format (engine_type) and category
+  const availableVariants = useMemo(() => {
+    if (!format || !category) {
+      return [];
+    }
+
+    return variants.filter(
+      (v) => v.engine_type === format && v.category === category
+    );
+  }, [variants, format, category]);
+
+  // Helper function to check if user can afford a variant
+  const canAffordVariant = (variant: GameVariant): boolean => {
+    if (userChips === null) return true; // If chips not loaded yet, allow selection
+    const buyIn = variant.config?.buyIn || 100;
+    return userChips >= buyIn;
+  };
+
+  // Check if selected variant is affordable
+  const selectedVariantAffordable = useMemo(() => {
+    if (!selectedVariantSlug) return false;
+    const selectedVariant = variants.find(
+      (v) => v.slug === selectedVariantSlug
+    );
+    if (!selectedVariant) return false;
+    if (userChips === null) return true; // If chips not loaded yet, allow selection
+    const buyIn = selectedVariant.config?.buyIn || 100;
+    return userChips >= buyIn;
+  }, [selectedVariantSlug, variants, userChips]);
+
+  // Set default format to holdem when variants load
   useEffect(() => {
-    // Only redirect if we're on /play/online page and have queue info
-    if (pathname === "/play/online" && inQueue && queueType) {
-      router.push(`/play/queue?type=${queueType}`);
+    if (variants.length > 0 && !format) {
+      const hasHoldem = variants.some((v) => v.engine_type === "holdem");
+      if (hasHoldem) {
+        setFormat("holdem");
+      }
     }
-  }, [inQueue, queueType, router, pathname]);
+  }, [variants, format]);
 
-  const joinQueue = (slug: string, buyIn: number) => {
-    // Prevent joining if checks are still in progress
-    if (isChecking) {
-      toast({
-        title: "Please wait",
-        description: "Checking for active games and queues...",
-        variant: "default",
-      });
-      return;
-    }
+  // Clear selected variant when filters change
+  useEffect(() => {
+    setSelectedVariantSlug("");
+  }, [format, category]);
 
-    // Prevent joining if already in a game
-    if (inGame) {
-      toast({
-        title: "Cannot join queue",
-        description: activeGameId
-          ? "You are already in an active game."
-          : "You are currently in a game.",
-        variant: "destructive",
-      });
-      return;
+  // Clear selected variant if it becomes unaffordable
+  useEffect(() => {
+    if (selectedVariantSlug && userChips !== null) {
+      const selectedVariant = variants.find(
+        (v) => v.slug === selectedVariantSlug
+      );
+      if (selectedVariant && !canAffordVariant(selectedVariant)) {
+        setSelectedVariantSlug("");
+      }
     }
+  }, [userChips, selectedVariantSlug, variants]);
 
-    // Prevent joining if already in a queue
-    if (inQueue) {
-      toast({
-        title: "Cannot join queue",
-        description: "You are already in a queue.",
-        variant: "destructive",
-      });
-      return;
+  // 5. Handle Queue Join
+  const handleFindGame = () => {
+    if (!selectedVariantSlug) return;
+    if (!socket.connected) {
+      socket.connect();
     }
-
-    // Only enforce funds check if buyIn > 0 (free games don't need funds)
-    if (buyIn > 0 && userChips !== null && userChips < buyIn) {
-      toast({
-        title: "Insufficient Funds",
-        description: `You need ${buyIn} chips to join. Current balance: ${userChips.toLocaleString()}.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (inQueue) {
-      toast({
-        title: "Already in queue",
-        description: "You are already in a queue.",
-        variant: "default",
-      });
-      return;
-    }
-    router.push(`/play/queue?type=${slug}`);
+    socket.emit("join_queue", { queueType: selectedVariantSlug });
   };
 
-  const handleRejoin = () => {
-    if (activeGameId) router.push(`/play/game/${activeGameId}`);
-  };
+  // 6. Render Content based on Queue State
+  const renderContent = () => {
+    // --- STATE: IN QUEUE ---
+    if (inQueue) {
+      const activeVariant = variants.find(
+        (v) => v.slug === (queueType || selectedVariantSlug)
+      );
 
-  // Buttons disabled until BOTH checks complete AND neither game nor queue is active
-  const isButtonDisabled =
-    inGame || inQueue || isChecking || !isSocketConnected;
+      return (
+        <div className="flex flex-col items-center justify-center py-10 space-y-6">
+          <div className="relative">
+            <div className="absolute inset-0 bg-emerald-500/20 blur-xl rounded-full animate-pulse" />
+            <div className="h-20 w-20 bg-slate-800 rounded-full flex items-center justify-center relative border-2 border-emerald-500">
+              <Loader2 className="h-10 w-10 text-emerald-500 animate-spin" />
+            </div>
+          </div>
 
-  return (
-    <div className="min-h-screen relative">
-      {/* --- SCROLLABLE CONTENT LAYER --- */}
-      <div className="relative z-10">
-        <div className="container mx-auto p-6 max-w-4xl">
-          <h1 className="text-3xl font-bold mb-6">Play Online</h1>
-          <div className="space-y-8">
-            {/* Cash Games Section */}
-            <section>
-              <div
-                className="text-white px-6 py-4 rounded-t-xl"
-                style={{
-                  background: `linear-gradient(to right, ${accentColor}, ${
-                    currentTheme.colors.accent[1] || accentColor
-                  })`,
-                }}
-              >
-                <h2 className="text-2xl font-bold">Cash Games</h2>
-                <p className="text-sm text-white/80">
-                  Play with real chips and cash out anytime
-                </p>
-              </div>
-              {isLoadingVariants ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-card rounded-b-xl">
-                  {[1, 2].map((i) => (
-                    <Card key={i} className="bg-card/50 animate-pulse h-48" />
+          <div className="text-center space-y-2">
+            <h2 className="text-2xl font-bold text-white">Finding Match...</h2>
+            <p className="text-slate-400">
+              Looking for players for{" "}
+              <span className="text-emerald-400">
+                {activeVariant?.name || "Poker"}
+              </span>
+            </p>
+          </div>
+
+          <div className="w-full max-w-xs bg-slate-800/50 rounded-lg p-4 border border-slate-800 text-center">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">
+              Matchmaking Status
+            </p>
+            <p className="text-sm font-medium text-slate-300">
+              {matchFound
+                ? "Game Found! Teleporting..."
+                : "Searching for opponents..."}
+            </p>
+          </div>
+
+          <Button
+            variant="destructive"
+            size="lg"
+            className="w-full max-w-xs"
+            onClick={() => leaveQueue(activeVariant?.slug || "")}
+            disabled={matchFound}
+          >
+            Cancel Search
+          </Button>
+        </div>
+      );
+    }
+
+    // --- STATE: SELECTION FORM ---
+    return (
+      <div className="space-y-8">
+        {/* Back Link */}
+        <Link
+          href="/play"
+          className="inline-flex items-center text-sm text-slate-500 hover:text-white"
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back to Modes
+        </Link>
+
+        {/* Format and Category Rows - Reduced spacing */}
+        <div className="space-y-3">
+          {/* Format - Label and Dropdown on Same Row */}
+          <div className="flex items-center gap-3">
+            <Label className="w-20 flex-shrink-0">Format</Label>
+            <div className="flex-1">
+              <Select value={format} onValueChange={setFormat}>
+                <SelectTrigger className="[&>span]:text-left">
+                  <SelectValue placeholder="Select Variant" />
+                </SelectTrigger>
+                <SelectContent>
+                  {formats.map((fmt) => (
+                    <SelectItem
+                      key={fmt.value}
+                      value={fmt.value}
+                      className="text-left"
+                    >
+                      {fmt.label}
+                    </SelectItem>
                   ))}
-                </div>
-              ) : variants.filter((v) => v.category === "cash").length === 0 ? (
-                <div className="p-6 bg-card rounded-b-xl">
-                  <div className="text-center py-12 bg-card/20 rounded-lg border border-border/50">
-                    <p className="text-muted-foreground">
-                      No cash games available at this time.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-card rounded-b-xl">
-                  {variants
-                    .filter((v) => v.category === "cash")
-                    .map((variant) => {
-                      const buyIn = variant.config?.buyIn || 0;
-                      const startingStack =
-                        variant.config?.startingStack || 1000;
-                      const isFree = buyIn === 0;
-                      const canAfford =
-                        isFree || (userChips !== null && userChips >= buyIn);
-                      const isDisabled =
-                        inGame ||
-                        inQueue ||
-                        isChecking ||
-                        !isSocketConnected ||
-                        !canAfford;
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-                      return (
-                        <MotionCard
-                          key={variant.id}
-                          className={`${
-                            isDisabled
-                              ? "cursor-not-allowed opacity-60"
-                              : "cursor-pointer"
-                          } bg-card rounded-xl overflow-hidden`}
-                          onClick={() =>
-                            !isDisabled && joinQueue(variant.slug, buyIn)
-                          }
-                        >
-                          <CardContent className="p-6">
-                            <div className="flex items-center gap-4 mb-4">
-                              <div
-                                className="p-3 rounded-lg"
-                                style={{
-                                  backgroundColor: `${accentColor}20`,
-                                  color: accentColor,
-                                }}
-                              >
-                                {variant.max_players === 2 ? (
-                                  <User
-                                    className="h-8 w-8"
-                                    style={{ color: accentColor }}
-                                  />
-                                ) : (
-                                  <Users
-                                    className="h-8 w-8"
-                                    style={{ color: accentColor }}
-                                  />
-                                )}
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex-1">
-                                    <h3 className="text-xl font-semibold">
-                                      {variant.name}
-                                    </h3>
-                                    <p className="text-sm text-muted-foreground">
-                                      {variant.description ||
-                                        `${variant.max_players}-Player ${
-                                          variant.category === "cash"
-                                            ? "Cash Game"
-                                            : "Game"
-                                        }`}
-                                    </p>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    {variant.category === "cash" && (
-                                      <span className="px-2 py-1 rounded text-xs bg-green-500/10 text-green-500 border border-green-500/20 whitespace-nowrap">
-                                        Cash
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="space-y-2 text-sm text-muted-foreground mb-4">
-                              <div className="flex justify-between">
-                                <span>Blinds:</span>
-                                <span className="font-medium text-foreground">
-                                  {variant.config?.blinds?.small || 1}/
-                                  {variant.config?.blinds?.big || 2}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Buy-in / Stack:</span>
-                                <span
-                                  className={`font-medium ${
-                                    canAfford
-                                      ? "text-foreground"
-                                      : "text-destructive"
-                                  }`}
-                                >
-                                  {isFree ? "Free" : buyIn} / {startingStack}
-                                </span>
-                              </div>
-                            </div>
-                            <Button
-                              className="w-full"
-                              size="lg"
-                              disabled={isDisabled}
-                              onClick={() => joinQueue(variant.slug, buyIn)}
-                              style={
-                                canAfford
-                                  ? {
-                                      background: `linear-gradient(to right, ${accentColor}, ${
-                                        currentTheme.colors.accent[1] ||
-                                        accentColor
-                                      })`,
-                                      color: "white",
-                                    }
-                                  : undefined
-                              }
-                              variant={canAfford ? "default" : "outline"}
-                              onMouseEnter={(e) => {
-                                if (canAfford && !isDisabled) {
-                                  e.currentTarget.style.background = `linear-gradient(to right, ${
-                                    currentTheme.colors.accent[1] || accentColor
-                                  }, ${
-                                    currentTheme.colors.accent[2] ||
-                                    currentTheme.colors.accent[1] ||
-                                    accentColor
-                                  })`;
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                if (canAfford && !isDisabled) {
-                                  e.currentTarget.style.background = `linear-gradient(to right, ${accentColor}, ${
-                                    currentTheme.colors.accent[1] || accentColor
-                                  })`;
-                                }
-                              }}
-                            >
-                              <Play className="mr-2 h-4 w-4" />
-                              {inGame
-                                ? "In Game"
-                                : inQueue
-                                ? "Already in Queue"
-                                : !isSocketConnected
-                                ? "Connecting..."
-                                : !canAfford
-                                ? "Insufficient Funds"
-                                : "Join Queue"}
-                            </Button>
-                          </CardContent>
-                        </MotionCard>
-                      );
-                    })}
-                </div>
-              )}
-            </section>
-
-            {/* Casual Games Section */}
-            <section>
-              <div
-                className="text-white px-6 py-4 rounded-t-xl"
-                style={{
-                  background: `linear-gradient(to right, ${accentColor}, ${
-                    currentTheme.colors.accent[1] || accentColor
-                  })`,
-                }}
-              >
-                <h2 className="text-2xl font-bold">Casual Games</h2>
-                <p className="text-sm text-white/80">
-                  Play for fun with free chips
-                </p>
-              </div>
-              {isLoadingVariants ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-card rounded-b-xl">
-                  {[1, 2].map((i) => (
-                    <Card key={i} className="bg-card/50 animate-pulse h-48" />
+          {/* Category - Label and Dropdown on Same Row */}
+          <div className="flex items-center gap-3">
+            <Label className="w-20 flex-shrink-0">Category</Label>
+            <div className="flex-1">
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger className="[&>span]:text-left">
+                  <SelectValue placeholder="Select Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem
+                      key={cat.value}
+                      value={cat.value}
+                      className="text-left"
+                    >
+                      {cat.label}
+                    </SelectItem>
                   ))}
-                </div>
-              ) : variants.filter((v) => v.category !== "cash").length === 0 ? (
-                <div className="p-6 bg-card rounded-b-xl">
-                  <div className="text-center py-12 bg-card/20 rounded-lg border border-border/50">
-                    <p className="text-muted-foreground">
-                      No casual games available at this time.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-card rounded-b-xl">
-                  {variants
-                    .filter((v) => v.category !== "cash")
-                    .map((variant) => {
-                      const buyIn = variant.config?.buyIn || 0;
-                      const startingStack =
-                        variant.config?.startingStack || 1000;
-                      const isFree = buyIn === 0;
-                      const canAfford =
-                        isFree || (userChips !== null && userChips >= buyIn);
-                      const isDisabled =
-                        inGame ||
-                        inQueue ||
-                        isChecking ||
-                        !isSocketConnected ||
-                        !canAfford;
-
-                      return (
-                        <MotionCard
-                          key={variant.id}
-                          className={`${
-                            isDisabled
-                              ? "cursor-not-allowed opacity-60"
-                              : "cursor-pointer"
-                          } bg-card rounded-xl overflow-hidden`}
-                          onClick={() =>
-                            !isDisabled && joinQueue(variant.slug, buyIn)
-                          }
-                        >
-                          <CardContent className="p-6">
-                            <div className="flex items-center gap-4 mb-4">
-                              <div
-                                className="p-3 rounded-lg"
-                                style={{
-                                  backgroundColor: `${accentColor}20`,
-                                  color: accentColor,
-                                }}
-                              >
-                                {variant.max_players === 2 ? (
-                                  <User
-                                    className="h-8 w-8"
-                                    style={{ color: accentColor }}
-                                  />
-                                ) : (
-                                  <Users
-                                    className="h-8 w-8"
-                                    style={{ color: accentColor }}
-                                  />
-                                )}
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex-1">
-                                    <h3 className="text-xl font-semibold">
-                                      {variant.name}
-                                    </h3>
-                                    <p className="text-sm text-muted-foreground">
-                                      {variant.description ||
-                                        `${variant.max_players}-Player ${
-                                          variant.category === "cash"
-                                            ? "Cash Game"
-                                            : "Game"
-                                        }`}
-                                    </p>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    {variant.category === "tournament" && (
-                                      <span className="px-2 py-1 rounded text-xs bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 whitespace-nowrap">
-                                        Tournament
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="space-y-2 text-sm text-muted-foreground mb-4">
-                              <div className="flex justify-between">
-                                <span>Blinds:</span>
-                                <span className="font-medium text-foreground">
-                                  {variant.config?.blinds?.small || 1}/
-                                  {variant.config?.blinds?.big || 2}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Buy-in / Stack:</span>
-                                <span
-                                  className={`font-medium ${
-                                    canAfford
-                                      ? "text-foreground"
-                                      : "text-destructive"
-                                  }`}
-                                >
-                                  {isFree ? "Free" : buyIn} / {startingStack}
-                                </span>
-                              </div>
-                            </div>
-                            <Button
-                              className="w-full"
-                              size="lg"
-                              disabled={isDisabled}
-                              onClick={() => joinQueue(variant.slug, buyIn)}
-                              style={
-                                canAfford
-                                  ? {
-                                      background: `linear-gradient(to right, ${accentColor}, ${
-                                        currentTheme.colors.accent[1] ||
-                                        accentColor
-                                      })`,
-                                      color: "white",
-                                    }
-                                  : undefined
-                              }
-                              variant={canAfford ? "default" : "outline"}
-                              onMouseEnter={(e) => {
-                                if (canAfford && !isDisabled) {
-                                  e.currentTarget.style.background = `linear-gradient(to right, ${
-                                    currentTheme.colors.accent[1] || accentColor
-                                  }, ${
-                                    currentTheme.colors.accent[2] ||
-                                    currentTheme.colors.accent[1] ||
-                                    accentColor
-                                  })`;
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                if (canAfford && !isDisabled) {
-                                  e.currentTarget.style.background = `linear-gradient(to right, ${accentColor}, ${
-                                    currentTheme.colors.accent[1] || accentColor
-                                  })`;
-                                }
-                              }}
-                            >
-                              <Play className="mr-2 h-4 w-4" />
-                              {inGame
-                                ? "In Game"
-                                : inQueue
-                                ? "Already in Queue"
-                                : !isSocketConnected
-                                ? "Connecting..."
-                                : !canAfford
-                                ? "Insufficient Funds"
-                                : "Join Queue"}
-                            </Button>
-                          </CardContent>
-                        </MotionCard>
-                      );
-                    })}
-                </div>
-              )}
-            </section>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
+
+        {/* Available Games - Only show if both format and category are selected */}
+        {format && category && (
+          <div className="space-y-3">
+            <Label>Available Games</Label>
+            {isLoading ? (
+              <div className="h-10 w-full bg-slate-800 animate-pulse rounded" />
+            ) : availableVariants.length === 0 ? (
+              <div className="p-4 border border-dashed border-slate-700 rounded text-center text-slate-500">
+                No tables available.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {availableVariants.map((variant) => {
+                  const canAfford = canAffordVariant(variant);
+                  const buyIn = variant.config?.buyIn || 100;
+                  const blinds = variant.config?.blinds || { small: 1, big: 2 };
+                  const isCasual =
+                    variant.category === "casual" ||
+                    variant.category === "tournament" ||
+                    variant.category === "sit_and_go";
+                  const displayText = isCasual
+                    ? `Blinds $${blinds.small}/$${blinds.big}`
+                    : `Buy-in $${buyIn}`;
+
+                  return (
+                    <button
+                      key={variant.id}
+                      onClick={() => {
+                        if (canAfford) {
+                          setSelectedVariantSlug(variant.slug);
+                        }
+                      }}
+                      disabled={!canAfford}
+                      className={`
+                        relative p-3 rounded-lg border text-left transition-all
+                        ${
+                          !canAfford
+                            ? "opacity-50 cursor-not-allowed bg-slate-800/20 border-slate-800"
+                            : selectedVariantSlug === variant.slug
+                            ? "bg-emerald-950/30 border-emerald-500 ring-1 ring-emerald-500/50"
+                            : "bg-slate-800/40 border-slate-700 hover:border-slate-600 hover:bg-slate-800/60"
+                        }
+                      `}
+                    >
+                      <div className="space-y-1">
+                        <div
+                          className={`font-semibold text-sm ${
+                            !canAfford ? "text-slate-500" : "text-white"
+                          }`}
+                        >
+                          {variant.name}
+                        </div>
+                        <div
+                          className={`text-xs ${
+                            !canAfford ? "text-slate-600" : "text-slate-400"
+                          }`}
+                        >
+                          {displayText}
+                          {!canAfford && userChips !== null && (
+                            <span className="block mt-0.5 text-red-400">
+                              Insufficient funds (${userChips.toLocaleString()})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {selectedVariantSlug === variant.slug && canAfford && (
+                        <div className="absolute top-2 right-2 h-2 w-2 rounded-full bg-emerald-500" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    </div>
+    );
+  };
+
+  return (
+    <PlayLayout
+      title="Online Lobby"
+      footer={
+        <>
+          <Button
+            size="lg"
+            className="w-full font-bold text-lg h-14 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 shadow-lg shadow-emerald-900/20"
+            disabled={
+              checkingGame ||
+              inQueue ||
+              !selectedVariantSlug ||
+              isLoading ||
+              !selectedVariantAffordable
+            }
+            onClick={handleFindGame}
+          >
+            {isLoading ? (
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <Search className="mr-2 h-5 w-5" />
+            )}
+            Find Game
+          </Button>
+          <p className="text-center text-xs text-slate-500 mt-3">
+            You will be placed in a queue until a match is found.
+          </p>
+        </>
+      }
+    >
+      {renderContent()}
+    </PlayLayout>
   );
 }
-

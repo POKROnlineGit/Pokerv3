@@ -40,7 +40,7 @@ export default function SignInPage() {
       if (mounted) {
         setCheckingAuth(false);
         if (user) {
-          router.replace("/play/online");
+          router.replace("/play");
           return;
         }
       }
@@ -53,7 +53,7 @@ export default function SignInPage() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted && session?.user) {
-        router.replace("/play/online");
+        router.replace("/play");
       }
     });
 
@@ -93,7 +93,7 @@ export default function SignInPage() {
       });
       if (error) throw error;
       router.refresh();
-      router.push('/play/online');
+      router.push('/play');
     } catch (err: any) {
       setError(err.message || "Failed to sign in");
     } finally {

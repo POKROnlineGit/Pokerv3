@@ -40,16 +40,8 @@ export function Sidebar() {
   const primaryColor = currentTheme.colors.primary[0];
   const accentColor = currentTheme.colors.accent[0];
 
-  // Detect if we're on a game page
-  const isGamePage = pathname?.match(/^\/play\/(game|local)\/[^/]+$/) !== null;
-
-  // Minimized state: default to true on game pages, false otherwise
-  const [isMinimized, setIsMinimized] = useState(isGamePage);
-
-  // Update minimized state when route changes to/from game page
-  useEffect(() => {
-    setIsMinimized(isGamePage);
-  }, [isGamePage]);
+  // Minimized state: default to false
+  const [isMinimized, setIsMinimized] = useState(false);
 
   const toggleSidebar = () => {
     setIsMinimized((prev) => !prev);
@@ -124,7 +116,7 @@ export function Sidebar() {
 
   const navItems = [
     {
-      href: "/play/online",
+      href: "/play",
       label: "Play",
       icon: Play,
       submenu: [
@@ -245,7 +237,7 @@ export function Sidebar() {
               className="flex justify-center items-center w-full"
             >
               <Link
-                href={user ? "/play/online" : "/"}
+                href={user ? "/play" : "/"}
                 className="flex items-center justify-center"
               >
                 <Image
@@ -267,14 +259,14 @@ export function Sidebar() {
           {navItems.map((item) => {
             const Icon = item.icon;
             // Check if current pathname matches the item's href
-            // For /play/online, also match /play/* paths (game pages, queue, etc.) except /play/bots
+            // For /play, also match /play/* paths (game pages, queue, etc.) except /play/bots
             // For items with submenus, also check if any submenu item is active
             let isActive =
-              item.href === "/play/online"
-                ? pathname === "/play/online" ||
+              item.href === "/play"
+                ? pathname === "/play" ||
+                  pathname === "/play/online" ||
                   (pathname?.startsWith("/play/") &&
-                    !pathname?.startsWith("/play/bots") &&
-                    pathname !== "/play")
+                    !pathname?.startsWith("/play/bots"))
                 : pathname === item.href ||
                   pathname?.startsWith(`${item.href}/`);
 
@@ -285,11 +277,11 @@ export function Sidebar() {
                 if (subItem.href === "/play/online") {
                   return (
                     pathname === "/play/online" ||
+                    pathname === "/play" ||
                     pathname?.startsWith("/play/game/") ||
                     pathname?.startsWith("/play/queue") ||
                     (pathname?.startsWith("/play/") &&
-                      !pathname?.startsWith("/play/bots") &&
-                      pathname !== "/play")
+                      !pathname?.startsWith("/play/bots"))
                   );
                 }
                 return (
@@ -454,27 +446,38 @@ export function Sidebar() {
         {user ? (
           // Logged in: Show Sign Out button
           <Tooltip text="Sign Out" show={isMinimized}>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center min-w-0 w-full text-white hover:bg-white/5 transition-colors relative rounded-lg"
-              style={{
-                minHeight: "48px",
-                padding: "12px",
-              }}
-            >
-              {/* Fixed-width icon container - always 40px wide */}
-              <div
-                className="flex items-center justify-center flex-shrink-0"
-                style={{ width: "40px" }}
+            <div className="relative w-full">
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSignOut();
+                }}
+                className="flex items-center min-w-0 text-white hover:bg-white/5 transition-colors relative rounded-lg"
+                style={{
+                  minHeight: "48px",
+                  paddingTop: "12px",
+                  paddingBottom: "12px",
+                  paddingLeft: "4px",
+                  paddingRight: "4px",
+                  marginLeft: "8px",
+                  marginRight: "8px",
+                }}
               >
-                <LogOut className="h-5 w-5" />
-              </div>
-              {!isMinimized && (
-                <span className="ml-3 whitespace-nowrap overflow-hidden">
-                  Sign Out
-                </span>
-              )}
-            </button>
+                {/* Fixed-width icon container - always 40px wide */}
+                <div
+                  className="flex items-center justify-center flex-shrink-0"
+                  style={{ width: "40px" }}
+                >
+                  <LogOut className="h-5 w-5" />
+                </div>
+                {!isMinimized && (
+                  <span className="ml-3 whitespace-nowrap overflow-hidden">
+                    Sign Out
+                  </span>
+                )}
+              </a>
+            </div>
           </Tooltip>
         ) : (
           // Logged out: Show Log In and Create Account buttons
@@ -603,11 +606,11 @@ export function Sidebar() {
                   if (subItem.href === "/play/online") {
                     isSubActive =
                       pathname === "/play/online" ||
+                      pathname === "/play" ||
                       pathname?.startsWith("/play/game/") ||
                       pathname?.startsWith("/play/queue") ||
                       (pathname?.startsWith("/play/") &&
-                        !pathname?.startsWith("/play/bots") &&
-                        pathname !== "/play");
+                        !pathname?.startsWith("/play/bots"));
                   }
                   return (
                     <Link

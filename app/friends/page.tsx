@@ -336,7 +336,7 @@ export default function FriendsPage() {
         <h1 className="text-3xl font-bold mb-6">Friends</h1>
 
         {/* Search Bar */}
-        <Card className="mb-6 bg-card/50 backdrop-blur-sm border">
+        <Card className="mb-6 bg-card backdrop-blur-sm border">
         <CardHeader>
           <CardTitle>Add Friend</CardTitle>
         </CardHeader>
@@ -418,7 +418,7 @@ export default function FriendsPage() {
         </TabsList>
 
         <TabsContent value="friends" className="mt-4">
-          <Card className="bg-card/50 backdrop-blur-sm border">
+          <Card className="bg-card backdrop-blur-sm border">
             <CardHeader>
               <CardTitle>Your Friends</CardTitle>
             </CardHeader>
@@ -465,7 +465,7 @@ export default function FriendsPage() {
         </TabsContent>
 
         <TabsContent value="pending" className="mt-4">
-          <Card className="bg-card/50 backdrop-blur-sm border">
+          <Card className="bg-card backdrop-blur-sm border">
             <CardHeader>
               <CardTitle>Pending Friend Requests</CardTitle>
             </CardHeader>

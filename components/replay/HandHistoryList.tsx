@@ -116,7 +116,7 @@ export function HandHistoryList({
 
   return (
     <>
-      <Card className="bg-card/50 backdrop-blur-sm border flex-1 flex flex-col min-h-0 overflow-hidden">
+      <Card className="bg-card backdrop-blur-sm border flex-1 flex flex-col min-h-0 overflow-hidden">
         <CardContent className="p-0 flex-1 overflow-auto">
           <div className="relative w-full h-full">
             <table className="w-full caption-bottom text-sm">

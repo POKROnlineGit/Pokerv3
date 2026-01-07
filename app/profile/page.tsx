@@ -147,7 +147,7 @@ export default function ProfilePage() {
         <div className="container mx-auto py-6 px-14 max-w-7xl h-[calc(100vh-3rem)] flex flex-col">
           <h1 className="text-3xl font-bold mb-6">Profile</h1>
           {/* Profile Header */}
-          <Card className="mb-6 bg-card/50 backdrop-blur-sm border flex-shrink-0">
+          <Card className="mb-6 bg-card backdrop-blur-sm border flex-shrink-0">
             <CardHeader>
               <div className="flex items-center gap-4">
                 <div className="p-4 bg-primary/10 rounded-full">
@@ -190,7 +190,7 @@ export default function ProfilePage() {
 
                 return (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Card className="bg-card/50 backdrop-blur-sm border">
+                    <Card className="bg-card backdrop-blur-sm border">
                       <CardHeader>
                         <CardTitle className="text-lg">Hands Played / Hands Won</CardTitle>
                       </CardHeader>
@@ -201,7 +201,7 @@ export default function ProfilePage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="bg-card/50 backdrop-blur-sm border">
+                    <Card className="bg-card backdrop-blur-sm border">
                       <CardHeader>
                         <CardTitle className="text-lg">VPIP</CardTitle>
                       </CardHeader>
@@ -212,7 +212,7 @@ export default function ProfilePage() {
                       </CardContent>
                     </Card>
 
-                    <Card className="bg-card/50 backdrop-blur-sm border">
+                    <Card className="bg-card backdrop-blur-sm border">
                       <CardHeader>
                         <CardTitle className="text-lg">PFR</CardTitle>
                       </CardHeader>
@@ -231,7 +231,7 @@ export default function ProfilePage() {
               {user ? (
                 <HandHistoryList hands={hands} currentUserId={user.id} />
               ) : (
-                <div className="flex flex-col items-center justify-center py-12 space-y-3 text-center border rounded-lg bg-card/50 text-muted-foreground">
+                <div className="flex flex-col items-center justify-center py-12 space-y-3 text-center border rounded-lg bg-card text-muted-foreground">
                   <p className="text-lg font-medium">Loading...</p>
                 </div>
               )}

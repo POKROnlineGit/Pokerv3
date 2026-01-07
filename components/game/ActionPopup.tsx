@@ -430,13 +430,11 @@ export function ActionPopup({
     };
 
     return (
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className="fixed bottom-6 right-6" style={{ zIndex: 9999 }}>
         {/* Visual Feedback Prompt */}
-        {!hero.folded && (
-          <div className="mb-2 text-center">
-            <p className="text-sm text-white font-medium">Show your cards?</p>
-          </div>
-        )}
+        <div className="mb-2 text-center">
+          <p className="text-sm text-white font-medium">Show your cards?</p>
+        </div>
         {/* Reveal Buttons - Horizontal Layout matching action buttons */}
         <div className="flex items-center gap-2 flex-row-reverse">
           {/* Reveal Card 2 Button (rightmost) */}
@@ -444,7 +442,7 @@ export function ActionPopup({
             onClick={() => handleReveal(1)}
             disabled={card2Revealed}
             className={cn(
-              "h-12 px-6 text-sm font-medium transition-all",
+              "h-12 px-6 text-sm font-medium",
               card2Revealed
                 ? "bg-green-600/80 border-2 border-green-500 text-white cursor-not-allowed"
                 : "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
@@ -458,7 +456,7 @@ export function ActionPopup({
             onClick={() => handleReveal(0)}
             disabled={card1Revealed}
             className={cn(
-              "h-12 px-6 text-sm font-medium transition-all",
+              "h-12 px-6 text-sm font-medium",
               card1Revealed
                 ? "bg-green-600/80 border-2 border-green-500 text-white cursor-not-allowed"
                 : "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
@@ -472,7 +470,7 @@ export function ActionPopup({
             onClick={handleRevealBoth}
             disabled={bothRevealed}
             className={cn(
-              "h-12 px-6 text-sm font-medium transition-all",
+              "h-12 px-6 text-sm font-medium",
               bothRevealed
                 ? "bg-green-600/80 border-2 border-green-500 text-white cursor-not-allowed"
                 : "bg-[#9A1F40] border-2 border-[#9A1F40] text-white hover:bg-[#7a182f]"
@@ -486,7 +484,7 @@ export function ActionPopup({
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <div className="fixed bottom-6 right-6" style={{ zIndex: 9999 }}>
       {/* Bet Menu (expanded above buttons) */}
       <AnimatePresence>
         {showBetMenu && isMyTurn && (
@@ -628,7 +626,7 @@ export function ActionPopup({
             onClick={handleFold}
             disabled={isMyTurn && showBetMenu}
             className={cn(
-              "h-12 px-6 text-sm font-medium transition-all",
+              "h-12 px-6 text-sm font-medium",
               foldQueued
                 ? "bg-red-600 border-2 border-red-600 text-white shadow-lg"
                 : isMyTurn
@@ -644,7 +642,7 @@ export function ActionPopup({
             onClick={handleCheck}
             disabled={checkDisabled || (isMyTurn && showBetMenu)}
             className={cn(
-              "h-12 px-6 text-sm font-medium transition-all",
+              "h-12 px-6 text-sm font-medium",
               checkQueued
                 ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
                 : isMyTurn && canCheck
@@ -666,7 +664,7 @@ export function ActionPopup({
               (highestBet === 0 && hero.chips < bigBlind)
             }
             className={cn(
-              "h-12 px-6 text-sm font-medium transition-all",
+              "h-12 px-6 text-sm font-medium",
               isMyTurn && showBetMenu
                 ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
                 : isMyTurn
@@ -683,7 +681,7 @@ export function ActionPopup({
               onClick={handleCall}
               disabled={isMyTurn && showBetMenu}
               className={cn(
-                "h-12 px-6 text-sm font-medium transition-all",
+                "h-12 px-6 text-sm font-medium",
                 callQueued
                   ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
                   : isMyTurn

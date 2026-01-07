@@ -132,7 +132,7 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
   }
 
   return (
-    <Card className="bg-card/50 backdrop-blur-sm border">
+    <Card className="bg-card backdrop-blur-sm border">
       <CardHeader>
         <CardTitle>{getCardTitle()}</CardTitle>
         <CardDescription>

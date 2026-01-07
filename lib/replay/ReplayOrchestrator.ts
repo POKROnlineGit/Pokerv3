@@ -120,9 +120,15 @@ export class ReplayOrchestrator {
   private history: ReplayInput;
   private manifestToSeat: Map<number, number>;
   private seatToPlayerId: Map<number, string>;
+  private currentUserId?: string;
 
-  constructor(history: ReplayInput, playerNames?: Record<string, string>) {
+  constructor(
+    history: ReplayInput,
+    playerNames?: Record<string, string>,
+    currentUserId?: string
+  ) {
     this.history = history;
+    this.currentUserId = currentUserId;
 
     // Create config object from variant string or use provided config
     const engineConfig = createConfigFromVariant(
@@ -277,9 +283,8 @@ export class ReplayOrchestrator {
         // FIX: Skip actions if game is finished or complete
         // The engine will reject these actions anyway
         if (gameStatus === "finished" || gameStatus === "complete") {
-          // Skip all actions when game is finished
-          // Transitions should have already been processed
-          continue;
+          // Break out of loop when game is complete to avoid extra frames
+          break;
         }
 
         // FIX: Allow transitions and reveals even when currentActorSeat is null (all-in runouts)
@@ -374,9 +379,25 @@ export class ReplayOrchestrator {
         // We listen for the engine requesting a transition via effects
         // Helper function to process transitions recursively
         const processTransitions = (effects: any[]): void => {
+          // Check game status before processing transitions
+          const ctxCheck = this.engine.context as unknown as EngineContext;
+          if (
+            ctxCheck.status === "finished" ||
+            ctxCheck.status === "complete"
+          ) {
+            // Don't process transitions if game is complete/finished
+            // This prevents the preflop transition for the next hand from being added
+            return;
+          }
+
           for (const effect of effects) {
             if (effect.type === "SCHEDULE_TRANSITION") {
               const targetPhase = effect.targetPhase;
+
+              // Skip preflop transitions - these are for the next hand, not this replay
+              if (targetPhase === "preflop") {
+                continue;
+              }
 
               // Prepare historical cards if dealing a street
               let overrides: any = null;
@@ -471,10 +492,65 @@ export class ReplayOrchestrator {
       // Mirror the structure: check if holeCards exists before processing
       let holeCards: string[] = [];
       if (p.holeCards && Array.isArray(p.holeCards)) {
-        // Map holeCards - for replay (God Mode), show all cards
-        holeCards = p.holeCards.map((c: any) => {
-          // Convert card object to display string
-          return typeof c === "string" ? c : c?.display || "HIDDEN";
+        // Initialize revealedIndices if not present
+        const revealedIndices: number[] = Array.isArray(p.revealedIndices)
+          ? p.revealedIndices
+          : [];
+
+        const isShowdown = rawState.currentPhase === "showdown";
+        const activeNonFoldedPlayers = (rawState.players || []).filter(
+          (pl: any) => !pl.folded && !pl.left
+        );
+        const activePlayersCount = activeNonFoldedPlayers.length;
+        const playersWithChips = (rawState.players || []).filter(
+          (pl: any) => pl.chips > 0 && !pl.folded && !pl.left
+        );
+        const currentBet = Math.max(
+          ...(rawState.players || []).map((pl: any) => pl.currentBet || 0)
+        );
+        const activePlayersForBalance = (rawState.players || []).filter(
+          (pl: any) => !pl.folded && !pl.left
+        );
+        const isBettingBalanced = activePlayersForBalance.every(
+          (pl: any) => pl.allIn || (pl.currentBet || 0) === currentBet
+        );
+        const isRunout =
+          playersWithChips.length <= 1 &&
+          activeNonFoldedPlayers.length > 1 &&
+          isBettingBalanced;
+
+        // Map holeCards - respect revealedIndices, similar to getPlayerContext
+        const isSelf = this.currentUserId && p.id === this.currentUserId;
+        holeCards = p.holeCards.map((c: any, index: number) => {
+          // Always reveal own cards (hero)
+          if (isSelf) {
+            return typeof c === "string" ? c : c?.display || "HIDDEN";
+          }
+
+          // Auto-reveal during runouts or showdown for active players
+          // At showdown: reveal all non-folded players' cards
+          // At runout: reveal if betting is balanced and there are multiple active players
+          // Also reveal if explicitly revealed via reveal action
+          if (isShowdown && !p.folded) {
+            // At showdown, reveal all non-folded players' cards
+            return typeof c === "string" ? c : c?.display || "HIDDEN";
+          }
+          if (
+            isRunout &&
+            ((!p.folded && activePlayersCount > 1) ||
+              revealedIndices.includes(index))
+          ) {
+            // At runout, reveal based on betting balance and active players
+            return typeof c === "string" ? c : c?.display || "HIDDEN";
+          }
+
+          // Reveal cards that have been explicitly revealed via reveal action
+          if (revealedIndices.includes(index)) {
+            return typeof c === "string" ? c : c?.display || "HIDDEN";
+          }
+
+          // All other cases: return 'HIDDEN'
+          return "HIDDEN";
         });
 
         // If all cards are hidden and player is folded, return empty array

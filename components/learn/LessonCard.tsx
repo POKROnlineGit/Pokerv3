@@ -25,7 +25,7 @@ export function LessonCard({ lesson }: LessonCardProps) {
 
   return (
     <Link href={`/learn/${lesson.slug}`} className="group block h-full">
-      <Card className="h-full transition-all duration-300 hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-900/20 bg-card/50 backdrop-blur-sm">
+      <Card className="h-full transition-all duration-300 hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-900/20 bg-card backdrop-blur-sm">
         <CardHeader className="pb-3">
           <div className="flex justify-between items-start gap-4">
             <div className="space-y-1">

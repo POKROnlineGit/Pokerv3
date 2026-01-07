@@ -44,7 +44,7 @@ export default function SignUpPage() {
       if (mounted) {
         setCheckingAuth(false);
         if (user) {
-          router.replace("/play/online");
+          router.replace("/play");
           return;
         }
       }
@@ -57,7 +57,7 @@ export default function SignUpPage() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted && session?.user) {
-        router.replace("/play/online");
+        router.replace("/play");
       }
     });
 
@@ -104,7 +104,7 @@ export default function SignUpPage() {
 
       // If auto-confirmed or successful, redirect to play
       if (data.user) {
-         router.push('/play/online'); 
+         router.push('/play'); 
       } else {
         // Handle case where email confirmation is required (optional UI feedback)
         setError("Check your email for the confirmation link.");
