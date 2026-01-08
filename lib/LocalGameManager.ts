@@ -50,12 +50,12 @@ export class LocalGameManager {
 
   private setupPlayers(heroId: string, startingStack: number) {
     const playersData = [
-      { id: heroId, name: 'You', isBot: false, chips: startingStack, seat: 1 },
-      { id: 'bot-1', name: 'Bot 1', isBot: true, chips: startingStack, seat: 2 },
-      { id: 'bot-2', name: 'Bot 2', isBot: true, chips: startingStack, seat: 3 },
-      { id: 'bot-3', name: 'Bot 3', isBot: true, chips: startingStack, seat: 4 },
-      { id: 'bot-4', name: 'Bot 4', isBot: true, chips: startingStack, seat: 5 },
-      { id: 'bot-5', name: 'Bot 5', isBot: true, chips: startingStack, seat: 6 },
+      { id: heroId, username: 'You', isBot: false, chips: startingStack, seat: 1 },
+      { id: 'bot-1', username: 'AggroBot', isBot: true, chips: startingStack, seat: 2 },
+      { id: 'bot-2', username: 'TightBot', isBot: true, chips: startingStack, seat: 3 },
+      { id: 'bot-3', username: 'CallingStation', isBot: true, chips: startingStack, seat: 4 },
+      { id: 'bot-4', username: 'RandomBot', isBot: true, chips: startingStack, seat: 5 },
+      { id: 'bot-5', username: 'SolidBot', isBot: true, chips: startingStack, seat: 6 },
     ];
     
     const maxPlayers = (this.engine.config as LocalGameConfig).maxPlayers;

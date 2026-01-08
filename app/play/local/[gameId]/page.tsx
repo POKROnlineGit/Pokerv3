@@ -13,14 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 
-const BOT_NAMES: Record<string, string> = {
-  "bot-1": "AggroBot",
-  "bot-2": "TightBot",
-  "bot-3": "CallingStation",
-  "bot-4": "RandomBot",
-  "bot-5": "SolidBot",
-};
-
 export default function LocalGamePage() {
   const params = useParams();
   const router = useRouter();
@@ -37,8 +29,6 @@ export default function LocalGamePage() {
   } = useLocalGameStore();
   const hasInitialized = useRef(false);
 
-  // Bot names for local games (hero username comes from gameState)
-  const [playerNames] = useState<Record<string, string>>(BOT_NAMES);
   const [showHandRankings, setShowHandRankings] = useState(false);
   const [cardsLoaded, setCardsLoaded] = useState(false);
 
@@ -107,6 +97,14 @@ export default function LocalGamePage() {
     }
   }, [startLocalGame]);
 
+  // Cleanup on unmount (when navigating away from the page)
+  useEffect(() => {
+    return () => {
+      leaveLocalGame();
+      console.log('[LocalGame] Cleaned up on page unmount');
+    };
+  }, [leaveLocalGame]);
+
   // Create Centralized Adapter: Apply all fixes once, use for both components
   // CRITICAL: This hook must be called BEFORE any early returns to maintain hook order
   const adaptedGameState = useMemo(() => {
@@ -117,8 +115,10 @@ export default function LocalGamePage() {
       pot: gameState.pot || gameState.totalPot || 0,
       dealerSeat: gameState.dealerSeat || 0,
       // Fix Players Array: Use currentBet directly (matches engine schema)
+      // Normalize username: map name to username (LocalGameManager uses 'name', engine expects 'username')
       players: (gameState.players || []).map((p: any) => ({
         ...p,
+        username: p.username || p.name || `Player ${p.seat || ""}`,
         currentBet: p.currentBet || 0,
         chips: Number(p.chips || 0),
       })),
@@ -217,12 +217,11 @@ export default function LocalGamePage() {
       {/* Table container - centered vertically and horizontally */}
       <div className="h-full w-full flex items-center justify-center">
         <PokerTable
-          gameState={adaptedGameState!}
-          currentUserId={heroId} // Pass the EXACT UUID from store
-          playerNames={playerNames}
-          isLocalGame={true}
-          isHeadsUp={false}
-        />
+           gameState={adaptedGameState!}
+           currentUserId={heroId} // Pass the EXACT UUID from store
+           isLocalGame={true}
+           isHeadsUp={false}
+         />
       </div>
 
       {/* Hand Rankings Sidebar */}
