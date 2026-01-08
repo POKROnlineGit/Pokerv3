@@ -74,12 +74,12 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       // Google prefers PNG for search results
-      { url: "/icon.png", type: "image/png", sizes: "any" },
-      { url: "/icon.ico", sizes: "any" },
-      { url: "/logo/POKROnlineLogoSVG.svg", type: "image/svg+xml" },
+      { url: `${BASE_URL}/icon.png`, type: "image/png", sizes: "any" },
+      { url: `${BASE_URL}/favicon.ico`, sizes: "any" },
+      { url: `${BASE_URL}/logo/POKROnlineLogoSVG.svg`, type: "image/svg+xml" },
     ],
-    shortcut: "/icon.png",
-    apple: "/icon.png",
+    shortcut: `${BASE_URL}/icon.png`,
+    apple: `${BASE_URL}/icon.png`,
   },
 };
 
