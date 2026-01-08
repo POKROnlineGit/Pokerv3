@@ -23,8 +23,8 @@ const oswald = Oswald({
 });
 
 // 1. Define the Base URL
-// Make sure NEXT_PUBLIC_APP_URL is set in your .env.local / Vercel settings
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://pokronline.com";
+// Make sure NEXT_PUBLIC_SITE_URL is set in your .env.local / Vercel settings
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://pokronline.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
