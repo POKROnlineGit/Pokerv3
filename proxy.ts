@@ -57,7 +57,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Public routes - accessible without authentication
-  if (url.pathname === "/" || url.pathname.startsWith("/coming-soon")) {
+  if (url.pathname === "/" || url.pathname.startsWith("/learn") || url.pathname.startsWith("/tools")) {
     return response;
   }
 
@@ -81,7 +81,7 @@ export async function proxy(request: NextRequest) {
       .single();
 
     if (!profile?.is_superuser) {
-      return NextResponse.redirect(new URL("/coming-soon", request.url));
+      return NextResponse.redirect(new URL("/", request.url));
     }
   }
 
