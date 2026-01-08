@@ -61,7 +61,13 @@ export function QueueProvider({ children }: { children: ReactNode }) {
           priority: 40,
           type: 'info',
           title: 'Looking for game...',
-          message: `Waiting for ${data.queueType === 'heads_up' ? 'Heads Up' : '6-Max'}...`,
+          message: `Waiting for ${
+            data.queueType?.toLowerCase().includes('heads_up')
+              ? 'Heads Up'
+              : data.queueType?.toLowerCase().includes('10_max') || data.queueType?.toLowerCase().includes('ten_max')
+              ? '10-Max'
+              : '6-Max'
+          }...`,
           action: {
             label: 'Leave',
             onClick: () => leaveQueue(data.queueType!),
@@ -82,7 +88,13 @@ export function QueueProvider({ children }: { children: ReactNode }) {
           priority: 40,
           type: 'info',
           title: 'Looking for game...',
-          message: `Waiting for ${data.queueType === 'heads_up' ? 'Heads Up' : '6-Max'}...`,
+          message: `Waiting for ${
+            data.queueType?.toLowerCase().includes('heads_up')
+              ? 'Heads Up'
+              : data.queueType?.toLowerCase().includes('10_max') || data.queueType?.toLowerCase().includes('ten_max')
+              ? '10-Max'
+              : '6-Max'
+          }...`,
           action: {
             label: 'Leave',
             onClick: () => leaveQueue(data.queueType),

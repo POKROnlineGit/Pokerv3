@@ -17,7 +17,7 @@ import { Loader2, Search, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClientComponentClient } from "@/lib/supabaseClient";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/lib/hooks";
 
 interface GameVariant {
   id: string;
@@ -153,13 +153,16 @@ export default function OnlinePlayPage() {
 
     const handleError = (error: { message?: string; error?: string }) => {
       const errorMessage = error.message || error.error || "An error occurred";
-      
+
       // Handle "already in a game" error
-      if (errorMessage.includes("already in a game") || errorMessage === "You are already in a game.") {
+      if (
+        errorMessage.includes("already in a game") ||
+        errorMessage === "You are already in a game."
+      ) {
         toast({
           variant: "destructive",
           title: "Cannot Join Queue",
-          description: "You are already in an active game. Please finish or leave your current game first.",
+          description: "You are already in an active game.",
         });
       } else {
         // Handle other queue-related errors
