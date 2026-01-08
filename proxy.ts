@@ -72,6 +72,17 @@ export async function proxy(request: NextRequest) {
     if (!user) {
       return NextResponse.redirect(new URL("/auth/signin", request.url));
     }
+
+    // Check superuser status
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_superuser")
+      .eq("id", user.id)
+      .single();
+
+    if (!profile?.is_superuser) {
+      return NextResponse.redirect(new URL("/coming-soon", request.url));
+    }
   }
 
   return response;
@@ -80,4 +91,3 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
-
