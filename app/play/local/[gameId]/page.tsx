@@ -37,42 +37,10 @@ export default function LocalGamePage() {
   } = useLocalGameStore();
   const hasInitialized = useRef(false);
 
-  // --- Client-Side Hydration: Player Names (including hero) ---
-  const [playerNames, setPlayerNames] =
-    useState<Record<string, string>>(BOT_NAMES);
+  // Bot names for local games (hero username comes from gameState)
+  const [playerNames] = useState<Record<string, string>>(BOT_NAMES);
   const [showHandRankings, setShowHandRankings] = useState(false);
   const [cardsLoaded, setCardsLoaded] = useState(false);
-
-  // Fetch hero's username from database
-  useEffect(() => {
-    if (!heroId) return;
-
-    const fetchHeroName = async () => {
-      // Check if we already have the hero's name (and it's not a bot name)
-      if (playerNames[heroId] && !BOT_NAMES[heroId]) {
-        return; // Already fetched
-      }
-
-      try {
-        const { data } = await supabase
-          .from("profiles")
-          .select("id, username")
-          .eq("id", heroId)
-          .single();
-
-        if (data?.username) {
-          setPlayerNames((prev) => ({
-            ...prev,
-            [heroId]: data.username,
-          }));
-        }
-      } catch (error) {
-        console.error("[LocalGame] Error fetching hero username:", error);
-      }
-    };
-
-    fetchHeroName();
-  }, [heroId, supabase, playerNames]);
 
   // Preload card images for hand rankings (local games always use holdem)
   useEffect(() => {
@@ -162,8 +130,7 @@ export default function LocalGamePage() {
       bbSeat: gameState.bbSeat || 0,
       currentActorSeat: gameState.currentActorSeat || null,
       // Map Phase Fields: Provide safe defaults if manager briefly sends null during transitions
-      currentRound: gameState.currentRound || "preflop",
-      currentPhase: gameState.currentPhase || "active",
+      currentPhase: gameState.currentPhase || "preflop",
       handNumber: gameState.handNumber || 1,
     };
   }, [gameState]);
@@ -225,8 +192,13 @@ export default function LocalGamePage() {
     );
   }
 
-  const handleAction = (action: ActionType, amount?: number) => {
+  const handleAction = (
+    action: ActionType,
+    amount?: number,
+    isAllInCall?: boolean
+  ) => {
     if (!gameState || !heroId) return;
+    // Local game manager may not support isAllInCall yet, but we pass it for future compatibility
     playerAction(action, amount);
   };
 

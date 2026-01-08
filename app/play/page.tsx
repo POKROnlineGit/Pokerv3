@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { PlayLayout } from "@/components/play/PlayLayout";
 import { Card, CardContent } from "@/components/ui/card";
-import { Globe2, Bot, ChevronRight } from "lucide-react";
+import { Globe2, Bot, ChevronRight, Crown } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@/lib/supabaseClient";
@@ -140,36 +140,42 @@ export default function PlayRootPage() {
       <div className="space-y-4">
         <Link href="/play/online" className="block group">
           <Card className="!bg-[hsl(222.2,84%,4.9%)] border-slate-700 group-hover:border-slate-600 group-hover:!bg-slate-800 group-hover:shadow-lg">
-            <CardContent className="p-6 flex items-center justify-between">
+            <CardContent className="py-3 px-4 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="h-10 w-10 rounded-full bg-slate-800/50 flex items-center justify-center">
                   <Globe2 className="h-4 w-4 text-slate-400" />
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Play Online</h3>
-                  <p className="text-sm text-slate-400">
-                    Ranked & Casual Matchmaking
-                  </p>
-                </div>
+                <h3 className="text-lg font-bold text-white">Play Online</h3>
               </div>
-              <ChevronRight className="h-4 w-4 text-slate-500 group-hover:translate-x-1" />
+              <ChevronRight className="h-4 w-4 text-slate-500 group-hover:translate-x-1 transition-transform" />
             </CardContent>
           </Card>
         </Link>
 
         <Link href="/play/bots" className="block group">
           <Card className="!bg-[hsl(222.2,84%,4.9%)] border-slate-700 group-hover:border-slate-600 group-hover:!bg-slate-800 group-hover:shadow-lg">
-            <CardContent className="p-6 flex items-center justify-between">
+            <CardContent className="py-3 px-4 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="h-10 w-10 rounded-full bg-slate-800/50 flex items-center justify-center">
                   <Bot className="h-4 w-4 text-slate-400" />
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Play Bots</h3>
-                  <p className="text-sm text-slate-400">Practice & Training</p>
-                </div>
+                <h3 className="text-lg font-bold text-white">Play Bots</h3>
               </div>
-              <ChevronRight className="h-4 w-4 text-slate-500 group-hover:translate-x-1" />
+              <ChevronRight className="h-4 w-4 text-slate-500 group-hover:translate-x-1 transition-transform" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/play/host" className="block group">
+          <Card className="!bg-[hsl(222.2,84%,4.9%)] border-slate-700 group-hover:border-slate-600 group-hover:!bg-slate-800 group-hover:shadow-lg">
+            <CardContent className="py-3 px-4 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-full bg-slate-800/50 flex items-center justify-center">
+                  <Crown className="h-4 w-4 text-slate-400" />
+                </div>
+                <h3 className="text-lg font-bold text-white">Host Game</h3>
+              </div>
+              <ChevronRight className="h-4 w-4 text-slate-500 group-hover:translate-x-1 transition-transform" />
             </CardContent>
           </Card>
         </Link>

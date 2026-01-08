@@ -24,6 +24,9 @@ export default function SignInPage() {
   const [error, setError] = useState<string | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   
+  // Get return URL from query params
+  const next = searchParams.get("next") || "/play/online";
+  
   // Redirect to signup if view=sign_up query param is present
   useEffect(() => {
     if (searchParams.get("view") === "sign_up") {
@@ -40,7 +43,7 @@ export default function SignInPage() {
       if (mounted) {
         setCheckingAuth(false);
         if (user) {
-          router.replace("/play");
+          router.replace(next);
           return;
         }
       }
@@ -53,7 +56,7 @@ export default function SignInPage() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted && session?.user) {
-        router.replace("/play");
+        router.replace(next);
       }
     });
 
@@ -61,7 +64,7 @@ export default function SignInPage() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [supabase, router]);
+  }, [supabase, router, next]);
 
   // Get theme colors
   const primaryColor = currentTheme.colors.primary[0];
@@ -72,7 +75,7 @@ export default function SignInPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         },
     });
     if (error) {
@@ -93,7 +96,7 @@ export default function SignInPage() {
       });
       if (error) throw error;
       router.refresh();
-      router.push('/play');
+      router.push(next);
     } catch (err: any) {
       setError(err.message || "Failed to sign in");
     } finally {

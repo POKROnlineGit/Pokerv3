@@ -113,50 +113,6 @@ export default function GamePage() {
   const { toast } = useToast();
   const { setStatus, clearStatus } = useStatus();
 
-  // --- Client-Side Hydration: Player Names ---
-  const [playerNames, setPlayerNames] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    if (!gameState?.players && !currentUserId) return;
-
-    const fetchNames = async () => {
-      // Collect all player IDs (non-bots) from gameState
-      const playerIds = new Set<string>();
-
-      if (gameState?.players) {
-        gameState.players
-          .filter((p) => !p.isBot)
-          .forEach((p) => playerIds.add(p.id));
-      }
-
-      // Explicitly include current user ID (same system as opponents)
-      if (currentUserId) {
-        playerIds.add(currentUserId);
-      }
-
-      // Find IDs we don't have names for yet
-      const missingIds = Array.from(playerIds).filter((id) => !playerNames[id]);
-
-      if (missingIds.length === 0) return;
-
-      // DIRECT DB CALL - Same system for all players including current user
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, username")
-        .in("id", missingIds);
-
-      if (data) {
-        const newNames: Record<string, string> = {};
-        data.forEach((p: any) => {
-          if (p.username) newNames[p.id] = p.username;
-        });
-        setPlayerNames((prev) => ({ ...prev, ...newNames }));
-      }
-    };
-
-    fetchNames();
-  }, [gameState?.players, currentUserId, supabase, playerNames]);
-
   // Fetch variant information from database
   useEffect(() => {
     if (!gameId || gameId.startsWith("local-")) return;
@@ -339,6 +295,17 @@ export default function GamePage() {
 
       // Listen for game state
       socket.on("gameState", (state: GameState) => {
+        console.log("[OnlineGame] GameState received:", {
+          gameId: state.gameId || gameId,
+          handNumber: state.handNumber || 0,
+          isPaused: (state as any).isPaused || false,
+          phase: state.currentPhase,
+          players: state.players?.length || 0,
+          pot: state.pot,
+          timestamp: new Date().toISOString(),
+          fullState: state,
+        });
+
         if (mounted) {
           // Mark initialization complete - authoritative state received from server
           if (isInitializing) {
@@ -418,9 +385,8 @@ export default function GamePage() {
             sidePots = Array.isArray(state.sidePots) ? state.sidePots : [];
           }
 
-          // Detect actual phase from server (may be "waiting" or mapped to currentRound)
-          const serverPhase =
-            (state as any).currentPhase || state.currentRound || "preflop";
+          // Detect actual phase from server (may be "waiting")
+          const serverPhase = (state as any).currentPhase || "preflop";
           const isWaitingPhase = serverPhase === "waiting";
 
           // BLOCK WAITING TRANSITION DURING ACTIVE HAND
@@ -459,7 +425,7 @@ export default function GamePage() {
             players: Array.isArray(state.players)
               ? state.players.map((p: any) => ({
                   id: p.id || p.userId || p.user_id || "",
-                  name: p.name || `Player ${p.seat || ""}`,
+                  username: p.username || `Player ${p.seat || ""}`,
                   seat: p.seat || 0,
                   chips: typeof p.chips === "number" ? p.chips : 0,
                   currentBet: p.currentBet || 0,
@@ -482,6 +448,7 @@ export default function GamePage() {
                   left: p.left ?? false,
                   isGhost: p.isGhost ?? p.disconnected ?? false,
                   disconnectTimestamp: p.disconnectTimestamp,
+                  status: p.status,
                 }))
               : [],
             // Ensure communityCards is always an array
@@ -509,23 +476,21 @@ export default function GamePage() {
               typeof state.buttonSeat === "number" ? state.buttonSeat : 1,
             sbSeat: typeof state.sbSeat === "number" ? state.sbSeat : 1,
             bbSeat: typeof state.bbSeat === "number" ? state.bbSeat : 2,
-            // Map phase to currentRound, handle phase reversals safely
-            // If blocking waiting, preserve current round from previous state
-            currentRound: shouldBlockWaiting
-              ? gameState?.currentRound || state.currentRound || "preflop"
+            // Map phase, handle phase reversals safely
+            // If blocking waiting, preserve current phase from previous state
+            currentPhase: shouldBlockWaiting
+              ? gameState?.currentPhase || state.currentPhase || "preflop"
               : isWaitingPhase
               ? "preflop" // Map "waiting" to "preflop" for UI (adapter does this too)
-              : state.currentRound ||
+              : state.currentPhase ||
                 (serverPhase === "waiting"
                   ? "preflop"
                   : (serverPhase as any)) ||
                 "preflop",
-            // Store actual phase for detection
-            currentPhase: serverPhase,
             currentActorSeat:
               typeof state.currentActorSeat === "number"
                 ? state.currentActorSeat
-                : 0,
+                : null,
             minRaise: typeof state.minRaise === "number" ? state.minRaise : 2,
             lastRaiseAmount:
               typeof state.lastRaiseAmount === "number"
@@ -663,97 +628,77 @@ export default function GamePage() {
         }) => {
           if (!mounted) return;
 
-          if (data.status === "DISCONNECTED" || data.status === "LEFT") {
-            setGameState((prevState) => {
-              if (!prevState) return prevState;
+          if (
+            data.status === "DISCONNECTED" ||
+            data.status === "LEFT" ||
+            data.status === "REMOVED"
+          ) {
+            // Get player info from current state for toast (before server updates)
+            const player = gameState?.players.find(
+              (p) => p.id === data.playerId
+            );
 
-              // Find and update the disconnected/left player
-              const updatedPlayers = prevState.players.map((player) => {
-                if (player.id === data.playerId) {
-                  return {
-                    ...player,
-                    disconnected: data.status === "DISCONNECTED",
-                    left: data.status === "LEFT",
-                    isGhost: data.status === "DISCONNECTED",
-                    // If action is FOLD, mark as folded immediately
-                    folded: data.action === "FOLD" ? true : player.folded,
-                    disconnectTimestamp:
-                      data.status === "DISCONNECTED"
-                        ? data.timestamp || Date.now()
-                        : undefined,
-                  };
-                }
-                return player;
-              });
+            // Start disconnect countdown timer (60 seconds) - only for DISCONNECTED
+            if (data.status === "DISCONNECTED" && data.timestamp) {
+              const disconnectTime = data.timestamp;
+              const countdownDuration = 60000; // 60 seconds
+              const endTime = disconnectTime + countdownDuration;
 
-              // Check if active players dropped to 1
-              const activePlayers = updatedPlayers.filter(
-                (p) => !p.folded && p.chips > 0 && !(p as any).left
-              );
+              setPlayerDisconnectTimers((prev) => ({
+                ...prev,
+                [data.playerId]: endTime,
+              }));
 
-              // Get player name for toast (before state update)
-              const player = prevState.players.find(
-                (p) => p.id === data.playerId
-              );
-
-              // Start disconnect countdown timer (60 seconds)
-              if (data.timestamp) {
-                const disconnectTime = data.timestamp;
-                const countdownDuration = 60000; // 60 seconds
-                const endTime = disconnectTime + countdownDuration;
-
-                setPlayerDisconnectTimers((prev) => ({
-                  ...prev,
-                  [data.playerId]: endTime,
-                }));
-
-                // Update countdown every second
-                if (disconnectTimerIntervalRef.current) {
-                  clearInterval(disconnectTimerIntervalRef.current);
-                }
-                disconnectTimerIntervalRef.current = setInterval(() => {
-                  setPlayerDisconnectTimers((prev) => {
-                    const updated = { ...prev };
-                    const now = Date.now();
-                    Object.keys(updated).forEach((playerId) => {
-                      if (updated[playerId] <= now) {
-                        delete updated[playerId];
-                      }
-                    });
-                    return updated;
-                  });
-                }, 1000);
+              // Update countdown every second
+              if (disconnectTimerIntervalRef.current) {
+                clearInterval(disconnectTimerIntervalRef.current);
               }
+              disconnectTimerIntervalRef.current = setInterval(() => {
+                setPlayerDisconnectTimers((prev) => {
+                  const updated = { ...prev };
+                  const now = Date.now();
+                  Object.keys(updated).forEach((playerId) => {
+                    if (updated[playerId] <= now) {
+                      delete updated[playerId];
+                    }
+                  });
+                  return updated;
+                });
+              }, 1000);
+            }
 
-              // Show toast notification
-              toast({
-                title:
-                  data.status === "LEFT"
-                    ? "Player left"
-                    : "Player disconnected",
-                description:
-                  data.status === "LEFT"
-                    ? `${player?.name || "A player"} has left the game`
-                    : `${player?.name || "A player"} disconnected${
-                        data.action === "FOLD" ? " and folded" : ""
-                      }`,
-                variant: "default",
-              });
-
-              return {
-                ...prevState,
-                players: updatedPlayers,
-              };
-            });
-
-            // Clear disconnect timer if player left
-            if (data.status === "LEFT") {
+            // Clear disconnect timer if player left or was removed
+            if (data.status === "LEFT" || data.status === "REMOVED") {
               setPlayerDisconnectTimers((prev) => {
                 const updated = { ...prev };
                 delete updated[data.playerId];
                 return updated;
               });
             }
+
+            // Show toast notification
+            toast({
+              title:
+                data.status === "LEFT" || data.status === "REMOVED"
+                  ? data.status === "REMOVED"
+                    ? "Player removed"
+                    : "Player left"
+                  : "Player disconnected",
+              description:
+                data.status === "LEFT" || data.status === "REMOVED"
+                  ? data.status === "REMOVED"
+                    ? `${
+                        player?.username || "A player"
+                      } was removed by the host`
+                    : `${player?.username || "A player"} has left the game`
+                  : `${player?.username || "A player"} disconnected${
+                      data.action === "FOLD" ? " and folded" : ""
+                    }`,
+              variant: "default",
+            });
+
+            // Let the server's gameState updates handle all state changes
+            // This ensures usernames and all player data are correctly normalized
           }
         }
       );
@@ -778,7 +723,7 @@ export default function GamePage() {
             // Show winner notification
             toast({
               title: "Hand complete",
-              description: `${winner?.name || "Player"} wins the pot!`,
+              description: `${winner?.username || "Player"} wins the pot!`,
               variant: "default",
             });
 
@@ -868,14 +813,14 @@ export default function GamePage() {
             return {
               ...prevState,
               communityCards: data.communityCards || prevState.communityCards,
-              currentRound:
+              currentPhase:
                 data.round === "flop"
                   ? "flop"
                   : data.round === "turn"
                   ? "turn"
                   : data.round === "river"
                   ? "river"
-                  : prevState.currentRound,
+                  : prevState.currentPhase,
             };
           });
 
@@ -904,7 +849,7 @@ export default function GamePage() {
           toast({
             title: "Player eliminated",
             description: `${
-              eliminatedPlayer?.name || "A player"
+              eliminatedPlayer?.username || "A player"
             } has been eliminated`,
             variant: "default",
           });
@@ -1015,7 +960,7 @@ export default function GamePage() {
           players: Array.isArray(state.players)
             ? state.players.map((p: any) => ({
                 id: p.id || p.userId || p.user_id || "",
-                name: p.name || `Player ${p.seat || ""}`,
+                username: p.username || `Player ${p.seat || ""}`,
                 seat: p.seat || 0,
                 chips: typeof p.chips === "number" ? p.chips : 0,
                 currentBet: p.currentBet || 0,
@@ -1036,6 +981,7 @@ export default function GamePage() {
                 disconnected: false, // Clear disconnect status on sync
                 left: false,
                 isGhost: false,
+                status: p.status,
               }))
             : [],
           communityCards: Array.isArray(state.communityCards)
@@ -1049,9 +995,13 @@ export default function GamePage() {
             typeof state.buttonSeat === "number" ? state.buttonSeat : 1,
           sbSeat: typeof state.sbSeat === "number" ? state.sbSeat : 1,
           bbSeat: typeof state.bbSeat === "number" ? state.bbSeat : 2,
-          currentRound: (state.currentRound ||
-            (state as any).currentPhase ||
-            "preflop") as "preflop" | "flop" | "turn" | "river" | "showdown",
+          currentPhase: (state.currentPhase || "preflop") as
+            | "preflop"
+            | "flop"
+            | "turn"
+            | "river"
+            | "showdown"
+            | "waiting",
           currentActorSeat:
             typeof state.currentActorSeat === "number"
               ? state.currentActorSeat
@@ -1157,13 +1107,19 @@ export default function GamePage() {
             }, 0);
           }
         } else if (errorMessage.includes("Not a player in this game")) {
+          // Show user-friendly error message
+          toast({
+            title: "Access Denied",
+            description: "You are not a player in this game.",
+            variant: "destructive",
+          });
+
           // No retry for authorization errors - redirect immediately
-          // Mark as unmounted to prevent state updates during redirect
           mounted = false;
-          // Defer redirect to allow React to finish current render cycle
+          // Defer redirect to allow toast to show
           setTimeout(() => {
             router.replace("/play/online");
-          }, 0);
+          }, 1500); // Give time for toast to be visible
         }
       });
     };
@@ -1283,8 +1239,7 @@ export default function GamePage() {
       return;
     }
 
-    const currentPhase =
-      (gameState as any).currentPhase || gameState.currentRound || "preflop";
+    const currentPhase = gameState.currentPhase || "preflop";
     const isWaitingPhase = currentPhase === "waiting";
     const activePlayerCount = gameState.players.filter(
       (p) => !p.folded && p.chips > 0 && !(p as any).left
@@ -1303,7 +1258,11 @@ export default function GamePage() {
     }
   }, [gameState, setStatus, clearStatus]);
 
-  const handleAction = (action: ActionType, amount?: number) => {
+  const handleAction = (
+    action: ActionType,
+    amount?: number,
+    isAllInCall?: boolean
+  ) => {
     // Block actions if we don't have state, no user, or we're currently syncing
     if (!gameState || !currentUserId) return;
 
@@ -1325,6 +1284,7 @@ export default function GamePage() {
       type: action,
       amount,
       seat: player.seat,
+      isAllInCall,
     };
 
     socket.emit("action", payload);
@@ -1334,7 +1294,7 @@ export default function GamePage() {
     if (!gameState || !currentUserId) return;
 
     // Only allow revealing during showdown
-    if (gameState.currentRound !== "showdown") {
+    if (gameState.currentPhase !== "showdown") {
       return;
     }
 
@@ -1378,7 +1338,6 @@ export default function GamePage() {
               gameState={gameState}
               currentUserId={currentUserId}
               onRevealCard={handleRevealCard}
-              playerNames={playerNames}
               isLocalGame={false}
               isHeadsUp={isHeadsUp}
               playerDisconnectTimers={playerDisconnectTimers}
@@ -1421,7 +1380,9 @@ export default function GamePage() {
               <p className="text-sm font-semibold">
                 {gameFinished.winnerId === currentUserId
                   ? "You won!"
-                  : playerNames[gameFinished.winnerId] ||
+                  : gameState?.players.find(
+                      (p) => p.id === gameFinished.winnerId
+                    )?.username ||
                     "Player " + gameFinished.winnerId.slice(0, 8)}
               </p>
             </div>

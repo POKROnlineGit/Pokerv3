@@ -206,11 +206,9 @@ export class LocalGameManager {
     uiState.bigBlind = ctx.bigBlind || ctx.config?.bigBlind || 0;
     uiState.smallBlind = ctx.smallBlind || ctx.config?.smallBlind || 0;
 
-    // Map Round & Phase: Ensure currentRound, currentPhase, and handNumber are available to UI
+    // Map Phase: Ensure currentPhase and handNumber are available to UI
     // Engine uses currentPhase for rounds (preflop, flop, turn, river, showdown)
-    // Map currentPhase to currentRound for UI display since engine doesn't have separate currentRound
-    uiState.currentRound = ctx.currentPhase || 'preflop';
-    uiState.currentPhase = ctx.currentPhase || 'active';
+    uiState.currentPhase = ctx.currentPhase || 'preflop';
     uiState.handNumber = ctx.handNumber || 1;
 
     this.updateUI(uiState);

@@ -19,7 +19,7 @@ export interface ActionValidation {
 
 export interface Player {
   id: string;
-  name: string;
+  username: string;
   seat: number;
   chips: number;
   currentBet: number; // Matches engine schema
@@ -43,6 +43,14 @@ export interface Player {
   left?: boolean;
   isGhost?: boolean;
   disconnectTimestamp?: number;
+
+  // Player Status
+  status?:
+    | "ACTIVE"
+    | "DISCONNECTED"
+    | "LEFT"
+    | "REMOVED"
+    | "WAITING_FOR_NEXT_HAND";
 }
 
 export interface Pot {
@@ -76,7 +84,7 @@ export interface GameState {
   minRaise: number;
   lastRaiseAmount?: number; // Amount of the last raise (on top, not total bet). For opening bets, this equals the bet amount.
   betsThisRound: number[];
-  currentRound: "preflop" | "flop" | "turn" | "river" | "showdown";
+  currentPhase: "preflop" | "flop" | "turn" | "river" | "showdown" | "waiting";
   handNumber: number;
   winnerIds?: string[];
   winningHand?: string;
@@ -92,5 +100,5 @@ export interface GameState {
   highBet?: number;
   // Frontend-specific fields
   left_players?: string[];
-  currentPhase?: string; // Actual phase from server (may be "waiting")
+  isPrivate?: boolean; // Whether this is a private game
 }

@@ -10,11 +10,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getClientHandStrength } from "@backend/domain/evaluation/ClientHandEvaluator";
 // @ts-ignore - Importing from shared backend
 import { calculateEquity } from "@backend/domain/evaluation/EquityCalculator";
+import { Badge } from "@/components/ui/badge";
 
 interface PokerTableProps {
   gameState: GameState & {
     left_players?: string[]; // Server may send left_players array
     currentPhase?: string; // Actual phase from server (may be "waiting")
+    isPaused?: boolean; // Whether the game is paused
+    hostId?: string; // Host ID for private games
   };
   currentUserId: string;
   onRevealCard?: (cardIndex: number) => void; // Callback for revealing a card during showdown
@@ -70,6 +73,7 @@ export function PokerTable({
   isSyncing = false,
 }: PokerTableProps) {
   const { isEnabled: debugMode } = useDebugMode();
+  const isPaused = gameState.isPaused || false;
 
   // 1. MOUNT TRACKING: Detect if this is the first render vs an update
   // We use this to suppress animations on page load/refresh
@@ -131,7 +135,7 @@ export function PokerTable({
     // - Multiple players have cards revealed (not HIDDEN)
     // - Not showdown
     // - Game is active (not waiting)
-    const isShowdown = gameState.currentRound === "showdown";
+    const isShowdown = gameState.currentPhase === "showdown";
     const isWaitingPhase = gameState.currentPhase === "waiting";
     const isGameActive = !isWaitingPhase;
 
@@ -198,7 +202,7 @@ export function PokerTable({
   }, [
     gameState.players,
     gameState.communityCards,
-    gameState.currentRound,
+    gameState.currentPhase,
     gameState.currentPhase,
   ]);
 
@@ -210,8 +214,8 @@ export function PokerTable({
       timerIntervalRef.current = null;
     }
 
-    // Reset progress if no timer
-    if (!turnTimer) {
+    // Reset progress if no timer or game is paused (for private games)
+    if (!turnTimer || isPaused) {
       setProgressPercent(0);
       currentTimerRef.current = null;
       return;
@@ -259,10 +263,20 @@ export function PokerTable({
         timerIntervalRef.current = null;
       }
     };
-  }, [turnTimer?.deadline, turnTimer?.duration, turnTimer?.activeSeat]);
+  }, [
+    turnTimer?.deadline,
+    turnTimer?.duration,
+    turnTimer?.activeSeat,
+    isPaused,
+  ]);
 
   // Dynamic seat count based on game type
-  const NUM_SEATS = isHeadsUp ? 2 : 6;
+  const NUM_SEATS = isHeadsUp
+    ? 2
+    : gameState.config?.maxPlayers ||
+      (gameState.players.length > 0
+        ? Math.max(...gameState.players.map((p) => p.seat))
+        : 6);
   // Use same radius for both heads-up and 6-max for consistency
   // Seats positioned so only ~20% of seat overlaps table edge
   const radiusX = 70; // Increased significantly to move seats further out
@@ -279,7 +293,8 @@ export function PokerTable({
   // Helper function to map position index to actual seat number
   const getSeatForPosition = (positionIndex: number): number => {
     // Rotate seat mapping to get the seat of a given position
-    let computedSeat = positionIndex;
+    // Default to 1-based seat numbers when no current user (spectator mode)
+    let computedSeat = positionIndex + 1;
     if (currentUserSeat !== undefined) {
       computedSeat =
         currentUserSeat + positionIndex > NUM_SEATS
@@ -310,7 +325,7 @@ export function PokerTable({
     );
   };
 
-  const isShowdown = gameState.currentRound === "showdown";
+  const isShowdown = gameState.currentPhase === "showdown";
 
   // Check if we're in waiting phase (opponent disconnected)
   const isWaitingPhase = gameState.currentPhase === "waiting";
@@ -456,7 +471,12 @@ export function PokerTable({
     };
   }, [gameState, isLocalGame, playerEquities]);
   const activePlayers = gameState.players.filter(
-    (p) => !p.folded && p.chips > 0
+    (p) =>
+      !p.folded &&
+      p.chips > 0 &&
+      p.status !== "LEFT" &&
+      p.status !== "REMOVED" &&
+      !p.left
   );
   const activePlayerCount = activePlayers.length;
 
@@ -471,17 +491,6 @@ export function PokerTable({
         maxWidth: "38rem",
       }}
     >
-      {/* Syncing overlay - blocks interactions while authoritative state is being fetched */}
-      {isSyncing && (
-        <div className="absolute inset-0 z-[70] flex flex-col items-center justify-center bg-black/70">
-          <div className="text-white text-xl font-semibold mb-2">
-            Syncing...
-          </div>
-          <div className="text-sm text-gray-200">
-            Reconnecting to the server and refreshing game state
-          </div>
-        </div>
-      )}
       {/* Debug overlay (super user + debug mode only) */}
       {debugMode && (
         <div className="absolute top-4 left-4 bg-black/90 text-white p-4 rounded-lg text-xs font-mono z-50 border-2 border-yellow-500">
@@ -500,7 +509,7 @@ export function PokerTable({
                 gameState.players.map((p) => ({
                   id: p.id,
                   seat: p.seat,
-                  name: p.name,
+                  username: p.username,
                   chips: p.chips,
                   currentBet: p.currentBet,
                   totalBet: p.totalBet,
@@ -514,7 +523,7 @@ export function PokerTable({
               return nextPlayer || "N/A";
             })()}
           </div>
-          <div>Round: {gameState.currentRound}</div>
+          <div>Round: {gameState.currentPhase}</div>
           <div className="mt-2 pt-2 border-t border-yellow-500/50">
             <div className="text-yellow-400">Players (clockwise):</div>
             {Array.from({ length: NUM_SEATS }, (_, i) => i + 1).map((seat) => {
@@ -525,7 +534,7 @@ export function PokerTable({
                   key={seat}
                   className={isActive ? "text-green-400" : "text-gray-400"}
                 >
-                  Seat {seat}: {p?.name || "Empty"} {p?.folded ? "(F)" : ""}{" "}
+                  Seat {seat}: {p?.username || "Empty"} {p?.folded ? "(F)" : ""}{" "}
                   {p?.allIn ? "(AI)" : ""} {p?.chips || 0} chips
                 </div>
               );
@@ -614,7 +623,7 @@ export function PokerTable({
         {/* Street indicator - Above cards with equal spacing */}
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[6rem] bg-black/80 text-white px-4 py-2 rounded-lg z-10">
           <div className="text-sm font-semibold uppercase">
-            {gameState.currentRound}
+            {gameState.currentPhase}
           </div>
         </div>
 
@@ -812,17 +821,28 @@ export function PokerTable({
         // Always trust the server's authoritative state for blinds
         const isSmallBlind = player?.seat === gameState.sbSeat;
         const isBigBlind = player?.seat === gameState.bbSeat;
+        const isHost = gameState.hostId && player?.id === gameState.hostId;
 
-        // Check if player has left (in left_players array from server OR left status)
+        // Check if player has left (in left_players array from server OR left status OR leaving)
         // This takes precedence over other states for visual feedback
         const hasLeftFromServer =
           player?.id && gameState.left_players
             ? gameState.left_players.includes(player.id)
             : false;
 
-        // Check if player is disconnected (ghost state) or left
+        // Check if player is permanently out (LEFT or REMOVED)
+        const isPermanentlyOut =
+          player?.status === "LEFT" ||
+          player?.status === "REMOVED" ||
+          player?.left ||
+          player?.leaving ||
+          hasLeftFromServer;
+
+        // Check if player is disconnected (ghost state) or permanently out
         const isDisconnected = player?.disconnected || player?.isGhost || false;
-        const hasLeft = player?.left || hasLeftFromServer;
+        // If player.leaving is true, treat them as left (server will remove at end of round)
+        const hasLeft = isPermanentlyOut;
+        const isRemoved = player?.status === "REMOVED";
 
         return (
           <div
@@ -836,13 +856,6 @@ export function PokerTable({
               </div>
             ) : (
               <>
-                {/* Show "Leaving After Hand" if player is leaving but hasn't left yet */}
-                {player.leaving && !hasLeft && (
-                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-orange-600 text-white px-3 py-1 rounded-full text-xs font-bold animate-pulse z-40">
-                    LEAVING AFTER HAND
-                  </div>
-                )}
-
                 {/* Player box - scaled 1.3x */}
                 <div
                   className={cn(
@@ -885,16 +898,27 @@ export function PokerTable({
                         ? "text-gray-400"
                         : isDisconnected
                         ? "text-blue-300"
+                        : (player as any).status === "WAITING_FOR_NEXT_HAND"
+                        ? "text-amber-300 opacity-75"
                         : "text-white"
                     )}
                   >
                     {player.id === currentUserId
-                      ? playerNames?.[player.id] || player.name || "You"
-                      : playerNames?.[player.id] ||
-                        player.name ||
+                      ? player.username || "You"
+                      : player.username ||
+                        playerNames?.[player.id] ||
                         `Player ${seat}`}
-                    {hasLeft && " (Left)"}
+                    {isRemoved && " (Removed)"}
+                    {hasLeft && !isRemoved && " (Left)"}
                   </div>
+
+                  {/* Waiting for next hand badge */}
+                  {(player as any).status === "WAITING_FOR_NEXT_HAND" &&
+                    !hasLeft && (
+                      <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-amber-600/80 text-white text-[10px] px-2 py-0.5 rounded-full z-25">
+                        Waiting for next round
+                      </div>
+                    )}
 
                   {/* Disconnected indicator (Reconnecting...) - Lower z-index to not block board */}
                   {isDisconnected &&
@@ -955,8 +979,10 @@ export function PokerTable({
                   </div>
 
                   {/* Turn Timer - Progress Bar at bottom of player box */}
+                  {/* Don't show timer when game is paused (for private games) */}
                   {turnTimer?.activeSeat === player.seat &&
-                    progressPercent > 0 && (
+                    progressPercent > 0 &&
+                    !isPaused && (
                       <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700/50 overflow-hidden rounded-b-xl z-5">
                         <div
                           className={cn(
@@ -998,6 +1024,13 @@ export function PokerTable({
                   {isBigBlind && !isDealer && (
                     <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold z-50">
                       BB
+                    </div>
+                  )}
+
+                  {/* Host indicator - Positioned bottom-left to avoid overlap with other badges */}
+                  {isHost && (
+                    <div className="absolute -bottom-2 -left-2 bg-yellow-500 text-black text-xs px-2 py-1 rounded-full font-bold z-50">
+                      Host
                     </div>
                   )}
 
@@ -1061,7 +1094,7 @@ export function PokerTable({
                 {/* Hole cards - positioned above the player box, angled outward */}
                 {(() => {
                   const isHero = player.id === currentUserId;
-                  const isShowdown = gameState.currentRound === "showdown";
+                  const isShowdown = gameState.currentPhase === "showdown";
 
                   // Handle empty arrays: if folded player has empty holeCards, render two HIDDEN placeholders
                   const cardsToRender =
@@ -1158,12 +1191,12 @@ export function PokerTable({
                                 : undefined // No transition when not new - prevents animation restart
                             }
                             className={cn(
-                              // Match player box styling: opacity-50 when folded, grayscale only when left
+                              // Match player box styling: opacity-50 when folded, grayscale only when permanently out
                               (player.folded ||
-                                player.left ||
+                                isPermanentlyOut ||
                                 player.disconnected) &&
                                 "opacity-50",
-                              player.left && "grayscale"
+                              isPermanentlyOut && "grayscale"
                             )}
                             style={{ transform: "scale(1.1)" }}
                           >

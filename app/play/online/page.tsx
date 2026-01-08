@@ -17,6 +17,7 @@ import { Loader2, Search, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClientComponentClient } from "@/lib/supabaseClient";
+import { useToast } from "@/components/ui/use-toast";
 
 interface GameVariant {
   id: string;
@@ -43,6 +44,7 @@ export default function OnlinePlayPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
   const [checkingGame, setCheckingGame] = useState(true);
+  const { toast } = useToast();
 
   // 1. Check if user is in an active game and redirect
   useEffect(() => {
@@ -144,6 +146,37 @@ export default function OnlinePlayPage() {
       socket.off("match_found", handleMatchFound);
     };
   }, [socket, router]);
+
+  // 1.2. Listen for socket errors (e.g., already in a game)
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleError = (error: { message?: string; error?: string }) => {
+      const errorMessage = error.message || error.error || "An error occurred";
+      
+      // Handle "already in a game" error
+      if (errorMessage.includes("already in a game") || errorMessage === "You are already in a game.") {
+        toast({
+          variant: "destructive",
+          title: "Cannot Join Queue",
+          description: "You are already in an active game. Please finish or leave your current game first.",
+        });
+      } else {
+        // Handle other queue-related errors
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage,
+        });
+      }
+    };
+
+    socket.on("error", handleError);
+
+    return () => {
+      socket.off("error", handleError);
+    };
+  }, [socket, toast]);
 
   // 2. Fetch Variants
   useEffect(() => {

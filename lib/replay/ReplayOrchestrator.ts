@@ -584,8 +584,7 @@ export class ReplayOrchestrator {
     return {
       gameId: rawState.gameId,
       status: rawState.status,
-      phase: rawState.currentPhase || "preflop",
-      currentRound: rawState.currentPhase || "preflop",
+      currentPhase: rawState.currentPhase || "preflop",
       players: finalPlayers,
       communityCards: (rawState.communityCards || []).map((c: any) =>
         typeof c === "string" ? c : c?.display || c
@@ -609,7 +608,6 @@ export class ReplayOrchestrator {
       handNumber: rawState.handNumber,
       bigBlind: rawState.bigBlind,
       smallBlind: rawState.smallBlind,
-      currentPhase: rawState.currentPhase,
       config: rawState.config,
     } as GameState;
   }

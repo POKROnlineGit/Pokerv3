@@ -41,7 +41,7 @@ export function LeaveGameButton({ gameId, className }: LeaveGameButtonProps) {
       // Error handled silently - user will be redirected anyway
     } finally {
       setOpen(false);
-      router.push("/play/online"); // Immediate redirect
+      router.push("/play"); // Immediate redirect
     }
   };
 

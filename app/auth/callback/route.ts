@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
+  const next = requestUrl.searchParams.get("next") || "/play/online";
 
   if (code) {
     const supabase = await createServerComponentClient();
@@ -35,8 +36,8 @@ export async function GET(request: Request) {
         }
 
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
-        // Redirect authenticated users to the play page
-        return NextResponse.redirect(new URL("/play/online", siteUrl));
+        // Redirect authenticated users to the specified return URL
+        return NextResponse.redirect(new URL(next, siteUrl));
       }
     }
 

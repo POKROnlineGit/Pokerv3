@@ -11,7 +11,11 @@ import { cn } from "@/lib/utils";
 interface ActionPopupProps {
   gameState: GameState | null;
   currentUserId: string | null;
-  onAction: (action: ActionType, amount?: number) => void;
+  onAction: (
+    action: ActionType,
+    amount?: number,
+    isAllInCall?: boolean
+  ) => void;
   onRevealCard?: (cardIndex: number) => void; // Callback for revealing cards during showdown
   isLocalGame?: boolean;
 }
@@ -44,10 +48,14 @@ export function ActionPopup({
     const player = gameState.players.find((p) => p.id === currentUserId);
     if (!player) return false;
 
-    // Check if player has LEFT status
-    const hasLeft =
-      player.left || gameState.left_players?.includes(currentUserId) || false;
-    return !hasLeft;
+    // Check if player is permanently out (LEFT or REMOVED)
+    const isPermanentlyOut =
+      player.status === "LEFT" ||
+      player.status === "REMOVED" ||
+      player.left ||
+      gameState.left_players?.includes(currentUserId) ||
+      false;
+    return !isPermanentlyOut;
   }, [gameState, currentUserId]);
 
   // Check if it's player's turn
@@ -137,6 +145,71 @@ export function ActionPopup({
     return 0;
   }, [gameState, bigBlind]);
 
+  // Detect if there are all-in players with smaller bets than highestBet
+  // This creates a dual call scenario
+  const allInCallInfo = useMemo(() => {
+    if (!gameState?.players || !hero) return null;
+
+    // Find all-in players who have a bet less than the highest bet
+    const allInPlayers = gameState.players.filter(
+      (p) =>
+        p.allIn && p.currentBet > 0 && p.currentBet < highestBet && !p.folded
+    );
+
+    if (allInPlayers.length === 0) return null;
+
+    // Find the effective bet according to backend: _getCurrentBet() returns
+    // Math.max(maxFromActingPlayers, maxFromAllInPlayers)
+    // This ensures that when someone goes all-in for more than current bet,
+    // the effective bet reflects that all-in amount
+    const nonAllInPlayers = gameState.players.filter(
+      (p) => !p.allIn && !p.folded
+    );
+
+    // Max bet from players who can still act (non-all-in)
+    const maxFromActingPlayers =
+      nonAllInPlayers.length > 0
+        ? Math.max(...nonAllInPlayers.map((p) => p.currentBet || 0), 0)
+        : 0;
+
+    // Max bet from all-in players
+    const maxFromAllInPlayers = Math.max(
+      ...allInPlayers.map((p) => p.currentBet || 0),
+      0
+    );
+
+    // Effective bet matches backend _getCurrentBet() logic
+    const effectiveBet = Math.max(maxFromActingPlayers, maxFromAllInPlayers);
+
+    // All-in call amount is the highest all-in bet (the amount needed to call the all-in player)
+    const highestAllInBet = maxFromAllInPlayers;
+
+    // The all-in call option is to call the all-in player's bet
+    // The full call option is to call the effective bet (which now includes all-in bets)
+    const allInCallAmount = highestAllInBet;
+    const fullCallAmount = Math.max(effectiveBet, highestBet);
+
+    // Only show dual options if all-in call is different from full call
+    if (allInCallAmount < fullCallAmount) {
+      return {
+        hasDualCall: true,
+        allInCallAmount: Math.max(0, allInCallAmount - (hero.currentBet || 0)),
+        fullCallAmount: Math.max(0, fullCallAmount - (hero.currentBet || 0)),
+      };
+    }
+
+    return null;
+  }, [gameState, hero, highestBet]);
+
+  // Effective chips to call (uses all-in call if dual scenario, otherwise highest bet)
+  const effectiveChipsToCall = useMemo(() => {
+    if (allInCallInfo?.hasDualCall) {
+      // In dual call scenario, use all-in call amount as the "effective" call
+      return allInCallInfo.allInCallAmount;
+    }
+    return chipsToCall;
+  }, [allInCallInfo, chipsToCall]);
+
   // Calculate min/max raise amounts (amount to raise on top)
   const raiseLimits = useMemo(() => {
     if (!hero || !gameState) return { min: 0, max: 0 };
@@ -150,11 +223,54 @@ export function ActionPopup({
       lastRaiseAmount > 0 ? Math.max(lastRaiseAmount, bigBlind) : bigBlind;
 
     // Maximum raise amount on top = player's remaining chips after calling
-    // Player needs chipsToCall to call, so max raise = hero.chips - chipsToCall
-    const maxRaiseOnTop = Math.max(0, hero.chips - chipsToCall);
+    // Player needs effectiveChipsToCall to call, so max raise = hero.chips - effectiveChipsToCall
+    const maxRaiseOnTop = Math.max(0, hero.chips - effectiveChipsToCall);
 
     return { min: minRaiseOnTop, max: maxRaiseOnTop };
-  }, [hero, gameState, bigBlind, lastRaiseAmount, chipsToCall]);
+  }, [hero, gameState, bigBlind, lastRaiseAmount, effectiveChipsToCall]);
+
+  // Check if there are players who can still act with bigger stacks than the prior bet
+  // Only allow jamming (all-in raise) if there's a player to act with a bigger stack
+  const canJamOnAllIn = useMemo(() => {
+    if (!gameState?.players || !hero || highestBet === 0) return false;
+
+    // Find players who:
+    // 1. Haven't folded
+    // 2. Aren't all-in
+    // 3. Have a bigger stack than the current highest bet (can cover the all-in)
+    // 4. Can still act (their currentBet < highestBet, meaning they need to act)
+    const actingPlayers = gameState.players.filter(
+      (p) =>
+        !p.folded &&
+        !p.allIn &&
+        p.chips > highestBet &&
+        (p.currentBet || 0) < highestBet && // They haven't matched the bet yet
+        p.id !== hero.id &&
+        p.status !== "LEFT" &&
+        p.status !== "REMOVED"
+    );
+
+    // Only allow jamming if there are players who can still act
+    return actingPlayers.length > 0;
+  }, [gameState, hero, highestBet]);
+
+  // Calculate all-in amounts for button replacement logic
+  const allInInfo = useMemo(() => {
+    if (!hero) return null;
+
+    const allInTotal = hero.chips;
+    const allInRaiseAmount = Math.max(0, hero.chips - effectiveChipsToCall);
+
+    return {
+      total: allInTotal,
+      raiseAmount: allInRaiseAmount,
+      lessThanCall: allInTotal < effectiveChipsToCall,
+      lessThanMinRaise:
+        allInRaiseAmount > 0 && allInRaiseAmount < raiseLimits.min,
+      canMakeMinRaise: allInRaiseAmount >= raiseLimits.min,
+      canJam: canJamOnAllIn && allInRaiseAmount > 0, // Can jam if there are players to act with bigger stacks
+    };
+  }, [hero, effectiveChipsToCall, raiseLimits.min, canJamOnAllIn]);
 
   // Initialize raise amount to min when raise menu opens
   useEffect(() => {
@@ -173,7 +289,13 @@ export function ActionPopup({
       } else if (queuedAction === "check") {
         onAction("check");
       } else if (queuedAction === "call") {
-        onAction("call", highestBet);
+        // Backend expects the amount TO CALL, not the total bet
+        // For queued calls, use the full call (not all-in call)
+        if (allInCallInfo?.hasDualCall) {
+          onAction("call", allInCallInfo.fullCallAmount, false);
+        } else {
+          onAction("call", effectiveChipsToCall, false);
+        }
       }
 
       // Clear queue after execution
@@ -205,19 +327,19 @@ export function ActionPopup({
   useEffect(() => {
     if (!gameState) return;
 
-    const currentRound = gameState.currentRound;
+    const currentPhase = gameState.currentPhase;
 
     if (
       prevRoundRef.current !== null &&
-      prevRoundRef.current !== currentRound &&
-      ["preflop", "flop", "turn", "river"].includes(currentRound)
+      prevRoundRef.current !== currentPhase &&
+      ["preflop", "flop", "turn", "river"].includes(currentPhase)
     ) {
       // New betting round started - reset chipsToCall reference
       prevChipsToCallRef.current = null;
     }
 
-    prevRoundRef.current = currentRound;
-  }, [gameState?.currentRound]);
+    prevRoundRef.current = currentPhase;
+  }, [gameState?.currentPhase]);
 
   // Safety cleanup: Clear queue if player leaves hand
   useEffect(() => {
@@ -227,13 +349,13 @@ export function ActionPopup({
     }
   }, [isPlayerInGame, hero]);
 
-  // Clear queued call/check when there's a raise (chipsToCall increases)
+  // Clear queued call/check when there's a raise (effectiveChipsToCall increases)
   useEffect(() => {
     if (!gameState || !hero) return;
 
-    const currentChipsToCall = chipsToCall;
+    const currentChipsToCall = effectiveChipsToCall;
 
-    // Only clear queue if chipsToCall increased (someone raised)
+    // Only clear queue if effectiveChipsToCall increased (someone raised)
     if (
       prevChipsToCallRef.current !== null &&
       currentChipsToCall > prevChipsToCallRef.current &&
@@ -245,13 +367,10 @@ export function ActionPopup({
     }
 
     prevChipsToCallRef.current = currentChipsToCall;
-  }, [chipsToCall, gameState, hero, queuedAction]);
+  }, [effectiveChipsToCall, gameState, hero, queuedAction]);
 
   // Check if it's showdown phase (must be before conditional return for hooks)
-  const isShowdown = gameState
-    ? gameState.currentPhase === "showdown" ||
-      gameState.currentRound === "showdown"
-    : false;
+  const isShowdown = gameState ? gameState.currentPhase === "showdown" : false;
 
   // Check if it's a contested showdown (hero hasn't folded and multiple players remaining)
   // Must be before conditional return to satisfy React Hooks rules
@@ -264,13 +383,13 @@ export function ActionPopup({
 
   // Hide component if player not in game or no game state
   // Show popup if there is an Active Actor, even if it's not me (enables Action Queuing)
-  // Hide during Runouts, Showdowns, and Transitions (when currentActorSeat === null)
+  // Hide during Runouts and Transitions (when currentActorSeat === null), BUT allow during Showdown for reveal cards
   // Hide if hero is all-in (cannot queue Fold/Check)
   if (
     !gameState ||
     !isPlayerInGame ||
     !hero ||
-    gameState.currentActorSeat === null ||
+    (gameState.currentActorSeat === null && !isShowdown) ||
     hero.allIn
   ) {
     return null;
@@ -300,12 +419,34 @@ export function ActionPopup({
   };
 
   const handleCall = () => {
+    const callAmount = effectiveChipsToCall;
+
     if (isMyTurn) {
-      onAction("call", highestBet);
+      // Backend expects the amount TO CALL, not the total bet
+      onAction("call", callAmount);
     } else {
       // Toggle queue
       setQueuedAction(queuedAction === "call" ? null : "call");
     }
+  };
+
+  const handleAllIn = () => {
+    if (!hero || !isMyTurn) return;
+    onAction("allin", hero.chips);
+  };
+
+  const handleAllInCall = () => {
+    if (!allInCallInfo || !hero || !isMyTurn) return;
+    // Backend expects the amount TO CALL, not the total bet
+    // isAllInCall: true indicates this is the all-in call (main pot only)
+    onAction("call", allInCallInfo.allInCallAmount, true);
+  };
+
+  const handleFullCall = () => {
+    if (!allInCallInfo || !hero || !isMyTurn) return;
+    // Backend expects the amount TO CALL, not the total bet
+    // isAllInCall: false (or undefined) indicates this is the full call (all pots)
+    onAction("call", allInCallInfo.fullCallAmount, false);
   };
 
   const handleRaise = () => {
@@ -343,7 +484,7 @@ export function ActionPopup({
 
     if (isAllIn) {
       // All-In: raise amount is remaining chips after call
-      const allInRaise = Math.max(0, hero.chips - chipsToCall);
+      const allInRaise = Math.max(0, hero.chips - effectiveChipsToCall);
       setRaiseAmount(Math.floor(allInRaise));
     } else {
       // Use pot value directly (not totalPot which includes current bets)
@@ -351,7 +492,10 @@ export function ActionPopup({
       const potValue = gameState?.pot || 0;
       const raiseOnTop = Math.floor(potValue * multiplier);
       // Clamp to available chips
-      const clampedRaise = Math.min(raiseOnTop, hero.chips - chipsToCall);
+      const clampedRaise = Math.min(
+        raiseOnTop,
+        hero.chips - effectiveChipsToCall
+      );
       // Set to max of minimum raise and calculated raise
       setRaiseAmount(Math.max(raiseLimits.min, clampedRaise));
     }
@@ -362,7 +506,10 @@ export function ActionPopup({
     if (!hero || !gameState) return true;
     const potValue = gameState.pot || 0;
     const calculatedRaise = Math.floor(potValue * multiplier);
-    const clampedRaise = Math.min(calculatedRaise, hero.chips - chipsToCall);
+    const clampedRaise = Math.min(
+      calculatedRaise,
+      hero.chips - effectiveChipsToCall
+    );
     return clampedRaise < raiseLimits.min;
   };
 
@@ -655,42 +802,117 @@ export function ActionPopup({
             {checkQueued ? "✓ Check" : "Check"}
           </Button>
 
-          {/* Raise Button */}
-          <Button
-            onClick={handleRaise}
-            disabled={
-              !isMyTurn ||
-              (highestBet > 0 && hero.chips < chipsToCall + raiseLimits.min) ||
-              (highestBet === 0 && hero.chips < bigBlind)
-            }
-            className={cn(
-              "h-12 px-6 text-sm font-medium",
-              isMyTurn && showBetMenu
-                ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
-                : isMyTurn
-                ? "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
-                : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 opacity-30 cursor-not-allowed"
-            )}
-          >
-            Raise
-          </Button>
-
-          {/* Call Button (leftmost, conditional) */}
-          {highestBet > (hero.currentBet || 0) && (
+          {/* Raise Button - Hide if all-in is less than call, replace with All In if less than min raise AND can jam */}
+          {!allInInfo?.lessThanCall && (
             <Button
-              onClick={handleCall}
-              disabled={isMyTurn && showBetMenu}
+              onClick={
+                allInInfo?.lessThanMinRaise && allInInfo?.canJam
+                  ? handleAllIn
+                  : handleRaise
+              }
+              disabled={
+                !isMyTurn ||
+                (allInInfo?.lessThanMinRaise && !allInInfo?.canJam
+                  ? true // Disable if all-in is less than min raise but can't jam
+                  : allInInfo?.lessThanMinRaise
+                  ? false // Allow if can jam
+                  : (highestBet > 0 &&
+                      hero.chips < effectiveChipsToCall + raiseLimits.min) ||
+                    (highestBet === 0 && hero.chips < bigBlind))
+              }
               className={cn(
                 "h-12 px-6 text-sm font-medium",
-                callQueued
+                isMyTurn && showBetMenu && !allInInfo?.lessThanMinRaise
                   ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
                   : isMyTurn
                   ? "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
-                  : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
+                  : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 opacity-30 cursor-not-allowed"
               )}
             >
-              {callQueued ? "✓ Call" : `Call $${chipsToCall}`}
+              {allInInfo?.lessThanMinRaise && allInInfo?.canJam
+                ? `All In $${allInInfo.total}`
+                : "Raise"}
             </Button>
+          )}
+
+          {/* Call Button(s) - Handle dual call scenario and all-in replacement */}
+          {highestBet > (hero.currentBet || 0) && (
+            <>
+              {/* Dual call options: All-in call and Full call */}
+              {allInCallInfo?.hasDualCall ? (
+                <>
+                  {/* All-in Call Button */}
+                  <Button
+                    onClick={handleAllInCall}
+                    disabled={isMyTurn && showBetMenu}
+                    className={cn(
+                      "h-12 px-6 text-sm font-medium",
+                      callQueued
+                        ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
+                        : isMyTurn
+                        ? "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
+                        : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
+                    )}
+                    title="Eligible only for main pot, will go all-in"
+                  >
+                    {callQueued
+                      ? "✓ Call"
+                      : `Call $${allInCallInfo.allInCallAmount} (Main Pot Only)`}
+                  </Button>
+
+                  {/* Full Call Button */}
+                  <Button
+                    onClick={handleFullCall}
+                    disabled={isMyTurn && showBetMenu}
+                    className={cn(
+                      "h-12 px-6 text-sm font-medium",
+                      callQueued
+                        ? "bg-emerald-600 border-2 border-emerald-600 text-white shadow-lg"
+                        : isMyTurn
+                        ? "bg-emerald-600 border-2 border-emerald-600 text-white hover:bg-emerald-700"
+                        : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
+                    )}
+                    title="Eligible for all pots, can continue betting"
+                  >
+                    {callQueued
+                      ? "✓ Call"
+                      : `Call $${allInCallInfo.fullCallAmount}`}
+                  </Button>
+                </>
+              ) : allInInfo?.lessThanCall ? (
+                /* All-in is less than call - replace Call with All In */
+                <Button
+                  onClick={handleAllIn}
+                  disabled={isMyTurn && showBetMenu}
+                  className={cn(
+                    "h-12 px-6 text-sm font-medium",
+                    callQueued
+                      ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
+                      : isMyTurn
+                      ? "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
+                      : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
+                  )}
+                >
+                  {callQueued ? "✓ All In" : `All In $${allInInfo.total}`}
+                </Button>
+              ) : (
+                /* Standard single call */
+                <Button
+                  onClick={handleCall}
+                  disabled={isMyTurn && showBetMenu}
+                  className={cn(
+                    "h-12 px-6 text-sm font-medium",
+                    callQueued
+                      ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
+                      : isMyTurn
+                      ? "bg-[#2a2a2a] border-2 border-white text-white hover:bg-[#3a3a3a]"
+                      : "bg-[#2a2a2a] border-2 border-gray-600 text-gray-300 hover:bg-[#3a3a3a]"
+                  )}
+                >
+                  {callQueued ? "✓ Call" : `Call $${effectiveChipsToCall}`}
+                </Button>
+              )}
+            </>
           )}
         </div>
       )}

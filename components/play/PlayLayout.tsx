@@ -15,7 +15,7 @@ const AMBIENT_GAME_STATE: any = {
   communityCards: [],
   pot: 0,
   dealerSeat: 0,
-  currentRound: "PREFLOP",
+  currentPhase: "preflop",
   turnTimer: null,
   actions: [],
 };

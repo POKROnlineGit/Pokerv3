@@ -76,9 +76,18 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     }
 
     const handleGameState = async (state: GameState) => {
-      // Reset redirect flag if we're already on the game page
-      const gamePath = `/play/game/${state.gameId}`;
-      if (pathname === gamePath) {
+      // Determine if this is a private game
+      const isPrivate = (state as any).isPrivate || false;
+      
+      // Determine the correct game path based on game type
+      const gamePath = isPrivate 
+        ? `/play/private/${state.gameId}`
+        : `/play/game/${state.gameId}`;
+      
+      // Reset redirect flag if we're already on the game page (check both routes)
+      const isOnGamePage = pathname === `/play/game/${state.gameId}` || 
+                          pathname === `/play/private/${state.gameId}`;
+      if (isOnGamePage) {
         isRedirectingRef.current = false;
         return;
       }
@@ -112,8 +121,13 @@ export function StatusProvider({ children }: { children: ReactNode }) {
       // Check if player has LEFT status - don't redirect if player has left
       const player = state.players?.find((p) => p.id === user.id);
       const isInLeftPlayers = state.left_players?.includes(user.id);
-      if (player?.left || isInLeftPlayers) {
-        return; // Don't redirect if player has left the game
+      const isPermanentlyOut =
+        player?.status === "LEFT" ||
+        player?.status === "REMOVED" ||
+        player?.left ||
+        isInLeftPlayers;
+      if (isPermanentlyOut) {
+        return; // Don't redirect if player has left or been removed from the game
       }
 
       // Check if this is a recently left game (race condition prevention)
@@ -144,7 +158,11 @@ export function StatusProvider({ children }: { children: ReactNode }) {
 
       // Redirect after delay (similar to match_found behavior)
       setTimeout(() => {
-        router.push(gamePath);
+        // Use the correct route based on game type
+        const redirectPath = isPrivate 
+          ? `/play/private/${state.gameId}`
+          : `/play/game/${state.gameId}`;
+        router.push(redirectPath);
         // Clear status after navigation
         setTimeout(() => {
           clearStatus("active-game");

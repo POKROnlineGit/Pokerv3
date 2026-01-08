@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   Moon,
   Sun,
+  Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -122,6 +123,7 @@ export function Sidebar() {
       submenu: [
         { href: "/play/online", label: "Play Online" },
         { href: "/play/bots", label: "Play Bots" },
+        { href: "/play/host", label: "Host Game" },
       ],
     },
     {
