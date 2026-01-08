@@ -57,7 +57,11 @@ export async function proxy(request: NextRequest) {
   }
 
   // Public routes - accessible without authentication
-  if (url.pathname === "/" || url.pathname.startsWith("/learn") || url.pathname.startsWith("/tools")) {
+  if (
+    url.pathname === "/" ||
+    url.pathname.startsWith("/learn") ||
+    url.pathname.startsWith("/tools")
+  ) {
     return response;
   }
 
@@ -71,17 +75,6 @@ export async function proxy(request: NextRequest) {
     // If not logged in, redirect to sign in
     if (!user) {
       return NextResponse.redirect(new URL("/auth/signin", request.url));
-    }
-
-    // Check superuser status
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("is_superuser")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.is_superuser) {
-      return NextResponse.redirect(new URL("/", request.url));
     }
   }
 
