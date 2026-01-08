@@ -64,23 +64,18 @@ export const metadata: Metadata = {
     description: "Play Texas Holdem instantly in your browser.",
     images: [
       {
-        url: "/icon.png",
+        url: `${BASE_URL}/icon.png`,
         width: 512,
         height: 512,
-        alt: "Pokr Game Table",
+        alt: "POKROnline Logo",
       },
     ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "POKROnline - Learn & Play Poker",
-    description: "Real-time multiplayer poker in your browser.",
   },
   icons: {
     icon: [
       // Google prefers PNG for search results
       { url: "/icon.png", type: "image/png", sizes: "any" },
-      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.ico", sizes: "any" },
       { url: "/logo/POKROnlineLogoSVG.svg", type: "image/svg+xml" },
     ],
     shortcut: "/icon.png",
