@@ -362,7 +362,7 @@ export function PlayLayout({
                         )}
                         <button
                           onClick={() => setIsSettingsOpen(false)}
-                          className="p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
+                          className="ml-auto p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
                           aria-label="Close settings"
                         >
                           <X className="h-5 w-5" />

@@ -359,12 +359,39 @@ export function Sidebar() {
                                   className="overflow-hidden"
                                 >
                                   <div className="bg-black/20">
+                                    {/* Play button at top for Play submenu */}
+                                    {item.href === "/play" && (
+                                      <Link
+                                        href="/play"
+                                        onClick={closeMobileSidebar}
+                                        className={cn(
+                                          "flex items-center px-4 py-3 pl-12 text-white hover:bg-white/5 transition-colors"
+                                        )}
+                                        style={
+                                          pathname === "/play" ||
+                                          pathname === "/play/online"
+                                            ? {
+                                                backgroundColor: `${accentColor}CC`,
+                                              }
+                                            : undefined
+                                        }
+                                      >
+                                        <span>Play</span>
+                                      </Link>
+                                    )}
                                     {item.submenu.map((subItem) => {
-                                      const isSubActive =
+                                      let isSubActive =
                                         pathname === subItem.href ||
                                         pathname?.startsWith(
                                           `${subItem.href}/`
                                         );
+                                      // Special case: /play/local should highlight "Play Bots"
+                                      if (
+                                        subItem.href === "/play/bots" &&
+                                        pathname?.startsWith("/play/local")
+                                      ) {
+                                        isSubActive = true;
+                                      }
                                       return (
                                         <Link
                                           key={subItem.href}
@@ -867,10 +894,35 @@ export function Sidebar() {
               }}
             >
               <nav className="flex flex-col h-full">
+                {/* Play button at top for Play submenu */}
+                {item.href === "/play" && (
+                  <Link
+                    href="/play"
+                    className={cn(
+                      "flex items-center px-4 py-3 min-w-0 w-full text-white hover:bg-white/5 transition-colors"
+                    )}
+                    style={
+                      pathname === "/play" || pathname === "/play/online"
+                        ? {
+                            backgroundColor: `${accentColor}CC`,
+                          }
+                        : undefined
+                    }
+                  >
+                    <span className="whitespace-nowrap">Play</span>
+                  </Link>
+                )}
                 {item.submenu.map((subItem) => {
                   let isSubActive =
                     pathname === subItem.href ||
                     pathname?.startsWith(`${subItem.href}/`);
+                  // Special case: /play/local should highlight "Play Bots"
+                  if (
+                    subItem.href === "/play/bots" &&
+                    pathname?.startsWith("/play/local")
+                  ) {
+                    isSubActive = true;
+                  }
                   return (
                     <Link
                       key={subItem.href}
