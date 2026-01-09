@@ -64,7 +64,7 @@ export const metadata: Metadata = {
     description: "Play Texas Holdem instantly in your browser.",
     images: [
       {
-        url: `${BASE_URL}/icon.png`,
+        url: `https://pokronline.com/icon.png`,
         width: 512,
         height: 512,
         alt: "POKROnline Logo",
@@ -74,12 +74,15 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       // Google prefers PNG for search results
-      { url: `${BASE_URL}/icon.png`, type: "image/png", sizes: "any" },
-      { url: `${BASE_URL}/favicon.ico`, sizes: "any" },
-      { url: `${BASE_URL}/logo/POKROnlineLogoSVG.svg`, type: "image/svg+xml" },
+      {
+        url: `https://pokronline.com/icon.png`,
+        type: "image/png",
+        sizes: "any",
+      },
+      { url: `https://pokronline.com/favicon.ico`, sizes: "any" },
     ],
-    shortcut: `${BASE_URL}/icon.png`,
-    apple: `${BASE_URL}/icon.png`,
+    shortcut: `https://pokronline.com/icon.png`,
+    apple: `https://pokronline.com/icon.png`,
   },
 };
 
@@ -124,13 +127,7 @@ export default async function RootLayout({
               "@context": "https://schema.org",
               "@type": "VideoGame",
               name: "POKROnline",
-              genre: [
-                "Card Game",
-                "Poker",
-                "Casino Game",
-                "Learn Poker",
-                "Game Theory",
-              ],
+              genre: ["Card Game", "Poker", "Learn Poker", "Game Theory"],
               description:
                 "A platform to learn the rules of poker, develop your skills with puzzles and lessons, and play online with our beautiful interface.",
               applicationCategory: "Game",
