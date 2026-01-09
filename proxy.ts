@@ -72,9 +72,11 @@ export async function proxy(request: NextRequest) {
     url.pathname.startsWith("/settings") ||
     url.pathname.startsWith("/friends")
   ) {
-    // If not logged in, redirect to sign in
+    // If not logged in, redirect to sign in with next parameter
     if (!user) {
-      return NextResponse.redirect(new URL("/auth/signin", request.url));
+      const signInUrl = new URL("/auth/signin", request.url);
+      signInUrl.searchParams.set("next", url.pathname);
+      return NextResponse.redirect(signInUrl);
     }
   }
 

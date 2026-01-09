@@ -3,12 +3,15 @@
 import React, { useEffect, useState } from "react";
 import { PlayLayout } from "@/components/play/PlayLayout";
 import { Card, CardContent } from "@/components/ui/card";
-import { Globe2, Bot, ChevronRight, Crown } from "lucide-react";
+import { Globe2, Bot, ChevronRight, Crown, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 import { useSocket } from "@/lib/socketClient";
 import { useQueue } from "@/components/providers/QueueProvider";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/lib/hooks";
 
 export default function PlayRootPage() {
   const router = useRouter();
@@ -16,6 +19,9 @@ export default function PlayRootPage() {
   const socket = useSocket();
   const { inQueue, queueType } = useQueue();
   const [checking, setChecking] = useState(true);
+  const [joinCode, setJoinCode] = useState("");
+  const [isJoiningCode, setIsJoiningCode] = useState(false);
+  const { toast } = useToast();
 
   // 1. Check if user is in an active game and redirect
   useEffect(() => {
@@ -125,6 +131,42 @@ export default function PlayRootPage() {
     }
   }, [checking, inQueue, queueType, router]);
 
+  const handleJoinByCode = async () => {
+    // Validate format: 5 alphanumeric characters
+    const codeRegex = /^[A-Z0-9]{5}$/;
+    if (!joinCode || !codeRegex.test(joinCode)) {
+      return;
+    }
+
+    setIsJoiningCode(true);
+
+    try {
+      const { data: gameId, error } = await supabase.rpc("resolve_join_code", {
+        p_code: joinCode,
+      });
+
+      if (error || !gameId) {
+        toast({
+          title: "Game Not Found",
+          description: "Could not find a game with that code.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      router.push(`/play/private/${gameId}`);
+    } catch (err) {
+      console.error(err);
+      toast({
+        title: "Game Not Found",
+        description: "Could not find a game with that code.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsJoiningCode(false);
+    }
+  };
+
   // Don't render content while checking
   if (checking) {
     return (
@@ -136,7 +178,45 @@ export default function PlayRootPage() {
     );
   }
   return (
-    <PlayLayout title="Select Game Mode">
+    <PlayLayout
+      title="Select Game Mode"
+      footer={
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Enter Game Code"
+              value={joinCode}
+              onChange={(e) => {
+                const upperValue = e.target.value
+                  .toUpperCase()
+                  .replace(/[^A-Z0-9]/g, "")
+                  .slice(0, 5);
+                setJoinCode(upperValue);
+              }}
+              maxLength={5}
+              className="uppercase font-mono flex-1 text-center"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && joinCode.length === 5) {
+                  handleJoinByCode();
+                }
+              }}
+            />
+            <Button
+              onClick={handleJoinByCode}
+              disabled={isJoiningCode || joinCode.length !== 5}
+              variant="secondary"
+              className="min-w-[60px]"
+            >
+              {isJoiningCode ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Join"
+              )}
+            </Button>
+          </div>
+        </div>
+      }
+    >
       <div className="space-y-4">
         <Link href="/play/online" className="block group">
           <Card className="!bg-[hsl(222.2,84%,4.9%)] border-slate-700 group-hover:border-slate-600 group-hover:!bg-slate-800 group-hover:shadow-lg">

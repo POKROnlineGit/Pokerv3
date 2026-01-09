@@ -560,6 +560,15 @@ export function PokerTable({
         </div>
       )}
 
+      {/* Pause/Sync Overlay - Bright red button in center */}
+      {(isPaused || isSyncing) && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[100]">
+          <div className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-lg shadow-2xl border-2 border-red-700 font-bold text-lg uppercase">
+            {isPaused ? "PAUSED" : "SYNCING"}
+          </div>
+        </div>
+      )}
+
       {/* Table - Deep maroon/red oval felt with brown wooden border */}
       <div
         className="absolute inset-0"

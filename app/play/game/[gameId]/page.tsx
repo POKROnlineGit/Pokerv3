@@ -295,17 +295,6 @@ export default function GamePage() {
 
       // Listen for game state
       socket.on("gameState", (state: GameState) => {
-        console.log("[OnlineGame] GameState received:", {
-          gameId: state.gameId || gameId,
-          handNumber: state.handNumber || 0,
-          isPaused: (state as any).isPaused || false,
-          phase: state.currentPhase,
-          players: state.players?.length || 0,
-          pot: state.pot,
-          timestamp: new Date().toISOString(),
-          fullState: state,
-        });
-
         if (mounted) {
           // Mark initialization complete - authoritative state received from server
           if (isInitializing) {

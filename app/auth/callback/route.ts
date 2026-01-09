@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const next = requestUrl.searchParams.get("next") || "/play/online";
+  const next = requestUrl.searchParams.get("next") || "/play";
 
   if (code) {
     const supabase = await createServerComponentClient();

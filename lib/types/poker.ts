@@ -101,4 +101,5 @@ export interface GameState {
   // Frontend-specific fields
   left_players?: string[];
   isPrivate?: boolean; // Whether this is a private game
+  joinCode?: string; // Short alphanumeric code for joining private games
 }

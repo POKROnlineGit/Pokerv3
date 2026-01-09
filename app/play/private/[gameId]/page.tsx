@@ -78,14 +78,14 @@ export default function PrivateGamePage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) {
-        router.push(
-          `/auth/signin?next=${encodeURIComponent(window.location.pathname)}`
-        );
+        const currentPath = window.location.pathname;
+        const redirectUrl = `/auth/signin?next=${encodeURIComponent(currentPath)}`;
+        router.replace(redirectUrl);
       } else {
         setCurrentUserId(data.user.id);
       }
     });
-  }, []);
+  }, [router]);
 
   // Initialize wasPlayerRef on mount
   useEffect(() => {
@@ -103,23 +103,10 @@ export default function PrivateGamePage() {
     if (!socket.connected) socket.connect();
 
     const onConnect = () => {
-      console.log("Joining private game:", gameId);
       socket.emit("joinGame", gameId);
     };
 
     const onGameState = (state: GameState) => {
-      console.log("[PrivateGame] GameState received:", {
-        timestamp: new Date().toISOString(),
-        gameId: state.gameId,
-        handNumber: state.handNumber,
-        phase: state.currentPhase,
-        players: state.players?.length || 0,
-        currentActorSeat: state.currentActorSeat,
-        pot: state.pot,
-        isPaused: (state as any).isPaused,
-        pendingRequests: (state as any).pendingRequests?.length || 0,
-        fullState: state,
-      });
 
       // Track transition from player to spectator (busted notification)
       if (currentUserId) {
@@ -582,6 +569,19 @@ export default function PrivateGamePage() {
             </Badge>
           )}
         </div>
+        
+        {/* Join Code Display - for all players */}
+        {gameState?.joinCode && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-xs h-8"
+            disabled
+          >
+            Game Code: {gameState.joinCode}
+          </Button>
+        )}
+
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -1013,6 +1013,7 @@ export default function PrivateGamePage() {
           currentUserId={currentUserId}
           isHeadsUp={gameState.config?.maxPlayers === 2}
           turnTimer={turnTimer}
+          isSyncing={isSyncing}
         />
       }
       actionPopup={actionPopupContent}

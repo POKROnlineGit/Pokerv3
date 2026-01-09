@@ -25,7 +25,7 @@ export default function SignInPage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   
   // Get return URL from query params
-  const next = searchParams.get("next") || "/play/online";
+  const next = searchParams.get("next") || "/play";
   
   // Redirect to signup if view=sign_up query param is present
   useEffect(() => {
