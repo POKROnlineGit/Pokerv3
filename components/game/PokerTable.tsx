@@ -5,7 +5,7 @@ import { GameState, Player } from "@/lib/types/poker";
 import { Card as CardType, getNextActivePlayer } from "@/lib/utils/pokerUtils";
 import { Card } from "@/components/Card";
 import { cn } from "@/lib/utils";
-import { useDebugMode } from "@/lib/hooks";
+import { useDebugMode, useIsMobile } from "@/lib/hooks";
 import { motion, AnimatePresence } from "framer-motion";
 import { getClientHandStrength } from "@backend/domain/evaluation/ClientHandEvaluator";
 // @ts-ignore - Importing from shared backend
@@ -73,6 +73,7 @@ export function PokerTable({
   isSyncing = false,
 }: PokerTableProps) {
   const { isEnabled: debugMode } = useDebugMode();
+  const isMobile = useIsMobile();
   const isPaused = gameState.isPaused || false;
 
   // 1. MOUNT TRACKING: Detect if this is the first render vs an update
@@ -279,8 +280,8 @@ export function PokerTable({
         : 6);
   // Use same radius for both heads-up and 6-max for consistency
   // Seats positioned so only ~20% of seat overlaps table edge
-  const radiusX = 70; // Increased significantly to move seats further out
-  const radiusY = 62; // Increased significantly to move seats further out
+  const radiusX = isMobile ? 55 : 70; // Reduced on mobile to bring players in from edges
+  const radiusY = 62; // Keep same on mobile and desktop
 
   // Find the current user's seat to position them at the bottom
   const currentUserSeat = gameState.players.find(
@@ -485,10 +486,17 @@ export function PokerTable({
 
   return (
     <div
-      className="relative mx-auto aspect-[5/3]"
+      className={cn(
+        "relative mx-auto",
+        isMobile ? "aspect-[3/4]" : "aspect-[5/3]"
+      )}
       style={{
-        width: "min(70vw, calc(70vh * 5 / 3), 38rem)",
-        maxWidth: "38rem",
+        width: isMobile
+          ? "min(70vw, calc(53vh * 3 / 4))"
+          : "min(70vw, calc(70vh * 5 / 3), 38rem)",
+        maxWidth: isMobile ? "none" : "38rem",
+        height: isMobile ? "53vh" : undefined,
+        marginTop: isMobile ? "-7vh" : undefined, // Raise table up so top doesn't move when height is reduced
       }}
     >
       {/* Debug overlay (super user + debug mode only) */}
@@ -583,7 +591,9 @@ export function PokerTable({
         }}
       >
         {/* Community cards area - centered, larger for heads-up - Higher z-index to appear above player status indicators */}
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex gap-2 z-30">
+        <div 
+          className={cn("absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex z-30", !isMobile && "gap-2")}
+        >
           <AnimatePresence>
             {gameState.communityCards.map((card, i) => {
               // 2. UNIQUE KEYS: Combine card + index + hand number
@@ -606,13 +616,14 @@ export function PokerTable({
                     // If mounted (update): Start off-screen with spin to animate in.
                     // If mounting (first load): Start at final position (y: 0) to skip animation.
                     isMountedRef.current
-                      ? { y: -80, rotate: -180, opacity: 0 }
-                      : false // 'false' tells motion to start at 'animate' state
+                      ? { y: -80, rotate: -180, opacity: 0, scale: isMobile ? 0.8 : 1 }
+                      : { scale: isMobile ? 0.8 : 1 } // Set scale even on first load
                   }
                   animate={{
                     y: 0,
                     rotate: 0,
                     opacity: 1,
+                    scale: isMobile ? 0.8 : 1,
                   }}
                   exit={{ opacity: 0, scale: 0.8 }}
                   transition={{
@@ -620,6 +631,10 @@ export function PokerTable({
                     stiffness: 400,
                     damping: 30,
                     delay: delay,
+                  }}
+                  style={{
+                    // Use negative margin on right side of all cards except last to create overlap
+                    marginRight: isMobile && i < gameState.communityCards.length - 1 ? "-0.75rem" : "0",
                   }}
                 >
                   <Card card={card as CardType} />
@@ -804,14 +819,15 @@ export function PokerTable({
             }
           >
             <div
-              className="absolute bg-yellow-500/90 text-black px-3 py-1.5 rounded-lg shadow-lg border-2 border-yellow-600 text-center"
+              className="absolute bg-yellow-500/90 text-black rounded-lg shadow-lg border-2 border-yellow-600 text-center"
               style={{
                 left: `calc(50% + ${offsetX}rem)`,
                 top: `calc(50% + ${offsetY}rem)`,
-                transform: `translate(${-anchorX * 100}%, ${-anchorY * 100}%)`,
+                transform: `translate(${-anchorX * 100}%, ${-anchorY * 100}%) scale(${isMobile ? 0.85 : 1})`,
+                padding: isMobile ? "0.375rem 0.75rem" : "0.375rem 0.75rem",
               }}
             >
-              <div className="text-base font-bold">${indicator.amount}</div>
+              <div className={cn("font-bold", isMobile ? "text-sm" : "text-base")}>${indicator.amount}</div>
             </div>
           </motion.div>
         );
@@ -895,7 +911,7 @@ export function PokerTable({
                       isDisconnected && !hasLeft
                         ? "grayscale(100%)"
                         : undefined,
-                    transform: "scale(1.15)",
+                    transform: `scale(${isMobile ? 0.9 : 1.15})`,
                     transformOrigin: "center",
                   }}
                 >
@@ -1092,7 +1108,7 @@ export function PokerTable({
                     <motion.div
                       initial={{ opacity: 0, y: -5 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="mt-2 z-30"
+                      className={cn("z-30", isMobile ? "mt-1" : "mt-2")}
                     >
                       <div className="bg-accent-600/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg shadow-lg border border-accent-500/50 text-xs font-semibold whitespace-nowrap">
                         {heroHandStrength}
@@ -1148,7 +1164,6 @@ export function PokerTable({
                     <div
                       className="absolute left-1/2 transform -translate-x-1/2 flex z-0 bottom-full"
                       style={{
-                        gap: "-1rem",
                         marginBottom: "-2.8rem", // Overlap player box by 40% (card height ~7rem * 0.4 = 2.8rem)
                       }}
                     >
@@ -1181,13 +1196,17 @@ export function PokerTable({
                                     y: 40,
                                     opacity: 0,
                                     rotate: i === 0 ? card1Angle : card2Angle,
+                                    scale: isMobile ? 0.8 : 1.1,
                                   }
-                                : false
+                                : {
+                                    scale: isMobile ? 0.8 : 1.1,
+                                  }
                             }
                             animate={{
                               y: 0,
                               opacity: 1,
                               rotate: i === 0 ? card1Angle : card2Angle,
+                              scale: isMobile ? 0.8 : 1.1,
                             }}
                             transition={
                               isNewRound
@@ -1207,7 +1226,11 @@ export function PokerTable({
                                 "opacity-50",
                               isPermanentlyOut && "grayscale"
                             )}
-                            style={{ transform: "scale(1.1)" }}
+                            style={{
+                              // Only apply negative margin on right side of first card to create overlap
+                              // This reduces container width by half the overlap, keeping centering correct
+                              marginRight: i === 0 ? (isMobile ? "-1rem" : "-1rem") : "0",
+                            }}
                           >
                             <Card
                               card={cardValue as CardType | "HIDDEN"}

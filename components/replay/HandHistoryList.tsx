@@ -6,6 +6,8 @@ import { Trophy, Clock, Coins, Play } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createClientComponentClient } from "@/lib/supabaseClient";
 import { ReplayViewer } from "@/components/replay/ReplayViewer";
+import { useIsMobile } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -67,6 +69,7 @@ export function HandHistoryList({
   hands,
   currentUserId,
 }: HandHistoryListProps) {
+  const isMobile = useIsMobile();
   const supabase = createClientComponentClient();
   const [selectedHand, setSelectedHand] = useState<HandSummary | null>(null);
   const [playerNames, setPlayerNames] = useState<Record<string, string>>({});
@@ -117,62 +120,53 @@ export function HandHistoryList({
   return (
     <>
       <Card className="bg-card backdrop-blur-sm border flex-1 flex flex-col min-h-0 overflow-hidden">
-        <CardContent className="p-0 flex-1 overflow-auto">
-          <div className="relative w-full h-full">
-            <table className="w-full caption-bottom text-sm">
-              <TableHeader
-                className="sticky top-0 bg-card/95 backdrop-blur-sm z-20 border-b rounded-t-lg"
-                style={{ position: "sticky", top: 0 }}
-              >
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[100px]">Hand #</TableHead>
-                  <TableHead className="w-[150px]">Date</TableHead>
-                  <TableHead>Board</TableHead>
-                  <TableHead>Winner</TableHead>
-                  <TableHead className="w-[100px]">Pot</TableHead>
-                  <TableHead className="w-[100px]">Status</TableHead>
-                  <TableHead className="w-[120px] text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {hands && hands.length > 0 ? (
-                  hands.map((hand) => {
-                    const isWinner = hand.winner_id === currentUserId;
-                    const boardCards = getBoardCards(hand.replay_data);
-                    const winnerName = hand.winner_id
-                      ? playerNames[hand.winner_id] ||
-                        `Seat ${
-                          Object.entries(hand.player_manifest).find(
-                            ([_, id]) => id === hand.winner_id
-                          )?.[0] || "?"
-                        }`
-                      : null;
+        <CardContent className={cn("flex-1 overflow-auto", isMobile ? "p-4" : "p-0")}>
+          {isMobile ? (
+            // Mobile: Cards Layout
+            <div className="space-y-4">
+              {hands && hands.length > 0 ? (
+                hands.map((hand) => {
+                  const isWinner = hand.winner_id === currentUserId;
+                  const boardCards = getBoardCards(hand.replay_data);
+                  const winnerName = hand.winner_id
+                    ? playerNames[hand.winner_id] ||
+                      `Seat ${
+                        Object.entries(hand.player_manifest).find(
+                          ([_, id]) => id === hand.winner_id
+                        )?.[0] || "?"
+                      }`
+                    : null;
 
-                    return (
-                      <TableRow
-                        key={hand.id}
-                        className="hover:bg-muted/30 cursor-pointer"
-                        onClick={() => setSelectedHand(hand)}
-                      >
-                        <TableCell>
-                          <div className="font-mono font-bold text-sm text-primary">
-                            #{hand.hand_index}
+                  return (
+                    <Card
+                      key={hand.id}
+                      className="bg-card/50 backdrop-blur-sm border cursor-pointer hover:bg-muted/30 transition-colors"
+                      onClick={() => setSelectedHand(hand)}
+                    >
+                      <CardContent className="p-4 space-y-3">
+                        {/* Header: Hand # and Date */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-mono font-bold text-base text-primary">
+                              Hand #{hand.hand_index}
+                            </div>
+                            <div className="text-xs text-muted-foreground font-mono">
+                              {hand.game_id.slice(0, 8)}
+                            </div>
                           </div>
-                          <div className="text-xs text-muted-foreground font-mono">
-                            {hand.game_id.slice(0, 8)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Clock className="w-3 h-3" />
                             {formatDistanceToNow(new Date(hand.played_at), {
                               addSuffix: true,
                             })}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          {boardCards.length > 0 ? (
-                            <div className="flex gap-1">
+                        </div>
+
+                        {/* Board Cards */}
+                        {boardCards.length > 0 && (
+                          <div>
+                            <div className="text-xs text-muted-foreground mb-1">Board</div>
+                            <div className="flex gap-1 flex-wrap">
                               {boardCards.map((card, idx) => (
                                 <span
                                   key={idx}
@@ -182,73 +176,205 @@ export function HandHistoryList({
                                 </span>
                               ))}
                             </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              —
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {winnerName ? (
-                            <span
-                              className={`text-xs font-medium ${
-                                isWinner
-                                  ? "text-emerald-400"
-                                  : "text-foreground"
-                              }`}
-                            >
-                              {isWinner ? "You" : winnerName}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              —
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
+                          </div>
+                        )}
+
+                        {/* Winner and Status */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-xs text-muted-foreground mb-1">Winner</div>
+                            {winnerName ? (
+                              <span
+                                className={`text-sm font-medium ${
+                                  isWinner
+                                    ? "text-emerald-400"
+                                    : "text-foreground"
+                                }`}
+                              >
+                                {isWinner ? "You" : winnerName}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">
+                                —
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            {isWinner ? (
+                              <div className="flex items-center gap-1 text-emerald-400 font-bold text-sm">
+                                <Trophy className="w-4 h-4" /> WON
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground font-medium">
+                                Played
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Pot and Action */}
+                        <div className="flex items-center justify-between pt-2 border-t">
                           <div className="flex items-center gap-1">
-                            <Coins className="w-3 h-3 text-muted-foreground" />
-                            <span className="font-mono font-medium">
-                              {hand.final_pot}
+                            <Coins className="w-4 h-4 text-muted-foreground" />
+                            <span className="font-mono font-medium text-sm">
+                              {hand.final_pot} chips
                             </span>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          {isWinner ? (
-                            <div className="flex items-center gap-1 text-emerald-400 font-bold text-sm">
-                              <Trophy className="w-4 h-4" /> WON
-                            </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground font-medium">
-                              Played
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
                           <div className="inline-flex items-center gap-1 text-sm font-medium text-emerald-500">
                             Watch <Play className="h-4 w-4" />
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12">
-                      <div className="flex flex-col items-center gap-2">
-                        <p className="text-muted-foreground">
-                          No hands recorded
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Play some games to see your history here.
-                        </p>
-                      </div>
-                    </TableCell>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              ) : (
+                <div className="text-center py-12">
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="text-muted-foreground">
+                      No hands recorded
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Play some games to see your history here.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            // Desktop: Table Layout
+            <div className="relative w-full h-full">
+              <table className="w-full caption-bottom text-sm">
+                <TableHeader
+                  className="sticky top-0 bg-card/95 backdrop-blur-sm z-20 border-b rounded-t-lg"
+                  style={{ position: "sticky", top: 0 }}
+                >
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-[100px]">Hand #</TableHead>
+                    <TableHead className="w-[150px]">Date</TableHead>
+                    <TableHead>Board</TableHead>
+                    <TableHead>Winner</TableHead>
+                    <TableHead className="w-[100px]">Pot</TableHead>
+                    <TableHead className="w-[100px]">Status</TableHead>
+                    <TableHead className="w-[120px] text-right">Action</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {hands && hands.length > 0 ? (
+                    hands.map((hand) => {
+                      const isWinner = hand.winner_id === currentUserId;
+                      const boardCards = getBoardCards(hand.replay_data);
+                      const winnerName = hand.winner_id
+                        ? playerNames[hand.winner_id] ||
+                          `Seat ${
+                            Object.entries(hand.player_manifest).find(
+                              ([_, id]) => id === hand.winner_id
+                            )?.[0] || "?"
+                          }`
+                        : null;
+
+                      return (
+                        <TableRow
+                          key={hand.id}
+                          className="hover:bg-muted/30 cursor-pointer"
+                          onClick={() => setSelectedHand(hand)}
+                        >
+                          <TableCell>
+                            <div className="font-mono font-bold text-sm text-primary">
+                              #{hand.hand_index}
+                            </div>
+                            <div className="text-xs text-muted-foreground font-mono">
+                              {hand.game_id.slice(0, 8)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Clock className="w-3 h-3" />
+                              {formatDistanceToNow(new Date(hand.played_at), {
+                                addSuffix: true,
+                              })}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {boardCards.length > 0 ? (
+                              <div className="flex gap-1">
+                                {boardCards.map((card, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="font-mono text-xs bg-card px-1.5 py-0.5 rounded border"
+                                  >
+                                    {card}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                —
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {winnerName ? (
+                              <span
+                                className={`text-xs font-medium ${
+                                  isWinner
+                                    ? "text-emerald-400"
+                                    : "text-foreground"
+                                }`}
+                              >
+                                {isWinner ? "You" : winnerName}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                —
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Coins className="w-3 h-3 text-muted-foreground" />
+                              <span className="font-mono font-medium">
+                                {hand.final_pot}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {isWinner ? (
+                              <div className="flex items-center gap-1 text-emerald-400 font-bold text-sm">
+                                <Trophy className="w-4 h-4" /> WON
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground font-medium">
+                                Played
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="inline-flex items-center gap-1 text-sm font-medium text-emerald-500">
+                              Watch <Play className="h-4 w-4" />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12">
+                        <div className="flex flex-col items-center gap-2">
+                          <p className="text-muted-foreground">
+                            No hands recorded
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Play some games to see your history here.
+                          </p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 

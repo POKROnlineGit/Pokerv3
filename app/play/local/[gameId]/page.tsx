@@ -26,8 +26,8 @@ export default function LocalGamePage() {
     leaveLocalGame,
     playerAction,
     newGame,
+    manager,
   } = useLocalGameStore();
-  const hasInitialized = useRef(false);
 
   const [showHandRankings, setShowHandRankings] = useState(false);
   const [cardsLoaded, setCardsLoaded] = useState(false);
@@ -91,19 +91,23 @@ export default function LocalGamePage() {
   }, []);
 
   useEffect(() => {
-    if (!hasInitialized.current) {
+    // Initialize if manager doesn't exist (more reliable than ref)
+    if (!manager) {
       startLocalGame();
-      hasInitialized.current = true;
     }
-  }, [startLocalGame]);
+  }, [startLocalGame, manager]);
 
   // Cleanup on unmount (when navigating away from the page)
   useEffect(() => {
     return () => {
-      leaveLocalGame();
-      console.log('[LocalGame] Cleaned up on page unmount');
+      // Always cleanup if manager exists (defensive)
+      if (manager) {
+        leaveLocalGame();
+        console.log('[LocalGame] Cleaned up on page unmount');
+      }
     };
-  }, [leaveLocalGame]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run on unmount
 
   // Create Centralized Adapter: Apply all fixes once, use for both components
   // CRITICAL: This hook must be called BEFORE any early returns to maintain hook order

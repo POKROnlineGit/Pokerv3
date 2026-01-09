@@ -8,7 +8,7 @@ export default async function LearnPage() {
   const lessons = await getLessons();
 
   return (
-    <div className="container mx-auto py-6 px-14 max-w-7xl h-full">
+    <div className="container mx-auto py-6 px-4 md:px-14 max-w-7xl h-full">
       <LessonDashboard initialLessons={lessons} />
     </div>
   );

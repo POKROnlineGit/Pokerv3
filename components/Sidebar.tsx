@@ -16,6 +16,9 @@ import {
   Moon,
   Sun,
   Crown,
+  Menu,
+  X,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +29,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { useThemeToggle } from "@/components/ThemeToggle";
+import { useIsMobile } from "@/lib/hooks";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -36,6 +40,9 @@ export function Sidebar() {
   const [user, setUser] = useState<any>(null);
   const [hoveredSubmenu, setHoveredSubmenu] = useState<string | null>(null);
   const { theme, toggleTheme, mounted: themeMounted } = useThemeToggle();
+  const isMobile = useIsMobile();
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
   // Get theme colors for sidebar elements (not background)
   const primaryColor = currentTheme.colors.primary[0];
@@ -113,6 +120,18 @@ export function Sidebar() {
     await supabase.auth.signOut();
     // Redirect to home and force a hard refresh to clear any cached state
     window.location.href = "/";
+  };
+
+  const toggleAccordion = (href: string) => {
+    setExpandedItems((prev) =>
+      prev.includes(href)
+        ? prev.filter((item) => item !== href)
+        : [...prev, href]
+    );
+  };
+
+  const closeMobileSidebar = () => {
+    setIsMobileSidebarOpen(false);
   };
 
   const navItems = [
@@ -214,9 +233,268 @@ export function Sidebar() {
     );
   };
 
+  // Mobile hamburger button
+  if (isMobile) {
+    return (
+      <>
+        {/* Hamburger Button - Fixed top left */}
+        <button
+          onClick={() => setIsMobileSidebarOpen(true)}
+          className="fixed top-4 left-4 z-[100] p-2 bg-[hsl(222.2,84%,4.9%)] text-white rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu className="h-6 w-6" />
+        </button>
+
+        {/* Mobile Sidebar Overlay */}
+        <AnimatePresence>
+          {isMobileSidebarOpen && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 bg-black/50 z-[9998]"
+                onClick={closeMobileSidebar}
+              />
+
+              {/* Full-screen Sidebar */}
+              <motion.aside
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                className="fixed inset-0 z-[9999] bg-[hsl(222.2,84%,4.9%)] flex flex-col overflow-y-auto"
+              >
+                {/* Header with Close Button */}
+                <div className="flex items-center justify-between p-4 border-b">
+                  <Link
+                    href={user ? "/play" : "/"}
+                    onClick={closeMobileSidebar}
+                    className="flex items-center"
+                  >
+                    <Image
+                      src="/logo/POKROnlineLogoSVG.svg"
+                      alt="POKROnline"
+                      width={48}
+                      height={48}
+                      className="h-12 w-12 object-contain"
+                      priority
+                    />
+                  </Link>
+                  <button
+                    onClick={closeMobileSidebar}
+                    className="p-2 text-white hover:bg-white/10 rounded-lg transition-colors"
+                    aria-label="Close menu"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                </div>
+
+                {/* Navigation Items */}
+                <nav className="flex-1 flex flex-col py-4">
+                  {navItems.map((item) => {
+                    const Icon = item.icon;
+                    let isActive =
+                      item.href === "/play"
+                        ? pathname === "/play" ||
+                          pathname === "/play/online" ||
+                          (pathname?.startsWith("/play/") &&
+                            !pathname?.startsWith("/play/bots"))
+                        : pathname === item.href ||
+                          pathname?.startsWith(`${item.href}/`);
+
+                    if (item.submenu && !isActive) {
+                      isActive = item.submenu.some((subItem) => {
+                        return (
+                          pathname === subItem.href ||
+                          pathname?.startsWith(`${subItem.href}/`)
+                        );
+                      });
+                    }
+
+                    const isExpanded = expandedItems.includes(item.href);
+
+                    return (
+                      <div key={item.href} className="w-full">
+                        {item.submenu ? (
+                          // Accordion item with submenu
+                          <>
+                            <button
+                              onClick={() => toggleAccordion(item.href)}
+                              className="flex items-center justify-between w-full px-4 py-3 text-white hover:bg-white/5 transition-colors"
+                              style={
+                                isActive
+                                  ? { backgroundColor: `${accentColor}CC` }
+                                  : undefined
+                              }
+                            >
+                              <div className="flex items-center gap-3">
+                                <Icon className="h-5 w-5" />
+                                <span>{item.label}</span>
+                                {!item.submenu &&
+                                  (item as any).badge !== null &&
+                                  (item as any).badge !== undefined && (
+                                    <Badge variant="destructive">
+                                      {(item as any).badge}
+                                    </Badge>
+                                  )}
+                              </div>
+                              <ChevronDown
+                                className={cn(
+                                  "h-5 w-5 transition-transform",
+                                  isExpanded && "rotate-180"
+                                )}
+                              />
+                            </button>
+                            <AnimatePresence>
+                              {isExpanded && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="bg-black/20">
+                                    {item.submenu.map((subItem) => {
+                                      const isSubActive =
+                                        pathname === subItem.href ||
+                                        pathname?.startsWith(
+                                          `${subItem.href}/`
+                                        );
+                                      return (
+                                        <Link
+                                          key={subItem.href}
+                                          href={subItem.href}
+                                          onClick={closeMobileSidebar}
+                                          className={cn(
+                                            "flex items-center px-4 py-3 pl-12 text-white hover:bg-white/5 transition-colors"
+                                          )}
+                                          style={
+                                            isSubActive
+                                              ? {
+                                                  backgroundColor: `${accentColor}CC`,
+                                                }
+                                              : undefined
+                                          }
+                                        >
+                                          <span>{subItem.label}</span>
+                                        </Link>
+                                      );
+                                    })}
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </>
+                        ) : (
+                          // Regular item without submenu
+                          <Link
+                            href={item.href}
+                            onClick={closeMobileSidebar}
+                            className="flex items-center gap-3 px-4 py-3 text-white hover:bg-white/5 transition-colors"
+                            style={
+                              isActive
+                                ? { backgroundColor: `${accentColor}CC` }
+                                : undefined
+                            }
+                          >
+                            <Icon className="h-5 w-5" />
+                            <span>{item.label}</span>
+                            {item.badge !== null &&
+                              item.badge !== undefined && (
+                                <Badge
+                                  variant="destructive"
+                                  className="ml-auto"
+                                >
+                                  {item.badge}
+                                </Badge>
+                              )}
+                          </Link>
+                        )}
+                      </div>
+                    );
+                  })}
+                </nav>
+
+                {/* Theme Toggle */}
+                <div className="border-t p-4">
+                  <button
+                    onClick={toggleTheme}
+                    className="flex items-center gap-3 w-full px-4 py-3 text-white hover:bg-white/5 transition-colors rounded-lg"
+                    disabled={!themeMounted}
+                  >
+                    {theme === "light" ? (
+                      <Moon className="h-5 w-5" />
+                    ) : (
+                      <Sun className="h-5 w-5" />
+                    )}
+                    <span>
+                      {theme === "light" ? "Dark Mode" : "Light Mode"}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Auth Section */}
+                <div className="border-t p-4">
+                  {user ? (
+                    <button
+                      onClick={() => {
+                        handleSignOut();
+                        closeMobileSidebar();
+                      }}
+                      className="flex items-center gap-3 w-full px-4 py-3 text-white hover:bg-white/5 transition-colors rounded-lg"
+                    >
+                      <LogOut className="h-5 w-5" />
+                      <span>Sign Out</span>
+                    </button>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <Link
+                        href="/auth/signin"
+                        onClick={closeMobileSidebar}
+                        className="flex items-center gap-3 px-4 py-3 text-white hover:bg-white/5 transition-colors rounded-lg"
+                      >
+                        <UserCircle className="h-5 w-5" />
+                        <span>Log In</span>
+                      </Link>
+                      <Link
+                        href="/auth/signup"
+                        onClick={closeMobileSidebar}
+                        className="flex items-center justify-center px-4 py-3 text-white transition-all rounded-lg"
+                        style={{
+                          background:
+                            "linear-gradient(to right, #059669, #15803d)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background =
+                            "linear-gradient(to right, #10b981, #16a34a)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background =
+                            "linear-gradient(to right, #059669, #15803d)";
+                        }}
+                      >
+                        <span>Create Account</span>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
+      </>
+    );
+  }
+
+  // Desktop sidebar
   return (
     <motion.aside
-      className="relative flex flex-col h-screen border-r bg-[hsl(222.2,84%,4.9%)] flex-shrink-0 z-50 overflow-visible"
+      className="hidden md:flex relative flex-col h-screen border-r bg-[hsl(222.2,84%,4.9%)] flex-shrink-0 z-50 overflow-visible"
       variants={sidebarVariants}
       animate={isMinimized ? "minimized" : "expanded"}
       initial={isMinimized ? "minimized" : "expanded"}
@@ -275,17 +553,6 @@ export function Sidebar() {
             // If item has submenu, check if any submenu item is active
             if (item.submenu && !isActive) {
               isActive = item.submenu.some((subItem) => {
-                // For Play Online, also match game pages and queue
-                if (subItem.href === "/play/online") {
-                  return (
-                    pathname === "/play/online" ||
-                    pathname === "/play" ||
-                    pathname?.startsWith("/play/game/") ||
-                    pathname?.startsWith("/play/queue") ||
-                    (pathname?.startsWith("/play/") &&
-                      !pathname?.startsWith("/play/bots"))
-                  );
-                }
                 return (
                   pathname === subItem.href ||
                   pathname?.startsWith(`${subItem.href}/`)
@@ -601,19 +868,9 @@ export function Sidebar() {
             >
               <nav className="flex flex-col h-full">
                 {item.submenu.map((subItem) => {
-                  // For Play Online, also match game pages and queue
                   let isSubActive =
                     pathname === subItem.href ||
                     pathname?.startsWith(`${subItem.href}/`);
-                  if (subItem.href === "/play/online") {
-                    isSubActive =
-                      pathname === "/play/online" ||
-                      pathname === "/play" ||
-                      pathname?.startsWith("/play/game/") ||
-                      pathname?.startsWith("/play/queue") ||
-                      (pathname?.startsWith("/play/") &&
-                        !pathname?.startsWith("/play/bots"));
-                  }
                   return (
                     <Link
                       key={subItem.href}

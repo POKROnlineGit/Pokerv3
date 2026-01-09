@@ -5,8 +5,11 @@ import { createClientComponentClient } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useIsMobile } from '@/lib/hooks'
+import { cn } from '@/lib/utils'
 
 export default function SettingsPage() {
+  const isMobile = useIsMobile()
   const supabase = createClientComponentClient()
   const router = useRouter()
   const [profile, setProfile] = useState<any>(null)
@@ -36,7 +39,7 @@ export default function SettingsPage() {
     return (
       <div className="min-h-screen relative">
         <div className="relative z-10">
-          <div className="container mx-auto py-6 px-14 max-w-7xl flex items-center justify-center min-h-screen">
+          <div className={cn("container mx-auto py-6 max-w-7xl flex items-center justify-center min-h-screen", isMobile ? "px-4" : "px-14")}>
           <div className="text-white">Loading...</div>
           </div>
         </div>
@@ -50,8 +53,8 @@ export default function SettingsPage() {
     <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
-        <div className="container mx-auto py-6 px-14 max-w-7xl">
-          <h1 className="text-3xl font-bold mb-6">Settings</h1>
+        <div className={cn("container mx-auto py-6 max-w-7xl", isMobile ? "px-4" : "px-14")}>
+          <h1 className={cn("text-3xl font-bold mb-6", isMobile && "text-center")}>Settings</h1>
           
           {/* Tabs */}
           <Tabs defaultValue="profile" className="w-full">

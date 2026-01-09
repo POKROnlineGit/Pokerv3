@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Trash2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/lib/hooks";
 
 interface EquityResult {
   equities: number[];
@@ -42,6 +43,7 @@ interface Preset {
 }
 
 export default function EquityCalculatorPage() {
+  const isMobile = useIsMobile();
   // --- State ---
   const [board, setBoard] = useState<string[]>([]);
   const [heroHand, setHeroHand] = useState<string[]>(["", ""]);
@@ -353,23 +355,266 @@ export default function EquityCalculatorPage() {
     <div className="min-h-screen relative">
       {/* Content Layer - Above Background */}
       <div className="relative z-10 flex items-center min-h-screen">
-        <div className="container mx-auto px-6 pt-6 pb-2 max-w-4xl w-full">
-          {/* Main Container Box - Single large box containing all sections */}
-          <Card className="p-6 flex flex-col">
-            <div className="flex gap-6 flex-1 min-h-0 relative">
-              {/* LEFT SIDE: Horizontal scrollable row with Community Cards, Hero/Villains, and Range Grid */}
-              <div className="flex-1 flex flex-col min-w-0 max-w-full">
-                {/* Horizontal scrollable row: Community Cards | Hero | Villains | Add Button */}
+        <div
+          className={cn(
+            "container mx-auto pt-6 pb-2 max-w-4xl w-full",
+            isMobile ? "px-4" : "px-6"
+          )}
+        >
+          {isMobile ? (
+            <>
+              {/* Mobile: Main Container Box - Single large box containing all sections */}
+              <Card
+                className="p-4 flex flex-col"
+                style={{ minHeight: "calc(100vh - 8rem)" }}
+              >
+                {/* Mobile: Header */}
+                <CardHeader className="pb-2 pt-0 px-0">
+                  <CardTitle className="text-center text-xl font-bold">
+                    Equity Evaluator
+                  </CardTitle>
+                </CardHeader>
+
+                {/* Mobile: 1. Cards Box - Full Width (Table Cards, Hero, Villains) */}
+                <div className="mb-4">
+                  <div
+                    ref={scrollContainerRef}
+                    className="overflow-x-auto overflow-y-visible w-full pb-6"
+                    style={{ scrollbarWidth: "none" }}
+                  >
+                    <div className="flex gap-4 items-center min-w-max">
+                      {/* Table Cards */}
+                      <div className="flex-shrink-0 space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">
+                          Table Cards
+                        </div>
+                        <BoardSelector
+                          value={board}
+                          onChange={setBoard}
+                          excludedCards={allExcludedCards.filter(
+                            (c) => !board.includes(c)
+                          )}
+                          showLabel={false}
+                        />
+                      </div>
+
+                      {/* Hero */}
+                      <div className="flex-shrink-0 space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">
+                          Hero
+                        </div>
+                        <HandSelector
+                          value={heroHand}
+                          onChange={setHeroHand}
+                          excludedCards={allExcludedCards.filter(
+                            (c) => !heroHand.includes(c)
+                          )}
+                        />
+                      </div>
+
+                      {/* Villains */}
+                      {villains.map((villain, index) => (
+                        <div
+                          key={villain.id}
+                          className="flex-shrink-0 space-y-1 relative"
+                        >
+                          <div className="text-xs font-medium text-muted-foreground">
+                            Villain {index + 1}
+                          </div>
+                          {villains.length > 1 && villain.id !== 1 && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="absolute -top-2 right-0 h-5 w-5 text-muted-foreground hover:text-destructive"
+                              onClick={() => removeVillain(villain.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                          {villain.type === "hand" ? (
+                            <HandSelector
+                              value={villain.hand}
+                              onChange={(h) =>
+                                updateVillain(villain.id, { hand: h })
+                              }
+                              excludedCards={allExcludedCards.filter(
+                                (c) => !villain.hand.includes(c)
+                              )}
+                            />
+                          ) : (
+                            <div className="text-xs text-muted-foreground h-14 w-[5.5rem] flex items-center justify-center">
+                              {villain.range.size} combos
+                            </div>
+                          )}
+                          {/* Range toggle button for Villain 1 */}
+                          {villain.id === 1 && (
+                            <Button
+                              variant={
+                                villain.type === "range" ? "outline" : "default"
+                              }
+                              size="sm"
+                              className="absolute top-[4rem] right-0 h-5 px-2 text-[10px] z-50"
+                              onClick={() => {
+                                if (villain.type === "hand") {
+                                  updateVillain(1, {
+                                    type: "range",
+                                    hand: ["", ""],
+                                  });
+                                } else {
+                                  updateVillain(1, {
+                                    type: "hand",
+                                  });
+                                }
+                              }}
+                            >
+                              {villain.type === "range"
+                                ? "Use Hand"
+                                : "Use Range"}
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+
+                      {/* Add Villain Button */}
+                      {villains.length < 5 && (
+                        <div className="flex-shrink-0 space-y-1">
+                          <div className="h-5"></div>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="border-dashed h-14 w-10"
+                            onClick={addVillain}
+                          >
+                            <Plus className="h-6 w-6" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mobile: 2. Range Box - Inside main card, no extra sub-box */}
+                <div className="w-full mb-4">
+                  <div className="w-full overflow-auto flex justify-center">
+                    <div
+                      ref={containerRef}
+                      style={{
+                        aspectRatio: "1",
+                        maxWidth: "100vw",
+                        width: "100%",
+                      }}
+                    >
+                      <RangeGrid
+                        selectedHands={villain1?.range || new Set()}
+                        onToggle={(h) =>
+                          isRangeMode && toggleRangeHand(1, h)
+                        }
+                        isMouseDown={isMouseDown && isRangeMode}
+                        onMouseEnter={handleMouseEnter}
+                      />
+                    </div>
+                  </div>
+                  {/* Preset Dropdown and Clear Button - Side by side */}
+                  {isRangeMode && (
+                    <div className="flex gap-2 justify-center mt-2 px-4">
+                      {presets.length > 0 && (
+                        <div className="flex-1 max-w-[200px]">
+                          <Select onValueChange={(val) => loadPreset(1, val)}>
+                            <SelectTrigger className="w-full h-9">
+                              <SelectValue placeholder="Select Range Preset" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {presets.map((preset) => (
+                                <SelectItem
+                                  key={preset.id}
+                                  value={preset.range_string}
+                                >
+                                  {preset.name} ({preset.category})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      <Button
+                        onClick={() =>
+                          updateVillain(1, {
+                            range: new Set(),
+                            rangeString: "",
+                          })
+                        }
+                        variant="outline"
+                        size="sm"
+                        className="h-9 bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600"
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mobile: 3. Results Box - Full Width */}
+                <CardContent className="pt-3 pb-3 flex-1 flex flex-col">
+                  {heroEquity !== null ? (
+                    <div className="space-y-2">
+                      <div className="pt-2">
+                        <div className="text-xs font-semibold mb-1">
+                          Equity
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-medium text-emerald-500">
+                              Hero
+                            </span>
+                            <span className="text-muted-foreground">
+                              {heroEquity.toFixed(1)}%
+                            </span>
+                          </div>
+                          {villains.map(
+                            (v, i) =>
+                              v.equity !== null && (
+                                <div
+                                  key={v.id}
+                                  className="flex justify-between items-center text-xs"
+                                >
+                                  <span className="font-medium">
+                                    Villain {i + 1}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    {v.equity.toFixed(1)}%
+                                  </span>
+                                </div>
+                              )
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground text-center pt-1">
+                      Enter hands to calculate equity
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <>
+              {/* Desktop: Main Container Box - Single large box containing all sections */}
+              <Card className="p-6 flex flex-col">
+                <div className="flex gap-6 flex-1 min-h-0 relative">
+                  {/* LEFT SIDE: Horizontal scrollable row with Table Cards, Hero/Villains, and Range Grid */}
+                  <div className="flex-1 flex flex-col min-w-0 max-w-full">
+                {/* Horizontal scrollable row: Table Cards | Hero | Villains | Add Button */}
                 <div
                   ref={scrollContainerRef}
                   className="pb-4 overflow-x-auto overflow-y-visible w-full relative"
                   style={{ scrollbarWidth: "none" }}
                 >
                   <div className="flex gap-4 items-center min-w-max">
-                    {/* Community Cards */}
+                    {/* Table Cards */}
                     <div className="flex-shrink-0 ml-4 space-y-1">
                       <div className="text-xs font-medium text-muted-foreground">
-                        Community Cards
+                        Table Cards
                       </div>
                       <BoardSelector
                         value={board}
@@ -602,6 +847,8 @@ export default function EquityCalculatorPage() {
               </div>
             </div>
           </Card>
+            </>
+          )}
         </div>
       </div>
     </div>

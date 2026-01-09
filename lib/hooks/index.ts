@@ -4,4 +4,5 @@ export { useDebugMode } from './useDebugMode';
 export { useProfile } from './useProfile';
 export { useGameRedirect } from './useGameRedirect';
 export { useLocalGameStore } from './useLocalGameStore';
+export { useIsMobile } from './useIsMobile';
 

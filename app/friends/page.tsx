@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Search, UserPlus, Check, X, Users, User } from 'lucide-react'
-import { useToast } from '@/lib/hooks'
+import { useToast, useIsMobile } from '@/lib/hooks'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/components/providers/ThemeProvider'
+import { cn } from '@/lib/utils'
 
 interface Friend {
   id: string
@@ -30,6 +31,7 @@ interface FriendRequest {
 }
 
 export default function FriendsPage() {
+  const isMobile = useIsMobile()
   const supabase = createClientComponentClient()
   const router = useRouter()
   const { currentTheme } = useTheme()
@@ -332,8 +334,8 @@ export default function FriendsPage() {
     <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
-        <div className="container mx-auto py-6 px-14 max-w-7xl">
-        <h1 className="text-3xl font-bold mb-6">Friends</h1>
+        <div className={cn("container mx-auto py-6 max-w-7xl", isMobile ? "px-4" : "px-14")}>
+        <h1 className={cn("text-3xl font-bold mb-6", isMobile && "text-center")}>Friends</h1>
 
         {/* Search Bar */}
         <Card className="mb-6 bg-card backdrop-blur-sm border">

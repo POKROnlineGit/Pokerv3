@@ -7,9 +7,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HandHistoryList } from "@/components/replay/HandHistoryList";
 import { UserCircle } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useIsMobile } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/providers/ThemeProvider";
 
 export default function ProfilePage() {
+  const isMobile = useIsMobile();
   const supabase = createClientComponentClient();
   const router = useRouter();
   const { currentTheme } = useTheme();
@@ -124,7 +127,7 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen relative">
         <div className="relative z-10">
-          <div className="container mx-auto py-6 px-14 max-w-7xl flex items-center justify-center min-h-screen">
+          <div className={cn("container mx-auto py-6 max-w-7xl flex items-center justify-center min-h-screen", isMobile ? "px-4" : "px-14")}>
             <div className="text-white">Loading...</div>
           </div>
         </div>
@@ -144,8 +147,8 @@ export default function ProfilePage() {
     <div className="min-h-screen relative">
       {/* --- SCROLLABLE CONTENT LAYER --- */}
       <div className="relative z-10">
-        <div className="container mx-auto py-6 px-14 max-w-7xl h-[calc(100vh-3rem)] flex flex-col">
-          <h1 className="text-3xl font-bold mb-6">Profile</h1>
+        <div className={cn("container mx-auto py-6 max-w-7xl h-[calc(100vh-3rem)] flex flex-col", isMobile ? "px-4" : "px-14")}>
+          <h1 className={cn("text-3xl font-bold mb-6", isMobile && "text-center")}>Profile</h1>
           {/* Profile Header */}
           <Card className="mb-6 bg-card backdrop-blur-sm border flex-shrink-0">
             <CardHeader>

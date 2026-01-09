@@ -7,6 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { GameState, ActionType } from "@/lib/types/poker";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/lib/hooks";
 
 interface ActionPopupProps {
   gameState: GameState | null;
@@ -29,6 +30,7 @@ export function ActionPopup({
   onRevealCard,
   isLocalGame = false,
 }: ActionPopupProps) {
+  const isMobile = useIsMobile();
   const [queuedAction, setQueuedAction] = useState<QueuedAction>(null);
   const [raiseAmount, setRaiseAmount] = useState(0); // Amount to raise on top (not total bet)
   const [showBetMenu, setShowBetMenu] = useState(false);
@@ -381,6 +383,27 @@ export function ActionPopup({
     return nonFoldedPlayers.length > 1; // More than just the hero
   }, [isShowdown, hero, gameState]);
 
+  // Allow folded players to see reveal controls during showdown
+  // But hide betting controls if folded
+  // Must be before conditional return to satisfy React Hooks rules
+  const showBettingControls = hero ? !hero.folded : false;
+
+  // Count visible action buttons for mobile width calculation
+  // Must be before conditional return to satisfy React Hooks rules
+  const buttonCount = useMemo(() => {
+    if (!showBettingControls || !hero) return 0;
+    let count = 2; // Fold and Check are always shown
+    if (!allInInfo?.lessThanCall) count++; // Raise button
+    if (highestBet > (hero.currentBet || 0)) {
+      if (allInCallInfo?.hasDualCall) {
+        count += 2; // Dual call buttons
+      } else {
+        count += 1; // Single call button
+      }
+    }
+    return count;
+  }, [showBettingControls, allInInfo, allInCallInfo, highestBet, hero]);
+
   // Hide component if player not in game or no game state
   // Show popup if there is an Active Actor, even if it's not me (enables Action Queuing)
   // Hide during Runouts and Transitions (when currentActorSeat === null), BUT allow during Showdown for reveal cards
@@ -394,10 +417,6 @@ export function ActionPopup({
   ) {
     return null;
   }
-
-  // Allow folded players to see reveal controls during showdown
-  // But hide betting controls if folded
-  const showBettingControls = !hero.folded;
 
   // Handle button clicks
   const handleFold = () => {
@@ -631,7 +650,13 @@ export function ActionPopup({
   }
 
   return (
-    <div className="fixed bottom-6 right-6" style={{ zIndex: 9999 }}>
+    <div
+      className={cn(
+        "fixed",
+        isMobile ? "bottom-0 left-0 right-0 px-4 pb-4" : "bottom-6 right-6"
+      )}
+      style={{ zIndex: 9999 }}
+    >
       {/* Bet Menu (expanded above buttons) */}
       <AnimatePresence>
         {showBetMenu && isMyTurn && (
@@ -640,7 +665,10 @@ export function ActionPopup({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="mb-4 bg-[#1a1a1a] border border-[#9A1F40] rounded-xl shadow-xl p-4 min-w-[20rem]"
+            className={cn(
+              "mb-4 bg-[#1a1a1a] border border-[#9A1F40] rounded-xl shadow-xl p-4",
+              isMobile ? "w-full" : "min-w-[20rem]"
+            )}
           >
             <div className="space-y-4">
               {/* Header */}
@@ -767,13 +795,29 @@ export function ActionPopup({
       {/* Action Buttons - Horizontal Layout (Right to Left: Call, Raise, Check, Fold) */}
       {/* Only show betting controls if player hasn't folded */}
       {showBettingControls && (
-        <div className="flex items-center gap-2 flex-row-reverse">
+        <div
+          className={cn(
+            "flex items-center gap-2",
+            isMobile ? "flex-row-reverse justify-end" : "flex-row-reverse"
+          )}
+          style={
+            isMobile
+              ? {
+                  width: buttonCount === 3 ? "75%" : "100%",
+                  marginLeft: "auto",
+                  marginRight: "0",
+                }
+              : undefined
+          }
+        >
           {/* Fold Button (rightmost) */}
           <Button
             onClick={handleFold}
             disabled={isMyTurn && showBetMenu}
             className={cn(
-              "h-12 px-6 text-sm font-medium",
+              "h-12 text-sm font-medium",
+              isMobile && "flex-1 min-w-0",
+              !isMobile && "px-6",
               foldQueued
                 ? "bg-red-600 border-2 border-red-600 text-white shadow-lg"
                 : isMyTurn
@@ -789,7 +833,9 @@ export function ActionPopup({
             onClick={handleCheck}
             disabled={checkDisabled || (isMyTurn && showBetMenu)}
             className={cn(
-              "h-12 px-6 text-sm font-medium",
+              "h-12 text-sm font-medium",
+              isMobile && "flex-1 min-w-0",
+              !isMobile && "px-6",
               checkQueued
                 ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
                 : isMyTurn && canCheck
@@ -821,7 +867,9 @@ export function ActionPopup({
                     (highestBet === 0 && hero.chips < bigBlind))
               }
               className={cn(
-                "h-12 px-6 text-sm font-medium",
+                "h-12 text-sm font-medium",
+                isMobile && "flex-1 min-w-0",
+                !isMobile && "px-6",
                 isMyTurn && showBetMenu && !allInInfo?.lessThanMinRaise
                   ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
                   : isMyTurn
@@ -846,7 +894,9 @@ export function ActionPopup({
                     onClick={handleAllInCall}
                     disabled={isMyTurn && showBetMenu}
                     className={cn(
-                      "h-12 px-6 text-sm font-medium",
+                      "h-12 text-sm font-medium",
+                      isMobile && "flex-1 min-w-0",
+                      !isMobile && "px-6",
                       callQueued
                         ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
                         : isMyTurn
@@ -865,7 +915,9 @@ export function ActionPopup({
                     onClick={handleFullCall}
                     disabled={isMyTurn && showBetMenu}
                     className={cn(
-                      "h-12 px-6 text-sm font-medium",
+                      "h-12 text-sm font-medium",
+                      isMobile && "flex-1 min-w-0",
+                      !isMobile && "px-6",
                       callQueued
                         ? "bg-emerald-600 border-2 border-emerald-600 text-white shadow-lg"
                         : isMyTurn
@@ -885,7 +937,9 @@ export function ActionPopup({
                   onClick={handleAllIn}
                   disabled={isMyTurn && showBetMenu}
                   className={cn(
-                    "h-12 px-6 text-sm font-medium",
+                    "h-12 text-sm font-medium",
+                    isMobile && "flex-1 min-w-0",
+                    !isMobile && "px-6",
                     callQueued
                       ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
                       : isMyTurn
@@ -901,7 +955,9 @@ export function ActionPopup({
                   onClick={handleCall}
                   disabled={isMyTurn && showBetMenu}
                   className={cn(
-                    "h-12 px-6 text-sm font-medium",
+                    "h-12 text-sm font-medium",
+                    isMobile && "flex-1 min-w-0",
+                    !isMobile && "px-6",
                     callQueued
                       ? "bg-[#9A1F40] border-2 border-[#9A1F40] text-white shadow-lg"
                       : isMyTurn

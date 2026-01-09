@@ -49,7 +49,8 @@ export function RangeGrid({
               isMouseDown && onMouseEnter && onMouseEnter(handLabel)
             }
             className={cn(
-              "h-8 w-8 text-[10px] font-medium border border-slate-800 flex items-center justify-center transition-colors select-none",
+              "text-[9px] font-medium border border-slate-800 flex items-center justify-center transition-colors select-none",
+              "aspect-square w-full h-full",
               isSelected
                 ? type === "pair"
                   ? "bg-emerald-600 text-white"
@@ -69,11 +70,13 @@ export function RangeGrid({
   }, [selectedHands, onToggle, isMouseDown, onMouseEnter]);
 
   return (
-    <div className="w-full overflow-x-auto bg-white/5 p-2 rounded border border-slate-600">
+    <div className="overflow-auto bg-white/5 p-1 rounded border border-slate-600 flex justify-center" style={{ width: 'fit-content', maxWidth: '100%', margin: '0 auto' }}>
       <div
-        className="inline-grid gap-px bg-slate-800 border-2 border-slate-400 p-2 select-none"
+        className="inline-grid bg-slate-800 border-2 border-slate-400 p-1 select-none"
         style={{
-          gridTemplateColumns: "repeat(13, 2rem)",
+          gridTemplateColumns: "repeat(13, minmax(1.25rem, 1.5rem))",
+          gridTemplateRows: "repeat(13, minmax(1.25rem, 1.5rem))",
+          gap: "1px",
           minWidth: "fit-content",
         }}
         onContextMenu={(e) => e.preventDefault()}

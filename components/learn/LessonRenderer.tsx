@@ -14,6 +14,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Card as PokerCard } from "@/components/Card";
 import { RangeGrid } from "@/components/analysis/RangeGrid";
+import { useIsMobile } from "@/lib/hooks";
 
 interface LessonRendererProps {
   lesson: Lesson;
@@ -21,6 +22,7 @@ interface LessonRendererProps {
 
 export function LessonRenderer({ lesson }: LessonRendererProps) {
   const router = useRouter();
+  const isMobile = useIsMobile();
   
   // Initialize state with saved progress, clamped to valid bounds
   const [pageIndex, setPageIndex] = useState(() => {
@@ -224,8 +226,8 @@ export function LessonRenderer({ lesson }: LessonRendererProps) {
   };
 
   return (
-    <div className="container mx-auto pt-0 pb-6 px-14 max-w-7xl relative z-10" style={{ position: 'relative', zIndex: 10 }}>
-      <Card className="bg-card backdrop-blur-sm border" style={{ height: 'calc(100vh - 6rem)', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 6rem)' }}>
+    <div className={isMobile ? "w-full mx-auto pt-4 pb-6 px-4 max-w-[140rem] relative z-10" : "container mx-auto pt-0 pb-6 px-14 max-w-7xl relative z-10"} style={{ position: 'relative', zIndex: 10 }}>
+      <Card className="bg-card backdrop-blur-sm border" style={{ height: isMobile ? 'calc(100vh - 8rem)' : 'calc(100vh - 6rem)', display: 'flex', flexDirection: 'column', maxHeight: isMobile ? 'calc(100vh - 8rem)' : 'calc(100vh - 6rem)' }}>
         {/* Top Bar */}
         <CardHeader className="pb-4 border-b flex-shrink-0">
           <div className="flex items-center justify-between text-sm mb-2" style={{ color: '#ffffff' }}>
@@ -261,7 +263,7 @@ export function LessonRenderer({ lesson }: LessonRendererProps) {
             variant="ghost" 
             onClick={handlePrev} 
             disabled={pageIndex === 0}
-            className="gap-2 bg-transparent border-0 shadow-none hover:bg-white/5"
+            className={isMobile ? "gap-2 bg-transparent border-0 shadow-none hover:bg-white/5 min-w-[100px]" : "gap-2 bg-transparent border-0 shadow-none hover:bg-white/5"}
             style={{
               opacity: pageIndex === 0 ? 0.5 : 1,
             }}
@@ -273,14 +275,14 @@ export function LessonRenderer({ lesson }: LessonRendererProps) {
             <Button 
               onClick={handleFinish} 
               disabled={isCompleting}
-              className="bg-emerald-600 hover:bg-emerald-700 gap-2 min-w-[140px]"
+              className={isMobile ? "bg-emerald-600 hover:bg-emerald-700 gap-2 min-w-[120px]" : "bg-emerald-600 hover:bg-emerald-700 gap-2 min-w-[140px]"}
             >
               {isCompleting ? "Completing..." : <>Complete Lesson <CheckCircle2 className="h-4 w-4" /></>}
             </Button>
           ) : (
             <Button 
               onClick={handleNext} 
-              className="gap-2 min-w-[140px] text-white border-0 shadow-none"
+              className={isMobile ? "gap-2 min-w-[120px] text-white border-0 shadow-none" : "gap-2 min-w-[140px] text-white border-0 shadow-none"}
               style={{
                 background: 'linear-gradient(to right, #059669, #15803d)',
               }}

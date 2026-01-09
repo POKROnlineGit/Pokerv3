@@ -18,6 +18,7 @@ export class LocalGameManager {
   private updateUI: (state: any) => void;
   private timers: NodeJS.Timeout[] = [];
   private botTimeout: NodeJS.Timeout | null = null;
+  private startGameTimeout: NodeJS.Timeout | null = null;
   private currentHeroId: string;
   private isDestroyed: boolean = false;
 
@@ -35,7 +36,8 @@ export class LocalGameManager {
     // Delay Initial Deal: Give UI 500ms to mount and render empty table before cards appear
     // This ensures entry animations can trigger properly
     console.log('[LocalGame] Initializing game...');
-    setTimeout(() => {
+    this.startGameTimeout = setTimeout(() => {
+      if (this.isDestroyed) return; // Safety check
       this.startGame();
     }, 500);
   }
@@ -285,6 +287,10 @@ export class LocalGameManager {
     this.isDestroyed = true;
     this.timers.forEach(clearTimeout);
     if (this.botTimeout) clearTimeout(this.botTimeout);
+    if (this.startGameTimeout) {
+      clearTimeout(this.startGameTimeout);
+      this.startGameTimeout = null;
+    }
     console.log('[LocalGame] Manager destroyed and timers cleared.');
   }
 }
