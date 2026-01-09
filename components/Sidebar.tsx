@@ -368,8 +368,7 @@ export function Sidebar() {
                                           "flex items-center px-4 py-3 pl-12 text-white hover:bg-white/5 transition-colors"
                                         )}
                                         style={
-                                          pathname === "/play" ||
-                                          pathname === "/play/online"
+                                          pathname === "/play"
                                             ? {
                                                 backgroundColor: `${accentColor}CC`,
                                               }
@@ -566,14 +565,11 @@ export function Sidebar() {
           {navItems.map((item) => {
             const Icon = item.icon;
             // Check if current pathname matches the item's href
-            // For /play, also match /play/* paths (game pages, queue, etc.) except /play/bots
+            // For /play, match any /play/* path
             // For items with submenus, also check if any submenu item is active
             let isActive =
               item.href === "/play"
-                ? pathname === "/play" ||
-                  pathname === "/play/online" ||
-                  (pathname?.startsWith("/play/") &&
-                    !pathname?.startsWith("/play/bots"))
+                ? pathname === "/play" || pathname?.startsWith("/play/")
                 : pathname === item.href ||
                   pathname?.startsWith(`${item.href}/`);
 
@@ -902,7 +898,7 @@ export function Sidebar() {
                       "flex items-center px-4 py-3 min-w-0 w-full text-white hover:bg-white/5 transition-colors"
                     )}
                     style={
-                      pathname === "/play" || pathname === "/play/online"
+                      pathname === "/play"
                         ? {
                             backgroundColor: `${accentColor}CC`,
                           }
