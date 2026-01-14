@@ -10,11 +10,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "daily",
       priority: 1,
     },
+    // Auth routes
     {
-      url: `${baseUrl}/auth`,
+      url: `${baseUrl}/auth/signin`,
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/auth/signup`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.4,
     },
     {
       url: `${baseUrl}/learn`,
@@ -22,11 +29,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "daily",
       priority: 0.7,
     },
+    // Tools routes
     {
-      url: `${baseUrl}/tools`,
+      url: `${baseUrl}/tools/equity-calculator`,
       lastModified: new Date(),
       changeFrequency: "daily",
-      priority: 1,
+      priority: 0.9,
+    },
+    {
+      url: `${baseUrl}/tools/range-analysis`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.9,
     },
   ];
 }
