@@ -220,9 +220,24 @@ export default function HomePage() {
             </div>
 
             {/* Footer */}
-            <div className="mt-12 text-center border-t border-white/10 pt-6">
+            <div className="mt-12 text-center border-t border-white/10 pt-6 space-y-2">
               <p className="text-emerald-500/40 text-sm">
                 © 2025 PokrOnline. All cards dealt fairly.
+              </p>
+              <p className="text-xs text-slate-500">
+                <a
+                  href="/privacy"
+                  className="hover:text-emerald-400 transition-colors underline-offset-4 hover:underline"
+                >
+                  Privacy Policy
+                </a>
+                <span className="mx-2 text-slate-600">•</span>
+                <a
+                  href="/terms"
+                  className="hover:text-emerald-400 transition-colors underline-offset-4 hover:underline"
+                >
+                  Terms of Service
+                </a>
               </p>
             </div>
           </div>
