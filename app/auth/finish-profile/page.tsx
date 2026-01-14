@@ -139,7 +139,7 @@ export default function FinishProfilePage() {
           id: user.id,
           username: cleanUsername,
           chips: 10000,
-          theme: "light",
+          theme: "dark",
           is_superuser: false,
           debug_mode: false,
         });

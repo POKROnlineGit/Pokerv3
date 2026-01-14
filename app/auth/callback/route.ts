@@ -29,7 +29,7 @@ export async function GET(request: Request) {
             id: user.id,
             username: username,
             chips: 10000,
-            theme: "light",
+            theme: "dark",
             is_superuser: false,
             debug_mode: false,
           });
