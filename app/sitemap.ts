@@ -11,12 +11,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
-      url: `${baseUrl}/play/online`,
-      lastModified: new Date(),
-      changeFrequency: "always",
-      priority: 0.8,
-    },
-    {
       url: `${baseUrl}/auth/signin`,
       lastModified: new Date(),
       changeFrequency: "monthly",
@@ -25,13 +19,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
     {
       url: `${baseUrl}/learn`,
       lastModified: new Date(),
-      changeFrequency: "weekly",
+      changeFrequency: "daily",
       priority: 0.7,
     },
     {
       url: `${baseUrl}/tools`,
       lastModified: new Date(),
-      changeFrequency: "weekly",
+      changeFrequency: "daily",
       priority: 1,
     },
   ];
