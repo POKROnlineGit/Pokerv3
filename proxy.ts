@@ -78,6 +78,22 @@ export async function proxy(request: NextRequest) {
       signInUrl.searchParams.set("next", url.pathname);
       return NextResponse.redirect(signInUrl);
     }
+
+    // Check if user has a username (unless already on finish-profile page)
+    if (url.pathname !== "/auth/finish-profile") {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("username")
+        .eq("id", user.id)
+        .single();
+
+      // If username is null or empty, redirect to finish-profile page
+      if (!profile?.username || profile.username.trim() === "") {
+        const finishProfileUrl = new URL("/auth/finish-profile", request.url);
+        finishProfileUrl.searchParams.set("next", url.pathname);
+        return NextResponse.redirect(finishProfileUrl);
+      }
+    }
   }
 
   return response;

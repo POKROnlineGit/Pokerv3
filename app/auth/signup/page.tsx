@@ -12,6 +12,7 @@ import { Loader2, Mail, ArrowLeft } from "lucide-react";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { ThemeBackground } from "@/components/ThemeBackground";
 import Image from "next/image";
+import { Filter } from "bad-words";
 
 export default function SignUpPage() {
   // State for method selection vs form
@@ -34,6 +35,9 @@ export default function SignUpPage() {
   // Get theme colors
   const primaryColor = currentTheme.colors.primary[0];
   const accentColor = currentTheme.colors.accent[0];
+
+  // Initialize profanity filter
+  const filter = new Filter();
 
   // Redirect if already signed in
   useEffect(() => {
@@ -88,6 +92,24 @@ export default function SignUpPage() {
     setError(null);
 
     try {
+      // Sanitize username (trim but preserve case)
+      const cleanUsername = username.trim();
+
+      // 1. Profanity Check (check lowercase version for profanity)
+      if (filter.isProfane(cleanUsername.toLowerCase())) {
+        setError("Please choose an appropriate username.");
+        setLoading(false);
+        return;
+      }
+
+      // 2. Length & Format Check (5-15 chars, allow uppercase and lowercase)
+      const usernameRegex = /^[a-zA-Z0-9_]{5,15}$/;
+      if (!usernameRegex.test(cleanUsername)) {
+        setError("Username must be 5-15 characters (letters, numbers, _ only).");
+        setLoading(false);
+        return;
+      }
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -95,23 +117,23 @@ export default function SignUpPage() {
           // Crucial: Redirects to callback to finalizing session/profile
           emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
-            username: username, // Passed to backend for profile creation
+            username: cleanUsername, // Passed to backend for profile creation
           }
         }
       });
 
       if (signUpError) throw signUpError;
 
-      // If auto-confirmed or successful, redirect to play
-      if (data.user) {
-         router.push('/play'); 
-      } else {
-        // Handle case where email confirmation is required (optional UI feedback)
-        setError("Check your email for the confirmation link.");
+      // Check if a session was created immediately
+      if (data.user && !data.session) {
+        // Email verification is required
+        router.push(`/auth/verify-email?email=${encodeURIComponent(email)}`);
+      } else if (data.user && data.session) {
+        // Auto-confirmed, redirect to play
+        router.push('/play');
       }
     } catch (err: any) {
       setError(err.message || "Failed to sign up");
-    } finally {
       setLoading(false);
     }
   };

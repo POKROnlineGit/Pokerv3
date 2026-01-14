@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Filter } from 'bad-words'
 
 interface SettingsFormProps {
   initialUsername: string
@@ -39,6 +40,9 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
   const supabase = createClientComponentClient()
   const router = useRouter()
 
+  // Initialize profanity filter
+  const filter = new Filter()
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -53,18 +57,38 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
       const updateData: { username?: string; theme?: string; color_theme?: string; debug_mode?: boolean } = {}
       
       if (tab === 'profile') {
-        // Check if username is already taken
+        // Sanitize username (trim but preserve case)
+        const cleanUsername = username.trim()
+
+        // 1. Profanity Check (check lowercase version for profanity)
+        if (filter.isProfane(cleanUsername.toLowerCase())) {
+          throw new Error('Please choose an appropriate username.')
+        }
+
+        // 2. Length & Format Check (5-15 chars, allow uppercase and lowercase)
+        const usernameRegex = /^[a-zA-Z0-9_]{5,15}$/
+        if (!usernameRegex.test(cleanUsername)) {
+          if (cleanUsername.length < 5) {
+            throw new Error('Username must be at least 5 characters.')
+          } else if (cleanUsername.length > 15) {
+            throw new Error('Username must be no more than 15 characters.')
+          } else {
+            throw new Error('Username must contain only letters, numbers, and underscores.')
+          }
+        }
+
+        // 3. Check if username is already taken (case-insensitive)
         const { data: existing } = await supabase
           .from('profiles')
           .select('id')
-          .eq('username', username)
+          .ilike('username', cleanUsername)
           .neq('id', user.id)
           .single()
 
         if (existing) {
-          throw new Error('Username already taken')
+          throw new Error('This username is already taken. Please choose another.')
         }
-        updateData.username = username
+        updateData.username = cleanUsername
       } else if (tab === 'theme') {
         updateData.theme = theme
         updateData.color_theme = colorTheme
@@ -72,12 +96,53 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
         updateData.debug_mode = debugMode
       }
 
-      const { error: updateError } = await supabase
+      // Check if profile exists, then INSERT or UPDATE accordingly
+      const { data: existingProfile } = await supabase
         .from('profiles')
-        .update(updateData)
+        .select('id')
         .eq('id', user.id)
+        .single()
 
-      if (updateError) throw updateError
+      if (existingProfile) {
+        // Profile exists, update it
+        const { error: updateError, data: updateDataResult } = await supabase
+          .from('profiles')
+          .update(updateData)
+          .eq('id', user.id)
+          .select()
+
+        if (updateError) throw updateError
+        
+        // Verify the update actually affected a row
+        if (!updateDataResult || updateDataResult.length === 0) {
+          throw new Error('Failed to update profile. Profile may not exist.')
+        }
+      } else {
+        // Profile doesn't exist, insert it with default values
+        const insertData: { id: string; username?: string; theme?: string; color_theme?: string; debug_mode?: boolean; chips: number; is_superuser: boolean } = {
+          id: user.id,
+          chips: 10000,
+          is_superuser: false,
+          ...updateData,
+        }
+        
+        // Ensure required fields are set
+        if (!insertData.username) {
+          insertData.username = user.email?.split('@')[0] || `user_${user.id.slice(0, 8)}`
+        }
+        if (!insertData.theme) {
+          insertData.theme = 'light'
+        }
+        if (insertData.debug_mode === undefined) {
+          insertData.debug_mode = false
+        }
+
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert(insertData)
+
+        if (insertError) throw insertError
+      }
 
       // Apply theme changes only if we're on the theme tab
       if (tab === 'theme') {
@@ -149,12 +214,13 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                minLength={3}
-                maxLength={20}
+                minLength={5}
+                maxLength={15}
+                pattern="[a-zA-Z0-9_]{5,15}"
                 className="bg-card"
               />
               <p className="text-sm text-muted-foreground">
-                Your username must be unique and between 3-20 characters
+                5-15 characters (letters, numbers, and underscores only)
               </p>
             </div>
           )}
