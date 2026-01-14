@@ -128,23 +128,21 @@ export default function FinishProfilePage() {
           .select();
 
         if (updateError) throw updateError;
-        
+
         // Verify the update actually affected a row
         if (!updateData || updateData.length === 0) {
           throw new Error("Failed to update username. Profile may not exist.");
         }
       } else {
         // Profile doesn't exist, insert it
-        const { error: insertError } = await supabase
-          .from("profiles")
-          .insert({
-            id: user.id,
-            username: cleanUsername,
-            chips: 10000,
-            theme: "light",
-            is_superuser: false,
-            debug_mode: false,
-          });
+        const { error: insertError } = await supabase.from("profiles").insert({
+          id: user.id,
+          username: cleanUsername,
+          chips: 10000,
+          theme: "light",
+          is_superuser: false,
+          debug_mode: false,
+        });
 
         if (insertError) throw insertError;
       }
