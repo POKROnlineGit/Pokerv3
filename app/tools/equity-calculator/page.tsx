@@ -506,9 +506,7 @@ export default function EquityCalculatorPage() {
                     >
                       <RangeGrid
                         selectedHands={villain1?.range || new Set()}
-                        onToggle={(h) =>
-                          isRangeMode && toggleRangeHand(1, h)
-                        }
+                        onToggle={(h) => isRangeMode && toggleRangeHand(1, h)}
                         isMouseDown={isMouseDown && isRangeMode}
                         onMouseEnter={handleMouseEnter}
                       />
@@ -558,9 +556,7 @@ export default function EquityCalculatorPage() {
                   {heroEquity !== null ? (
                     <div className="space-y-2">
                       <div className="pt-2">
-                        <div className="text-xs font-semibold mb-1">
-                          Equity
-                        </div>
+                        <div className="text-xs font-semibold mb-1">Equity</div>
                         <div className="space-y-0.5">
                           <div className="flex justify-between items-center text-xs">
                             <span className="font-medium text-emerald-500">
@@ -604,249 +600,254 @@ export default function EquityCalculatorPage() {
                 <div className="flex gap-6 flex-1 min-h-0 relative">
                   {/* LEFT SIDE: Horizontal scrollable row with Table Cards, Hero/Villains, and Range Grid */}
                   <div className="flex-1 flex flex-col min-w-0 max-w-full">
-                {/* Horizontal scrollable row: Table Cards | Hero | Villains | Add Button */}
-                <div
-                  ref={scrollContainerRef}
-                  className="pb-4 overflow-x-auto overflow-y-visible w-full relative"
-                  style={{ scrollbarWidth: "none" }}
-                >
-                  <div className="flex gap-4 items-center min-w-max">
-                    {/* Table Cards */}
-                    <div className="flex-shrink-0 ml-4 space-y-1">
-                      <div className="text-xs font-medium text-muted-foreground">
-                        Table Cards
-                      </div>
-                      <BoardSelector
-                        value={board}
-                        onChange={setBoard}
-                        excludedCards={allExcludedCards.filter(
-                          (c) => !board.includes(c)
-                        )}
-                        showLabel={false}
-                      />
-                    </div>
-
-                    {/* Hero */}
-                    <div className="flex-shrink-0 space-y-1">
-                      <div className="text-xs font-medium text-muted-foreground">
-                        Hero
-                      </div>
-                      <HandSelector
-                        value={heroHand}
-                        onChange={setHeroHand}
-                        excludedCards={allExcludedCards.filter(
-                          (c) => !heroHand.includes(c)
-                        )}
-                      />
-                    </div>
-
-                    {/* Villains */}
-                    {villains.map((villain, index) => (
-                      <div
-                        key={villain.id}
-                        className="flex-shrink-0 space-y-1 relative"
-                      >
-                        <div className="text-xs font-medium text-muted-foreground">
-                          Villain {index + 1}
-                        </div>
-                        {villains.length > 1 && villain.id !== 1 && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute -top-2 right-0 h-5 w-5 text-muted-foreground hover:text-destructive"
-                            onClick={() => removeVillain(villain.id)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        )}
-                        {villain.type === "hand" ? (
-                          <HandSelector
-                            value={villain.hand}
-                            onChange={(h) =>
-                              updateVillain(villain.id, { hand: h })
-                            }
+                    {/* Horizontal scrollable row: Table Cards | Hero | Villains | Add Button */}
+                    <div
+                      ref={scrollContainerRef}
+                      className="pb-4 overflow-x-auto overflow-y-visible w-full relative"
+                      style={{ scrollbarWidth: "none" }}
+                    >
+                      <div className="flex gap-4 items-center min-w-max">
+                        {/* Table Cards */}
+                        <div className="flex-shrink-0 ml-4 space-y-1">
+                          <div className="text-xs font-medium text-muted-foreground">
+                            Table Cards
+                          </div>
+                          <BoardSelector
+                            value={board}
+                            onChange={setBoard}
                             excludedCards={allExcludedCards.filter(
-                              (c) => !villain.hand.includes(c)
+                              (c) => !board.includes(c)
+                            )}
+                            showLabel={false}
+                          />
+                        </div>
+
+                        {/* Hero */}
+                        <div className="flex-shrink-0 space-y-1">
+                          <div className="text-xs font-medium text-muted-foreground">
+                            Hero
+                          </div>
+                          <HandSelector
+                            value={heroHand}
+                            onChange={setHeroHand}
+                            excludedCards={allExcludedCards.filter(
+                              (c) => !heroHand.includes(c)
                             )}
                           />
-                        ) : (
-                          <div className="text-xs text-muted-foreground h-14 w-[5.5rem] flex items-center justify-center">
-                            {villain.range.size} combos
+                        </div>
+
+                        {/* Villains */}
+                        {villains.map((villain, index) => (
+                          <div
+                            key={villain.id}
+                            className="flex-shrink-0 space-y-1 relative"
+                          >
+                            <div className="text-xs font-medium text-muted-foreground">
+                              Villain {index + 1}
+                            </div>
+                            {villains.length > 1 && villain.id !== 1 && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute -top-2 right-0 h-5 w-5 text-muted-foreground hover:text-destructive"
+                                onClick={() => removeVillain(villain.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                            {villain.type === "hand" ? (
+                              <HandSelector
+                                value={villain.hand}
+                                onChange={(h) =>
+                                  updateVillain(villain.id, { hand: h })
+                                }
+                                excludedCards={allExcludedCards.filter(
+                                  (c) => !villain.hand.includes(c)
+                                )}
+                              />
+                            ) : (
+                              <div className="text-xs text-muted-foreground h-14 w-[5.5rem] flex items-center justify-center">
+                                {villain.range.size} combos
+                              </div>
+                            )}
+                            {/* Range toggle button for Villain 1 */}
+                            {villain.id === 1 && (
+                              <Button
+                                variant={
+                                  villain.type === "range"
+                                    ? "outline"
+                                    : "default"
+                                }
+                                size="sm"
+                                className="absolute top-[4rem] right-0 h-5 px-2 text-[10px] z-50"
+                                onClick={() => {
+                                  if (villain.type === "hand") {
+                                    // Switching to range mode - clear the hand
+                                    updateVillain(1, {
+                                      type: "range",
+                                      hand: ["", ""],
+                                    });
+                                  } else {
+                                    // Switching to hand mode
+                                    updateVillain(1, {
+                                      type: "hand",
+                                    });
+                                  }
+                                }}
+                              >
+                                {villain.type === "range"
+                                  ? "Use Hand"
+                                  : "Use Range"}
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+
+                        {/* Add Villain Button - To the right of Villain 1 */}
+                        {villains.length < 5 && (
+                          <div className="flex-shrink-0 space-y-1">
+                            <div className="h-5"></div>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="border-dashed h-14 w-10"
+                              onClick={addVillain}
+                            >
+                              <Plus className="h-6 w-6" />
+                            </Button>
                           </div>
                         )}
-                        {/* Range toggle button for Villain 1 */}
-                        {villain.id === 1 && (
-                          <Button
-                            variant={
-                              villain.type === "range" ? "outline" : "default"
-                            }
-                            size="sm"
-                            className="absolute top-[4rem] right-0 h-5 px-2 text-[10px] z-50"
-                            onClick={() => {
-                              if (villain.type === "hand") {
-                                // Switching to range mode - clear the hand
-                                updateVillain(1, {
-                                  type: "range",
-                                  hand: ["", ""],
-                                });
-                              } else {
-                                // Switching to hand mode
-                                updateVillain(1, {
-                                  type: "hand",
-                                });
-                              }
-                            }}
-                          >
-                            {villain.type === "range"
-                              ? "Use Hand"
-                              : "Use Range"}
-                          </Button>
-                        )}
                       </div>
-                    ))}
+                    </div>
 
-                    {/* Add Villain Button - To the right of Villain 1 */}
-                    {villains.length < 5 && (
-                      <div className="flex-shrink-0 space-y-1">
-                        <div className="h-5"></div>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="border-dashed h-14 w-10"
-                          onClick={addVillain}
+                    {/* Range Grid Box - Always displayed, beneath Villain 1 */}
+                    <div className="flex-1 flex flex-col min-h-0 relative">
+                      <div className="flex-1 flex items-center justify-center min-h-0 overflow-hidden">
+                        <Card
+                          className={cn(
+                            "flex-shrink-0 max-h-full overflow-hidden",
+                            !isRangeMode && "opacity-50"
+                          )}
                         >
-                          <Plus className="h-6 w-6" />
-                        </Button>
+                          <CardContent className="pt-3 pb-3 overflow-auto max-h-full">
+                            <div
+                              ref={containerRef}
+                              className="flex justify-start"
+                            >
+                              <div
+                                className={cn(
+                                  !isRangeMode && "pointer-events-none"
+                                )}
+                              >
+                                <RangeGrid
+                                  selectedHands={villain1?.range || new Set()}
+                                  onToggle={(h) =>
+                                    isRangeMode && toggleRangeHand(1, h)
+                                  }
+                                  isMouseDown={isMouseDown && isRangeMode}
+                                  onMouseEnter={handleMouseEnter}
+                                />
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
                       </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Range Grid Box - Always displayed, beneath Villain 1 */}
-                <div className="flex-1 flex flex-col min-h-0 relative">
-                  <div className="flex-1 flex items-center justify-center min-h-0 overflow-hidden">
-                    <Card
-                      className={cn(
-                        "flex-shrink-0 max-h-full overflow-hidden",
-                        !isRangeMode && "opacity-50"
-                      )}
-                    >
-                      <CardContent className="pt-3 pb-3 overflow-auto max-h-full">
-                        <div ref={containerRef} className="flex justify-start">
-                          <div
-                            className={cn(
-                              !isRangeMode && "pointer-events-none"
-                            )}
-                          >
-                            <RangeGrid
-                              selectedHands={villain1?.range || new Set()}
-                              onToggle={(h) =>
-                                isRangeMode && toggleRangeHand(1, h)
-                              }
-                              isMouseDown={isMouseDown && isRangeMode}
-                              onMouseEnter={handleMouseEnter}
-                            />
+                      {/* Preset Dropdown - Bottom left */}
+                      {presets.length > 0 && isRangeMode && (
+                        <div className="absolute -bottom-2 left-0 z-10">
+                          <div className="w-[180px]">
+                            <Select onValueChange={(val) => loadPreset(1, val)}>
+                              <SelectTrigger className="w-full h-9">
+                                <SelectValue placeholder="Select Range Preset" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {presets.map((preset) => (
+                                  <SelectItem
+                                    key={preset.id}
+                                    value={preset.range_string}
+                                  >
+                                    {preset.name} ({preset.category})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
+                      )}
+                      {/* Clear Range Button - Bottom right */}
+                      {isRangeMode && (
+                        <div className="absolute -bottom-2 right-0 z-10">
+                          <Button
+                            onClick={() =>
+                              updateVillain(1, {
+                                range: new Set(),
+                                rangeString: "",
+                              })
+                            }
+                            variant="outline"
+                            size="sm"
+                            className="h-9 bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600"
+                          >
+                            Clear
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* RIGHT SIDE: Equity Results - Exact same styling as range evaluator */}
+                  <div className="w-64 flex-shrink-0 flex flex-col">
+                    <Card className="flex-1 flex flex-col min-h-0">
+                      <CardHeader className="pb-1 pt-3">
+                        <CardTitle className="text-center text-xl font-bold">
+                          Equity Evaluator
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-3 pb-3 flex-1 flex flex-col">
+                        {heroEquity !== null ? (
+                          <div className="space-y-2">
+                            <div className="pt-2">
+                              <div className="text-xs font-semibold mb-1">
+                                Equity
+                              </div>
+                              <div className="space-y-0.5">
+                                <div className="flex justify-between items-center text-xs">
+                                  <span className="font-medium text-emerald-500">
+                                    Hero
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    {heroEquity.toFixed(1)}%
+                                  </span>
+                                </div>
+                                {villains.map(
+                                  (v, i) =>
+                                    v.equity !== null && (
+                                      <div
+                                        key={v.id}
+                                        className="flex justify-between items-center text-xs"
+                                      >
+                                        <span className="font-medium">
+                                          Villain {i + 1}
+                                        </span>
+                                        <span className="text-muted-foreground">
+                                          {v.equity.toFixed(1)}%
+                                        </span>
+                                      </div>
+                                    )
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground text-center pt-1">
+                            Enter hands to calculate equity
+                          </p>
+                        )}
                       </CardContent>
                     </Card>
                   </div>
-                  {/* Preset Dropdown - Bottom left */}
-                  {presets.length > 0 && isRangeMode && (
-                    <div className="absolute -bottom-2 left-0 z-10">
-                      <div className="w-[180px]">
-                        <Select onValueChange={(val) => loadPreset(1, val)}>
-                          <SelectTrigger className="w-full h-9">
-                            <SelectValue placeholder="Select Range Preset" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {presets.map((preset) => (
-                              <SelectItem
-                                key={preset.id}
-                                value={preset.range_string}
-                              >
-                                {preset.name} ({preset.category})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  )}
-                  {/* Clear Range Button - Bottom right */}
-                  {isRangeMode && (
-                    <div className="absolute -bottom-2 right-0 z-10">
-                      <Button
-                        onClick={() =>
-                          updateVillain(1, {
-                            range: new Set(),
-                            rangeString: "",
-                          })
-                        }
-                        variant="outline"
-                        size="sm"
-                        className="h-9 bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600"
-                      >
-                        Clear
-                      </Button>
-                    </div>
-                  )}
                 </div>
-              </div>
-
-              {/* RIGHT SIDE: Equity Results - Exact same styling as range evaluator */}
-              <div className="w-64 flex-shrink-0 flex flex-col">
-                <Card className="flex-1 flex flex-col min-h-0">
-                  <CardHeader className="pb-1 pt-3">
-                    <CardTitle className="text-center text-xl font-bold">
-                      Equity Evaluator
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-3 pb-3 flex-1 flex flex-col">
-                    {heroEquity !== null ? (
-                      <div className="space-y-2">
-                        <div className="pt-2">
-                          <div className="text-xs font-semibold mb-1">
-                            Equity
-                          </div>
-                          <div className="space-y-0.5">
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="font-medium text-emerald-500">
-                                Hero
-                              </span>
-                              <span className="text-muted-foreground">
-                                {heroEquity.toFixed(1)}%
-                              </span>
-                            </div>
-                            {villains.map(
-                              (v, i) =>
-                                v.equity !== null && (
-                                  <div
-                                    key={v.id}
-                                    className="flex justify-between items-center text-xs"
-                                  >
-                                    <span className="font-medium">
-                                      Villain {i + 1}
-                                    </span>
-                                    <span className="text-muted-foreground">
-                                      {v.equity.toFixed(1)}%
-                                    </span>
-                                  </div>
-                                )
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground text-center pt-1">
-                        Enter hands to calculate equity
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </Card>
+              </Card>
             </>
           )}
         </div>

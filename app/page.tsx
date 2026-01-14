@@ -132,15 +132,14 @@ export default function HomePage() {
             {/* Title Area */}
             <div className="mb-8 relative flex flex-col items-center justify-center gap-6">
               <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-emerald-600 to-green-700 drop-shadow-2xl tracking-tighter">
-                POKROnline
+                PokrOnline
               </h1>
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-emerald-500/20 blur-3xl rounded-full w-64 h-64 -z-10" />
             </div>
 
             {/* Tagline */}
             <p className="text-xl md:text-3xl text-gray-200 mb-12 font-light leading-relaxed">
-              The <span className="font-bold text-white">Poker</span> platform
-              for players of all skill levels.
+              Learn, Study, and dominate <span className="font-bold text-white">Poker</span>.
             </p>
 
             {/* Action Area */}
@@ -188,7 +187,7 @@ export default function HomePage() {
                 Master the Game
               </h2>
               <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-                Built for enthusiasts, by enthusiasts. POKROnline provides the
+                Built for enthusiasts, by enthusiasts. PokrOnline provides the
                 complete suite of tools to elevate your game.
               </p>
             </div>
@@ -222,7 +221,7 @@ export default function HomePage() {
             {/* Footer */}
             <div className="mt-12 text-center border-t border-white/10 pt-6">
               <p className="text-emerald-500/40 text-sm">
-                © 2025 POKROnline. All cards dealt fairly.
+                © 2025 PokrOnline. All cards dealt fairly.
               </p>
             </div>
           </div>

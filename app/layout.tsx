@@ -29,11 +29,11 @@ const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://pokronline.com";
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
   title: {
-    default: "POKROnline - Learn & Play Poker",
-    template: "%s | Pokr",
+    default: "PokrOnline - Learn & Play Poker",
+    template: "%s | PokrOnline",
   },
   description:
-    "Join POKROnline for fast-paced, real-time Texas Holdem action. Suitable for players of all skill levels. Learn the rules, practice with curated puzzles, and play online to test your skill. No download required.",
+    "Join PokrOnline for fast-paced, real-time Texas Holdem action. Suitable for players of all skill levels. Learn the rules, practice with curated puzzles, and play online to test your skill. No download required.",
   keywords: [
     "poker",
     "pokr",
@@ -53,21 +53,21 @@ export const metadata: Metadata = {
     "poker tricks",
     "poker secrets",
   ],
-  applicationName: "POKROnline",
-  authors: [{ name: "POKROnline Team" }],
+  applicationName: "PokrOnline",
+  authors: [{ name: "PokrOnline Team" }],
   openGraph: {
     type: "website",
     locale: "en_US",
     url: BASE_URL,
-    siteName: "POKROnline",
-    title: "POKROnline - Learn & Play Poker",
+    siteName: "PokrOnline",
+    title: "PokrOnline - Learn & Play Poker",
     description: "Play Texas Holdem instantly in your browser.",
     images: [
       {
         url: `https://pokronline.com/icon.png`,
         width: 512,
         height: 512,
-        alt: "POKROnline Logo",
+        alt: "PokrOnline Logo",
       },
     ],
   },
@@ -126,7 +126,7 @@ export default async function RootLayout({
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "VideoGame",
-              name: "POKROnline",
+              name: "PokrOnline",
               genre: ["Card Game", "Poker", "Learn Poker", "Game Theory"],
               description:
                 "A platform to learn the rules of poker, develop your skills with puzzles and lessons, and play online with our beautiful interface.",
