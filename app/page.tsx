@@ -139,7 +139,8 @@ export default function HomePage() {
 
             {/* Tagline */}
             <p className="text-xl md:text-3xl text-gray-200 mb-12 font-light leading-relaxed">
-              Learn, Study, and dominate <span className="font-bold text-white">Poker</span>.
+              Learn, Study, and Dominate{" "}
+              <span className="font-bold text-white">Poker</span>.
             </p>
 
             {/* Action Area */}
