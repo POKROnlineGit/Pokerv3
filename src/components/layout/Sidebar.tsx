@@ -13,8 +13,6 @@ import {
   UserPlus,
   ChevronRight,
   ChevronLeft,
-  Moon,
-  Sun,
   Crown,
   Menu,
   X,
@@ -28,7 +26,6 @@ import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/components/providers/ThemeProvider";
-import { useThemeToggle } from "@/components/theme/ThemeToggle";
 import { useIsMobile } from "@/lib/hooks";
 
 export function Sidebar() {
@@ -39,7 +36,6 @@ export function Sidebar() {
   const [pendingCount, setPendingCount] = useState(0);
   const [user, setUser] = useState<any>(null);
   const [hoveredSubmenu, setHoveredSubmenu] = useState<string | null>(null);
-  const { theme, toggleTheme, mounted: themeMounted } = useThemeToggle();
   const isMobile = useIsMobile();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
@@ -446,24 +442,6 @@ export function Sidebar() {
                   })}
                 </nav>
 
-                {/* Theme Toggle */}
-                <div className="border-t p-4">
-                  <button
-                    onClick={toggleTheme}
-                    className="flex items-center gap-3 w-full px-4 py-3 text-white hover:bg-white/5 transition-colors rounded-lg"
-                    disabled={!themeMounted}
-                  >
-                    {theme === "light" ? (
-                      <Moon className="h-5 w-5" />
-                    ) : (
-                      <Sun className="h-5 w-5" />
-                    )}
-                    <span>
-                      {theme === "light" ? "Dark Mode" : "Light Mode"}
-                    </span>
-                  </button>
-                </div>
-
                 {/* Auth Section */}
                 <div className="border-t p-4">
                   {user ? (
@@ -646,52 +624,6 @@ export function Sidebar() {
               </Tooltip>
             );
           })}
-        </div>
-
-        {/* Theme Toggle - Above collapse button */}
-        <div className="mt-auto pt-6">
-          <Tooltip
-            text={
-              isMinimized
-                ? theme === "light"
-                  ? "Dark"
-                  : "Light"
-                : theme === "light"
-                ? "Switch to Dark Mode"
-                : "Switch to Light Mode"
-            }
-            show={isMinimized}
-          >
-            <button
-              onClick={toggleTheme}
-              className="flex items-center min-w-0 w-full text-white hover:bg-white/5 transition-colors relative"
-              style={{
-                minHeight: "48px",
-                paddingLeft: "12px",
-                paddingRight: "12px",
-                paddingTop: "12px",
-                paddingBottom: "12px",
-              }}
-              disabled={!themeMounted}
-            >
-              {/* Fixed-width icon container - always 40px wide */}
-              <div
-                className="flex items-center justify-center flex-shrink-0"
-                style={{ width: "40px" }}
-              >
-                {theme === "light" ? (
-                  <Moon className="h-5 w-5" />
-                ) : (
-                  <Sun className="h-5 w-5" />
-                )}
-              </div>
-              {!isMinimized && (
-                <span className="ml-3 whitespace-nowrap overflow-hidden">
-                  {theme === "light" ? "Dark" : "Light"}
-                </span>
-              )}
-            </button>
-          </Tooltip>
         </div>
 
         {/* Toggle Button - At bottom of nav */}
