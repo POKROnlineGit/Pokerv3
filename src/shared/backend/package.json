@@ -1,0 +1,35 @@
+{
+  "name": "poker-server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Persistent real-time Node.js server for PokerOnline",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node --require ./loadEnv.cjs src/index.js",
+    "dev": "nodemon --exec \"node --require ./loadEnv.cjs\" src/index.js"
+  },
+  "keywords": [
+    "poker",
+    "socket.io",
+    "supabase",
+    "real-time"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.45.4",
+    "dotenv": "^16.6.1",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "redis": "^4.7.0",
+    "socket.io": "^4.7.5",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

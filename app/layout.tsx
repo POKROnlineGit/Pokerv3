@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 import { Inter, Oswald } from "next/font/google";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
-import { Sidebar } from "@/components/Sidebar";
-import { createServerComponentClient } from "@/lib/supabaseClient";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { createServerComponentClient } from "@/lib/api/supabase/client";
 import { ToastProvider } from "@/components/providers/ToastProvider";
-import { GameRedirectProvider } from "@/components/GameRedirectProvider";
+import { GameRedirectProvider } from "@/components/layout/GameRedirectProvider";
 import { QueueProvider } from "@/components/providers/QueueProvider";
 import { StatusProvider } from "@/components/providers/StatusProvider";
 import { StatusOverlay } from "@/components/ui/StatusOverlay";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
-import { ThemeBackground } from "@/components/ThemeBackground";
+import { ThemeBackground } from "@/components/theme/ThemeBackground";
 
 const inter = Inter({
   subsets: ["latin"],

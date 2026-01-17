@@ -17,7 +17,8 @@
     "start": "next start",
     "lint": "next lint",
     "audit": "npm audit --audit-level=moderate",
-    "security": "npm audit && npm outdated"
+    "security": "npm audit && npm outdated",
+    "migrate": "node scripts/migrate-structure.js"
   },
   "dependencies": {
     "@next/third-parties": "^16.1.1",

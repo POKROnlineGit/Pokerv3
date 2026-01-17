@@ -24,10 +24,13 @@
     ],
     "paths": {
       "@/*": [
-        "./*"
+        "./src/*"
+      ],
+      "@app/*": [
+        "./app/*"
       ],
       "@backend/*": [
-        "./shared-backend/src/*"
+        "./src/shared/backend/src/*"
       ]
     }
   },
