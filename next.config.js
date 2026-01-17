@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const path = require('path');
+const path = require("path");
 
 const nextConfig = {
   images: {
@@ -14,20 +14,20 @@ const nextConfig = {
     // Add alias for @app to resolve app directory imports (with wildcard support)
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@backend': path.resolve(__dirname, 'src/shared/backend/src'),
+      "@backend": path.resolve(__dirname, "shared-backend/src"),
     };
-    
+
     // Handle @app/* pattern by adding to modules array
     config.resolve.modules = [
       ...(config.resolve.modules || []),
-      path.resolve(__dirname, 'app'),
+      path.resolve(__dirname, "app"),
     ];
-    
+
     // Also add direct alias for @app root
-    config.resolve.alias['@app'] = path.resolve(__dirname, 'app');
-    
+    config.resolve.alias["@app"] = path.resolve(__dirname, "app");
+
     return config;
   },
-}
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;
