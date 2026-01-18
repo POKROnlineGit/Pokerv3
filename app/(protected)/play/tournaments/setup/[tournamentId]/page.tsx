@@ -35,8 +35,8 @@ export default function TournamentSetupPage() {
     getTournamentState,
     updateTournamentSettings,
     tournamentAdminAction,
+    joinTournamentRoom,
   } = useTournamentSocket();
-  const { tournamentUpdate, statusChange } = useTournamentEvents(tournamentId);
   const { toast } = useToast();
   const { currentTheme } = useTheme();
   const supabase = createClientComponentClient();
@@ -45,6 +45,14 @@ export default function TournamentSetupPage() {
     useState<TournamentStateResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // useTournamentEvents must be called AFTER currentUserId is defined
+  const {
+    tournamentState: realTimeState,
+    statusChange,
+  } = useTournamentEvents(tournamentId, {
+    currentUserId,
+  });
 
   // Settings form state
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
@@ -126,6 +134,10 @@ export default function TournamentSetupPage() {
 
         setTournamentData(response as TournamentStateResponse);
         setIsLoading(false);
+        // Join tournament room for real-time updates
+        joinTournamentRoom(tournamentId).catch((err) => {
+          console.error("[Tournament] Failed to join room:", err);
+        });
       } catch (error: any) {
         console.error("Failed to fetch tournament state", error);
         toast({
@@ -142,20 +154,14 @@ export default function TournamentSetupPage() {
     if (tournamentId && currentUserId) {
       fetchTournamentState();
     }
-  }, [tournamentId, currentUserId, getTournamentState, router, toast]);
+  }, [tournamentId, currentUserId, getTournamentState, router, toast, joinTournamentRoom]);
 
-  // Update tournament data when real-time update arrives
+  // Update tournament data when real-time state arrives
   useEffect(() => {
-    if (tournamentUpdate && tournamentData) {
-      setTournamentData((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          tournament: tournamentUpdate,
-        } as TournamentStateResponse;
-      });
+    if (realTimeState) {
+      setTournamentData(realTimeState);
     }
-  }, [tournamentUpdate, tournamentData]);
+  }, [realTimeState]);
 
   // Handle status changes - redirect when status changes from setup to another state
   useEffect(() => {
@@ -170,16 +176,10 @@ export default function TournamentSetupPage() {
         statusChange.status !== "setup"
       ) {
         router.replace(`/play/tournaments/${tournamentId}`);
-      } else {
-        // Refresh tournament data
-        getTournamentState(tournamentId).then((response) => {
-          if (!("error" in response)) {
-            setTournamentData(response as TournamentStateResponse);
-          }
-        });
       }
+      // Real-time state will be updated via tournamentState event
     }
-  }, [statusChange, tournamentId, currentUserId, getTournamentState, router]);
+  }, [statusChange, tournamentId, currentUserId, router]);
 
   // Initialize settings form when tournament data loads
   useEffect(() => {
@@ -457,18 +457,18 @@ export default function TournamentSetupPage() {
     <PlayLayout
       title={`Setup: ${tournament.title || tournament.name || "Tournament"}`}
       footer={
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 w-full">
           <Button
             onClick={handleUpdateSettings}
             disabled={isUpdatingSettings || isOpeningRegistration}
             size="lg"
             variant="secondary"
-            className="flex-1 font-bold text-lg h-14"
+            className="w-full font-bold text-sm h-12"
           >
             {isUpdatingSettings ? (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              <Save className="mr-2 h-5 w-5" />
+              <Save className="mr-2 h-4 w-4" />
             )}
             Save Settings
           </Button>
@@ -477,7 +477,7 @@ export default function TournamentSetupPage() {
               onClick={handleOpenRegistration}
               disabled={isUpdatingSettings || isOpeningRegistration}
               size="lg"
-              className="flex-1 font-bold text-lg h-14"
+              className="w-full font-bold text-sm h-12"
               style={{
                 background: `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`,
               }}
@@ -489,9 +489,9 @@ export default function TournamentSetupPage() {
               }}
             >
               {isOpeningRegistration ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <Users className="mr-2 h-5 w-5" />
+                <Users className="mr-2 h-4 w-4" />
               )}
               Open Registration
             </Button>
@@ -499,32 +499,32 @@ export default function TournamentSetupPage() {
         </div>
       }
     >
-      <div className="space-y-6">
+      <div className="space-y-3">
         <Link
           href={`/play/tournaments/${tournamentId}`}
-          className="inline-flex items-center text-sm text-slate-500 hover:text-white"
+          className="inline-flex items-center text-xs text-slate-500 hover:text-white"
         >
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back to Tournament
+          <ArrowLeft className="h-3 w-3 mr-1" /> Back
         </Link>
 
         <Card className="bg-slate-800/50 border-slate-700">
-          <CardHeader>
-            <CardTitle className="text-xl flex items-center gap-2">
-              <Settings className="h-5 w-5 text-slate-400" />
-              Configure Tournament Settings
+          <CardHeader className="px-3 pt-3 pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Settings className="h-4 w-4 text-slate-400" />
+              Configure Settings
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-slate-400">
+          <CardContent className="space-y-3 px-3 pb-3">
+            <p className="text-xs text-slate-400">
               Configure your tournament settings before opening registration.
               All fields marked with * are required.
             </p>
 
             <Separator className="bg-slate-700" />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
               <div className="space-y-2">
-                <Label>Max Players (Optional)</Label>
+                <Label className="text-xs">Max Players (Optional)</Label>
                 <Input
                   type="number"
                   value={settingsForm.maxPlayers}
@@ -534,7 +534,7 @@ export default function TournamentSetupPage() {
                       maxPlayers: e.target.value,
                     })
                   }
-                  className="bg-slate-900 border-slate-800 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                  className="bg-slate-900 border-slate-800 h-9 text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
                   min="1"
                   placeholder="Unlimited"
                 />
@@ -544,7 +544,7 @@ export default function TournamentSetupPage() {
                 </p>
               </div>
               <div className="space-y-2">
-                <Label>Players Per Table *</Label>
+                <Label className="text-xs">Players Per Table *</Label>
                 <Input
                   type="number"
                   value={settingsForm.maxPlayersPerTable}
@@ -563,7 +563,7 @@ export default function TournamentSetupPage() {
                       });
                     }
                   }}
-                  className="bg-slate-900 border-slate-800 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                  className="bg-slate-900 border-slate-800 h-9 text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
                   min="2"
                   max="10"
                 />
@@ -571,11 +571,8 @@ export default function TournamentSetupPage() {
                   Must be between 2 and 10
                 </p>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Starting Stack *</Label>
+                <Label className="text-xs">Starting Stack *</Label>
                 <Input
                   type="number"
                   value={settingsForm.startingStack}
@@ -585,12 +582,12 @@ export default function TournamentSetupPage() {
                       startingStack: e.target.value,
                     })
                   }
-                  className="bg-slate-900 border-slate-800 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                  className="bg-slate-900 border-slate-800 h-9 text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
                   min="1"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Blind Level Duration (minutes) *</Label>
+                <Label className="text-xs">Blind Level Duration (minutes) *</Label>
                 <Input
                   type="number"
                   value={settingsForm.blindLevelDurationMinutes}
@@ -600,7 +597,7 @@ export default function TournamentSetupPage() {
                       blindLevelDurationMinutes: e.target.value,
                     })
                   }
-                  className="bg-slate-900 border-slate-800 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                  className="bg-slate-900 border-slate-800 h-9 text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
                   min="1"
                 />
               </div>
@@ -608,64 +605,62 @@ export default function TournamentSetupPage() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Blind Structure *</Label>
+                <Label className="text-xs">Blind Structure *</Label>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={addBlindLevel}
-                  className="h-8"
+                  className="h-7 text-xs"
                 >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Level
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add
                 </Button>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {settingsForm.blindStructure.map((level, index) => (
                   <div
                     key={index}
-                    className="flex items-center gap-2 p-3 bg-slate-900/50 border border-slate-700 rounded-lg"
+                    className="flex items-center gap-1.5 p-2 bg-slate-900/50 border border-slate-700 rounded-lg"
                   >
-                    <div className="flex items-center gap-2 flex-1">
-                      <span className="text-xs text-slate-500 w-12">
-                        Level {index + 1}
-                      </span>
-                      <div className="flex items-center gap-2 flex-1">
-                        <div className="flex-1">
-                          <Label className="text-xs text-slate-500">
-                            Small Blind
-                          </Label>
-                          <Input
-                            type="number"
-                            value={level.small}
-                            onChange={(e) => {
-                              const value = parseInt(e.target.value);
-                              if (!isNaN(value) && value > 0) {
-                                updateBlindLevel(index, "small", value);
-                              }
-                            }}
-                            className="bg-slate-800 border-slate-700 h-8 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
-                            min="1"
-                          />
-                        </div>
-                        <span className="text-slate-500 pt-5">/</span>
-                        <div className="flex-1">
-                          <Label className="text-xs text-slate-500">
-                            Big Blind
-                          </Label>
-                          <Input
-                            type="number"
-                            value={level.big}
-                            onChange={(e) => {
-                              const value = parseInt(e.target.value);
-                              if (!isNaN(value) && value > 0) {
-                                updateBlindLevel(index, "big", value);
-                              }
-                            }}
-                            className="bg-slate-800 border-slate-700 h-8 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
-                            min="1"
-                          />
-                        </div>
+                    <span className="text-xs text-slate-500 w-8 flex-shrink-0">
+                      L{index + 1}
+                    </span>
+                    <div className="flex items-center gap-1 flex-1">
+                      <div className="flex-1 min-w-0">
+                        <Label className="text-[10px] text-slate-500 block">
+                          Small
+                        </Label>
+                        <Input
+                          type="number"
+                          value={level.small}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value);
+                            if (!isNaN(value) && value > 0) {
+                              updateBlindLevel(index, "small", value);
+                            }
+                          }}
+                          className="bg-slate-800 border-slate-700 h-7 text-xs [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                          min="1"
+                        />
+                      </div>
+                      <span className="text-slate-500 pt-4 text-xs">/</span>
+                      <div className="flex-1 min-w-0">
+                        <Label className="text-[10px] text-slate-500 block">
+                          Big
+                        </Label>
+                        <Input
+                          type="number"
+                          value={level.big}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value);
+                            if (!isNaN(value) && value > 0) {
+                              updateBlindLevel(index, "big", value);
+                            }
+                          }}
+                          className="bg-slate-800 border-slate-700 h-7 text-xs [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                          min="1"
+                        />
                       </div>
                     </div>
                     {settingsForm.blindStructure.length > 1 && (
@@ -674,9 +669,9 @@ export default function TournamentSetupPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => removeBlindLevel(index)}
-                        className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
+                        className="h-7 w-7 p-0 text-red-400 hover:text-red-300 flex-shrink-0"
                       >
-                        <X className="h-4 w-4" />
+                        <X className="h-3 w-3" />
                       </Button>
                     )}
                   </div>

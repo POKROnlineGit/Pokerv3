@@ -1,4 +1,4 @@
-import { TournamentStatus } from '@/lib/types/tournament';
+import { TournamentStatusType } from '@/lib/types/tournament';
 import { Badge } from '@/components/ui/badge';
 import { 
   Clock, 
@@ -10,11 +10,11 @@ import {
 } from 'lucide-react';
 
 interface TournamentStatusBadgeProps {
-  status: TournamentStatus;
+  status: TournamentStatusType;
   className?: string;
 }
 
-const statusConfig: Record<TournamentStatus, {
+const statusConfig: Record<TournamentStatusType, {
   label: string;
   variant: 'default' | 'secondary' | 'destructive' | 'outline';
   icon: React.ComponentType<{ className?: string }>;

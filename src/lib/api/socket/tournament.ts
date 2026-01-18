@@ -3,19 +3,42 @@
 import { useSocket } from "./client";
 import { useCallback, useEffect, useState } from "react";
 import {
-  Tournament,
   TournamentState,
   TournamentStateResponse,
   TournamentLeaderboard,
   TournamentAdminActionType,
+  TournamentSettings,
+  TournamentStatusChangedEvent,
+  TournamentPlayerRegisteredEvent,
+  TournamentPlayerUnregisteredEvent,
+  TournamentParticipantCountChangedEvent,
+  TournamentBlindLevelAdvancedEvent,
+  TournamentPlayerEliminatedEvent,
+  TournamentPlayerTransferredEvent,
+  TournamentTablesBalancedEvent,
+  TournamentTablesMergedEvent,
+  TournamentLevelWarningEvent,
+  TournamentCompletedEvent,
+  TournamentStateEvent,
+  TournamentStatusType,
+  Tournament,
 } from "@/lib/types/tournament";
 
 /**
  * Hook for tournament socket operations
+ * Provides all emit functions for tournament management
  */
 export function useTournamentSocket() {
   const socket = useSocket();
 
+  // ============================================
+  // TOURNAMENT MANAGEMENT
+  // ============================================
+
+  /**
+   * Create a new tournament
+   * Host is automatically joined to tournament room
+   */
   const createTournament = useCallback(
     (payload: {
       title: string;
@@ -32,103 +55,22 @@ export function useTournamentSocket() {
     [socket]
   );
 
-  const registerTournament = useCallback(
-    (
-      tournamentId: string
-    ): Promise<{ success: boolean } | { error: string }> => {
-      return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
-
-        socket.emit(
-          "register_tournament",
-          { tournamentId },
-          (response: any) => {
-            resolve(response);
-          }
-        );
-      });
-    },
-    [socket]
-  );
-
-  const unregisterTournament = useCallback(
-    (
-      tournamentId: string
-    ): Promise<{ success: boolean } | { error: string }> => {
-      return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
-
-        socket.emit(
-          "unregister_tournament",
-          { tournamentId },
-          (response: any) => {
-            resolve(response);
-          }
-        );
-      });
-    },
-    [socket]
-  );
-
-  const getTournamentState = useCallback(
-    (
-      tournamentId: string
-    ): Promise<TournamentStateResponse | { error: string }> => {
-      return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
-
-        socket.emit(
-          "get_tournament_state",
-          { tournamentId },
-          (response: any) => {
-            resolve(response);
-          }
-        );
-      });
-    },
-    [socket]
-  );
-
-  const getActiveTournaments = useCallback(
-    (
-      status?: Tournament["status"]
-    ): Promise<{ tournaments: Tournament[] } | { error: string }> => {
-      return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
-
-        // Backend filters by 'active', 'registration', 'paused' if no status provided
-        socket.emit("get_active_tournaments", { status }, (response: any) => {
-          resolve(response);
-        });
-      });
-    },
-    [socket]
-  );
-
-  const getTournamentLeaderboard = useCallback(
-    (
-      tournamentId: string
-    ): Promise<{ leaderboard: TournamentLeaderboard } | { error: string }> => {
-      return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
-
-        socket.emit(
-          "get_tournament_leaderboard",
-          { tournamentId },
-          (response: any) => {
-            resolve(response);
-          }
-        );
-      });
-    },
-    [socket]
-  );
-
+  /**
+   * Tournament admin actions (host only)
+   * - UPDATE_SETTINGS: Update tournament configuration (only in setup status)
+   * - OPEN_REGISTRATION: Move from setup to registration status
+   * - START_TOURNAMENT: Start the tournament (creates tables, assigns players)
+   * - PAUSE_TOURNAMENT: Pause the tournament
+   * - RESUME_TOURNAMENT: Resume paused tournament
+   * - CANCEL_TOURNAMENT: Cancel the tournament
+   * - REGISTER_PLAYER: Host can register another player
+   * - TRANSFER_PLAYER: Manually transfer player between tables
+   */
   const tournamentAdminAction = useCallback(
     (
       tournamentId: string,
       actionType: TournamentAdminActionType,
-      data?: any
+      data?: Record<string, any>
     ): Promise<{ success: boolean } | { error: string }> => {
       return new Promise((resolve) => {
         if (!socket.connected) socket.connect();
@@ -146,9 +88,30 @@ export function useTournamentSocket() {
 
         // For UPDATE_SETTINGS, validate settings object
         if (actionType === "UPDATE_SETTINGS") {
-          if (!data || typeof data !== "object") {
+          if (!data?.settings || typeof data.settings !== "object") {
             resolve({
               error: "Settings object is required for UPDATE_SETTINGS action",
+            });
+            return;
+          }
+        }
+
+        // For REGISTER_PLAYER, validate playerId
+        if (actionType === "REGISTER_PLAYER") {
+          if (!data?.playerId) {
+            resolve({
+              error: "Player ID is required for REGISTER_PLAYER action",
+            });
+            return;
+          }
+        }
+
+        // For TRANSFER_PLAYER, validate required fields
+        if (actionType === "TRANSFER_PLAYER") {
+          if (!data?.playerId || !data?.sourceTableId || !data?.targetTableId) {
+            resolve({
+              error:
+                "Player ID, source table ID, and target table ID are required for TRANSFER_PLAYER action",
             });
             return;
           }
@@ -172,38 +135,309 @@ export function useTournamentSocket() {
     [socket]
   );
 
+  /**
+   * Update tournament settings (convenience wrapper for UPDATE_SETTINGS action)
+   */
   const updateTournamentSettings = useCallback(
     (
       tournamentId: string,
-      settings: {
-        maxPlayers?: number;
-        maxPlayersPerTable?: number;
-        startingStack?: number;
-        blindStructureTemplate?: Array<{ small: number; big: number }>;
-        blindLevelDurationMinutes?: number;
-      }
+      settings: TournamentSettings
+    ): Promise<{ success: boolean } | { error: string }> => {
+      return tournamentAdminAction(tournamentId, "UPDATE_SETTINGS", {
+        settings,
+      });
+    },
+    [tournamentAdminAction]
+  );
+
+  /**
+   * Host registers another player for the tournament
+   */
+  const registerPlayerByHost = useCallback(
+    (
+      tournamentId: string,
+      playerId: string
+    ): Promise<{ success: boolean } | { error: string }> => {
+      return tournamentAdminAction(tournamentId, "REGISTER_PLAYER", {
+        playerId,
+      });
+    },
+    [tournamentAdminAction]
+  );
+
+  /**
+   * Manually transfer a player between tables
+   */
+  const transferPlayer = useCallback(
+    (
+      tournamentId: string,
+      playerId: string,
+      sourceTableId: string,
+      targetTableId: string
+    ): Promise<{ success: boolean } | { error: string }> => {
+      return tournamentAdminAction(tournamentId, "TRANSFER_PLAYER", {
+        playerId,
+        sourceTableId,
+        targetTableId,
+      });
+    },
+    [tournamentAdminAction]
+  );
+
+  // ============================================
+  // PLAYER REGISTRATION
+  // ============================================
+
+  /**
+   * Register for a tournament
+   * Player is automatically joined to tournament room
+   */
+  const registerTournament = useCallback(
+    (
+      tournamentId: string
     ): Promise<{ success: boolean } | { error: string }> => {
       return new Promise((resolve) => {
         if (!socket.connected) socket.connect();
 
-        // Validate tournamentId
-        if (!tournamentId || typeof tournamentId !== "string") {
-          resolve({ error: "Tournament ID is required" });
-          return;
-        }
+        socket.emit(
+          "register_tournament",
+          { tournamentId },
+          (response: any) => {
+            if (response?.error) {
+              resolve({ error: response.error });
+            } else {
+              resolve({ success: true });
+            }
+          }
+        );
+      });
+    },
+    [socket]
+  );
 
-        // Validate settings object
-        if (!settings || typeof settings !== "object") {
-          resolve({ error: "Settings must be an object" });
-          return;
-        }
+  /**
+   * Unregister from a tournament (only before start)
+   */
+  const unregisterTournament = useCallback(
+    (
+      tournamentId: string
+    ): Promise<{ success: boolean } | { error: string }> => {
+      return new Promise((resolve) => {
+        if (!socket.connected) socket.connect();
 
         socket.emit(
-          "tournament_admin_action",
+          "unregister_tournament",
+          { tournamentId },
+          (response: any) => {
+            if (response?.error) {
+              resolve({ error: response.error });
+            } else {
+              resolve({ success: true });
+            }
+          }
+        );
+      });
+    },
+    [socket]
+  );
+
+  // ============================================
+  // STATE QUERIES
+  // ============================================
+
+  /**
+   * Get complete tournament state
+   */
+  const getTournamentState = useCallback(
+    (
+      tournamentId: string
+    ): Promise<TournamentStateResponse | { error: string }> => {
+      return new Promise((resolve) => {
+        if (!socket.connected) socket.connect();
+
+        socket.emit(
+          "get_tournament_state",
+          { tournamentId },
+          (response: any) => {
+            if (response?.error) {
+              resolve({ error: response.error });
+            } else {
+              resolve(response);
+            }
+          }
+        );
+      });
+    },
+    [socket]
+  );
+
+  /**
+   * Get list of active/joinable tournaments
+   * @param status Optional filter: "setup", "registration", "active", "paused"
+   */
+  const getActiveTournaments = useCallback(
+    (
+      status?: TournamentStatusType
+    ): Promise<{ tournaments: Tournament[] } | { error: string }> => {
+      return new Promise((resolve) => {
+        if (!socket.connected) socket.connect();
+
+        socket.emit("get_active_tournaments", { status }, (response: any) => {
+          if (response?.error) {
+            resolve({ error: response.error });
+          } else {
+            resolve(response);
+          }
+        });
+      });
+    },
+    [socket]
+  );
+
+  /**
+   * Get sorted leaderboard (by chip count)
+   */
+  const getTournamentLeaderboard = useCallback(
+    (
+      tournamentId: string
+    ): Promise<TournamentLeaderboard | { error: string }> => {
+      return new Promise((resolve) => {
+        if (!socket.connected) socket.connect();
+
+        socket.emit(
+          "get_tournament_leaderboard",
+          { tournamentId },
+          (response: any) => {
+            if (response?.error) {
+              resolve({ error: response.error });
+            } else {
+              resolve(response);
+            }
+          }
+        );
+      });
+    },
+    [socket]
+  );
+
+  // ============================================
+  // ROOM MANAGEMENT
+  // ============================================
+
+  /**
+   * Join tournament room for real-time updates
+   */
+  const joinTournamentRoom = useCallback(
+    (
+      tournamentId: string
+    ): Promise<{ success: boolean } | { error: string }> => {
+      return new Promise((resolve) => {
+        if (!socket.connected) socket.connect();
+
+        socket.emit(
+          "join_tournament_room",
+          { tournamentId },
+          (response: any) => {
+            if (response?.error) {
+              resolve({ error: response.error });
+            } else {
+              resolve({ success: true });
+            }
+          }
+        );
+      });
+    },
+    [socket]
+  );
+
+  /**
+   * Leave tournament room when navigating away
+   */
+  const leaveTournamentRoom = useCallback(
+    (
+      tournamentId: string
+    ): Promise<{ success: boolean } | { error: string }> => {
+      return new Promise((resolve) => {
+        if (!socket.connected) socket.connect();
+
+        socket.emit(
+          "leave_tournament_room",
+          { tournamentId },
+          (response: any) => {
+            if (response?.error) {
+              resolve({ error: response.error });
+            } else {
+              resolve({ success: true });
+            }
+          }
+        );
+      });
+    },
+    [socket]
+  );
+
+  // ============================================
+  // GAME/TABLE ACTIONS
+  // ============================================
+
+  /**
+   * Join assigned table when tournament starts
+   */
+  const joinTable = useCallback(
+    (tableId: string): Promise<{ success: boolean } | { error: string }> => {
+      return new Promise((resolve) => {
+        if (!socket.connected) socket.connect();
+
+        socket.emit("joinGame", { gameId: tableId }, (response: any) => {
+          if (response?.error) {
+            resolve({ error: response.error });
+          } else {
+            resolve({ success: true });
+          }
+        });
+      });
+    },
+    [socket]
+  );
+
+  /**
+   * Leave a table
+   */
+  const leaveTable = useCallback(
+    (tableId: string): Promise<{ success: boolean } | { error: string }> => {
+      return new Promise((resolve) => {
+        if (!socket.connected) socket.connect();
+
+        socket.emit("leaveGame", { gameId: tableId }, (response: any) => {
+          if (response?.error) {
+            resolve({ error: response.error });
+          } else {
+            resolve({ success: true });
+          }
+        });
+      });
+    },
+    [socket]
+  );
+
+  /**
+   * Submit poker action (fold, call, raise, etc.)
+   */
+  const submitAction = useCallback(
+    (
+      tableId: string,
+      action: "fold" | "check" | "call" | "raise" | "all_in",
+      amount?: number
+    ): Promise<{ success: boolean } | { error: string }> => {
+      return new Promise((resolve) => {
+        if (!socket.connected) socket.connect();
+
+        socket.emit(
+          "playerAction",
           {
-            tournamentId,
-            type: "UPDATE_SETTINGS",
-            settings,
+            gameId: tableId,
+            action,
+            amount,
           },
           (response: any) => {
             if (response?.error) {
@@ -219,31 +453,75 @@ export function useTournamentSocket() {
   );
 
   return {
+    // Tournament management
     createTournament,
+    tournamentAdminAction,
+    updateTournamentSettings,
+    registerPlayerByHost,
+    transferPlayer,
+
+    // Player registration
     registerTournament,
     unregisterTournament,
+
+    // State queries
     getTournamentState,
     getActiveTournaments,
     getTournamentLeaderboard,
-    tournamentAdminAction,
-    updateTournamentSettings,
+
+    // Room management
+    joinTournamentRoom,
+    leaveTournamentRoom,
+
+    // Game/table actions
+    joinTable,
+    leaveTable,
+    submitAction,
   };
 }
 
 /**
  * Hook to listen for tournament events
- * Automatically joins the tournament room and listens for status changes
+ * Automatically joins/leaves tournament room and listens for all tournament events
  */
-export function useTournamentEvents(tournamentId?: string) {
+export function useTournamentEvents(
+  tournamentId?: string,
+  options?: {
+    currentUserId?: string | null;
+    onTournamentStarted?: (tournamentId: string) => void;
+    onPlayerTransferred?: (data: TournamentPlayerTransferredEvent) => void;
+    onTournamentCompleted?: (data: TournamentCompletedEvent) => void;
+    onPlayerEliminated?: (data: TournamentPlayerEliminatedEvent) => void;
+    onLevelWarning?: (data: TournamentLevelWarningEvent) => void;
+  }
+) {
   const socket = useSocket();
-  const [tournamentUpdate, setTournamentUpdate] = useState<Tournament | null>(
-    null
-  );
-  const [statusChange, setStatusChange] = useState<{
-    tournamentId: string;
-    status: Tournament["status"];
-    previousStatus?: Tournament["status"];
-  } | null>(null);
+  const {
+    currentUserId,
+    onTournamentStarted,
+    onPlayerTransferred,
+    onTournamentCompleted,
+    onPlayerEliminated,
+    onLevelWarning,
+  } = options || {};
+
+  // State for real-time updates
+  const [tournamentState, setTournamentState] =
+    useState<TournamentStateResponse | null>(null);
+  const [statusChange, setStatusChange] =
+    useState<TournamentStatusChangedEvent | null>(null);
+  const [participantCount, setParticipantCount] = useState<number | null>(null);
+  const [blindLevel, setBlindLevel] =
+    useState<TournamentBlindLevelAdvancedEvent | null>(null);
+  const [playerEliminated, setPlayerEliminated] =
+    useState<TournamentPlayerEliminatedEvent | null>(null);
+  const [tablesMerged, setTablesMerged] =
+    useState<TournamentTablesMergedEvent | null>(null);
+  const [levelWarning, setLevelWarning] =
+    useState<TournamentLevelWarningEvent | null>(null);
+  const [tournamentStarted, setTournamentStarted] = useState<boolean>(false);
+  const [tournamentCompleted, setTournamentCompleted] =
+    useState<TournamentCompletedEvent | null>(null);
 
   useEffect(() => {
     if (!tournamentId) return;
@@ -254,100 +532,225 @@ export function useTournamentEvents(tournamentId?: string) {
     }
 
     // Join tournament room when connected
-    const joinTournamentRoom = () => {
-      // Emit join_tournament event to backend (backend will handle socket.join)
-      socket.emit("join_tournament", { tournamentId });
+    const joinRoom = () => {
+      socket.emit("join_tournament_room", { tournamentId }, (response: any) => {
+        if (response?.error) {
+          console.error("[Tournament] Failed to join room:", response.error);
+        }
+      });
     };
 
     // Join room immediately if already connected, otherwise wait for connection
     if (socket.connected) {
-      joinTournamentRoom();
+      joinRoom();
     } else {
-      socket.once("connect", joinTournamentRoom);
+      socket.once("connect", joinRoom);
     }
 
-    const handleTournamentUpdate = (data: Tournament) => {
+    // ============================================
+    // STATUS & REGISTRATION EVENTS
+    // ============================================
+
+    const handleStatusChanged = (data: TournamentStatusChangedEvent) => {
       if (data.tournamentId === tournamentId) {
-        setTournamentUpdate(data);
+        setStatusChange(data);
+        // Handle tournament start: registration → active
+        if (
+          data.status === "active" &&
+          data.previousStatus === "registration"
+        ) {
+          setTournamentStarted(true);
+          onTournamentStarted?.(data.tournamentId);
+        }
       }
     };
 
-    const handleTournamentStarted = (data: {
-      tournamentId: string;
-      gameId?: string;
-    }) => {
+    const handlePlayerRegistered = (data: TournamentPlayerRegisteredEvent) => {
       if (data.tournamentId === tournamentId) {
-        // Tournament started - redirect to game if player is assigned
+        setParticipantCount(data.participantCount);
       }
     };
 
-    const handlePlayerEliminated = (data: {
-      tournamentId: string;
-      playerId: string;
-    }) => {
+    const handlePlayerUnregistered = (
+      data: TournamentPlayerUnregisteredEvent
+    ) => {
       if (data.tournamentId === tournamentId) {
-        // Update tournament state
+        setParticipantCount(data.participantCount);
       }
     };
 
-    // Listen for TOURNAMENT_STATUS_CHANGED event (backend sends this exact event name)
-    const handleStatusChanged = (data: {
-      tournamentId: string;
-      status: Tournament["status"];
-      previousStatus?: Tournament["status"];
-    }) => {
+    const handleParticipantCountChanged = (
+      data: TournamentParticipantCountChangedEvent
+    ) => {
       if (data.tournamentId === tournamentId) {
-        setStatusChange({
-          tournamentId: data.tournamentId,
+        setParticipantCount(data.participantCount);
+      }
+    };
+
+    // ============================================
+    // TOURNAMENT GAMEPLAY EVENTS
+    // ============================================
+
+    const handleBlindLevelAdvanced = (
+      data: TournamentBlindLevelAdvancedEvent
+    ) => {
+      if (data.tournamentId === tournamentId) {
+        setBlindLevel(data);
+      }
+    };
+
+    const handleLevelWarning = (data: TournamentLevelWarningEvent) => {
+      if (data.tournamentId === tournamentId) {
+        setLevelWarning(data);
+        onLevelWarning?.(data);
+      }
+    };
+
+    const handlePlayerEliminated = (data: TournamentPlayerEliminatedEvent) => {
+      if (data.tournamentId === tournamentId) {
+        setPlayerEliminated(data);
+        onPlayerEliminated?.(data);
+      }
+    };
+
+    const handlePlayerTransferred = (
+      data: TournamentPlayerTransferredEvent
+    ) => {
+      if (data.tournamentId === tournamentId) {
+        // Normalize the playerId field
+        const playerId = data.playerId || data.userId;
+        // Check if this is the current user being transferred
+        if (currentUserId && playerId === currentUserId) {
+          onPlayerTransferred?.(data);
+        }
+      }
+    };
+
+    const handleTablesBalanced = (data: TournamentTablesBalancedEvent) => {
+      if (data.tournamentId === tournamentId) {
+        // Server will send tournamentState event after balancing
+      }
+    };
+
+    const handleTablesMerged = (data: TournamentTablesMergedEvent) => {
+      if (data.tournamentId === tournamentId) {
+        setTablesMerged(data);
+      }
+    };
+
+    const handleTournamentCompleted = (data: TournamentCompletedEvent) => {
+      if (data.tournamentId === tournamentId) {
+        setTournamentCompleted(data);
+        onTournamentCompleted?.(data);
+      }
+    };
+
+    // ============================================
+    // STATE BROADCAST EVENT (SOURCE OF TRUTH)
+    // ============================================
+
+    const handleTournamentState = (data: TournamentStateEvent) => {
+      if (data.tournamentId === tournamentId) {
+        // Full state refresh - SERVER IS THE SOURCE OF TRUTH
+        setTournamentState({
+          tournament: data.tournament,
+          participants: data.participants,
+          tables: data.tables,
           status: data.status,
-          previousStatus: data.previousStatus,
+          hostId: data.hostId,
+          canRegister: data.canRegister,
+          timestamp: data.timestamp,
         });
-        // Also update tournament update if we have it (use functional update to avoid stale closure)
-        setTournamentUpdate((prev) => {
-          if (prev && prev.tournamentId === tournamentId) {
-            return {
-              ...prev,
-              status: data.status,
-            };
-          }
-          return prev;
-        });
+        // Reset incremental state
+        setParticipantCount(data.participants.length);
+        setBlindLevel(null);
+        setPlayerEliminated(null);
+        setTablesMerged(null);
+        setLevelWarning(null);
       }
     };
 
-    // Listen for error events from tournament admin actions
-    const handleError = (error: {
-      message?: string;
-      tournamentId?: string;
-    }) => {
-      if (error.tournamentId === tournamentId) {
-        console.error("[Tournament] Admin action error:", error.message);
-        // Error is logged, but we don't update state here
-        // Components should handle errors via callback responses
+    // ============================================
+    // ERROR EVENT
+    // ============================================
+
+    const handleError = (error: { message?: string; tournamentId?: string }) => {
+      if (!error.tournamentId || error.tournamentId === tournamentId) {
+        console.error("[Tournament] Error:", error.message);
       }
     };
 
-    socket.on("tournament_update", handleTournamentUpdate);
-    socket.on("tournament_started", handleTournamentStarted);
-    socket.on("tournament_player_eliminated", handlePlayerEliminated);
+    // ============================================
+    // REGISTER ALL EVENT LISTENERS
+    // ============================================
+
     socket.on("TOURNAMENT_STATUS_CHANGED", handleStatusChanged);
-    // Also listen for lowercase version for backward compatibility
-    socket.on("tournament_status_changed", handleStatusChanged);
+    socket.on("TOURNAMENT_PLAYER_REGISTERED", handlePlayerRegistered);
+    socket.on("TOURNAMENT_PLAYER_UNREGISTERED", handlePlayerUnregistered);
+    socket.on(
+      "TOURNAMENT_PARTICIPANT_COUNT_CHANGED",
+      handleParticipantCountChanged
+    );
+    socket.on("TOURNAMENT_BLIND_LEVEL_ADVANCED", handleBlindLevelAdvanced);
+    socket.on("TOURNAMENT_LEVEL_WARNING", handleLevelWarning);
+    socket.on("TOURNAMENT_PLAYER_ELIMINATED", handlePlayerEliminated);
+    socket.on("TOURNAMENT_PLAYER_TRANSFERRED", handlePlayerTransferred);
+    socket.on("TOURNAMENT_TABLES_BALANCED", handleTablesBalanced);
+    socket.on("TOURNAMENT_TABLES_MERGED", handleTablesMerged);
+    socket.on("TOURNAMENT_COMPLETED", handleTournamentCompleted);
+    socket.on("tournamentState", handleTournamentState);
     socket.on("error", handleError);
 
+    // ============================================
+    // CLEANUP
+    // ============================================
+
     return () => {
-      socket.off("tournament_update", handleTournamentUpdate);
-      socket.off("tournament_started", handleTournamentStarted);
-      socket.off("tournament_player_eliminated", handlePlayerEliminated);
       socket.off("TOURNAMENT_STATUS_CHANGED", handleStatusChanged);
-      socket.off("tournament_status_changed", handleStatusChanged);
+      socket.off("TOURNAMENT_PLAYER_REGISTERED", handlePlayerRegistered);
+      socket.off("TOURNAMENT_PLAYER_UNREGISTERED", handlePlayerUnregistered);
+      socket.off(
+        "TOURNAMENT_PARTICIPANT_COUNT_CHANGED",
+        handleParticipantCountChanged
+      );
+      socket.off("TOURNAMENT_BLIND_LEVEL_ADVANCED", handleBlindLevelAdvanced);
+      socket.off("TOURNAMENT_LEVEL_WARNING", handleLevelWarning);
+      socket.off("TOURNAMENT_PLAYER_ELIMINATED", handlePlayerEliminated);
+      socket.off("TOURNAMENT_PLAYER_TRANSFERRED", handlePlayerTransferred);
+      socket.off("TOURNAMENT_TABLES_BALANCED", handleTablesBalanced);
+      socket.off("TOURNAMENT_TABLES_MERGED", handleTablesMerged);
+      socket.off("TOURNAMENT_COMPLETED", handleTournamentCompleted);
+      socket.off("tournamentState", handleTournamentState);
       socket.off("error", handleError);
-      socket.off("connect", joinTournamentRoom);
+      socket.off("connect", joinRoom);
 
       // Leave tournament room when unmounting
-      socket.emit("leave_tournament", { tournamentId });
+      socket.emit("leave_tournament_room", { tournamentId }, (response: any) => {
+        if (response?.error) {
+          console.error("[Tournament] Failed to leave room:", response.error);
+        }
+      });
     };
-  }, [socket, tournamentId]);
+  }, [
+    socket,
+    tournamentId,
+    currentUserId,
+    onTournamentStarted,
+    onPlayerTransferred,
+    onTournamentCompleted,
+    onPlayerEliminated,
+    onLevelWarning,
+  ]);
 
-  return { tournamentUpdate, statusChange };
+  return {
+    tournamentState,
+    statusChange,
+    participantCount,
+    blindLevel,
+    playerEliminated,
+    tablesMerged,
+    levelWarning,
+    tournamentStarted,
+    tournamentCompleted,
+  };
 }

@@ -1,4 +1,5 @@
-export type TournamentStatus =
+// Tournament Status Types
+export type TournamentStatusType =
   | "setup" // Initial state, host configuring
   | "registration" // Registration open, players can join
   | "active" // Tournament running, tables active
@@ -6,130 +7,343 @@ export type TournamentStatus =
   | "completed" // Tournament finished
   | "cancelled"; // Tournament cancelled
 
+// Participant Status Types
+export type ParticipantStatus =
+  | "registered" // Signed up, waiting for tournament to start
+  | "active" // Playing in tournament
+  | "eliminated" // Busted out
+  | "transferred"; // Being moved to another table
+
+// Admin Action Types
 export type TournamentAdminActionType =
   | "UPDATE_SETTINGS" // Update tournament settings during setup
   | "OPEN_REGISTRATION" // setup → registration
   | "START_TOURNAMENT" // registration → active
   | "PAUSE_TOURNAMENT" // active → paused
   | "RESUME_TOURNAMENT" // paused → active
-  | "CANCEL_TOURNAMENT"; // any → cancelled
+  | "CANCEL_TOURNAMENT" // any → cancelled
+  | "REGISTER_PLAYER" // Host registers another player
+  | "TRANSFER_PLAYER"; // Manual player transfer
 
-export interface Tournament {
-  id?: string; // Backend uses 'id', but we also support 'tournamentId' for compatibility
-  tournamentId?: string; // For compatibility with existing code
-  host_id: string; // Backend snake_case
-  hostId?: string; // For compatibility
-  title?: string; // Backend uses 'title'
-  name?: string; // For compatibility
-  description?: string | null;
-  status: TournamentStatus;
-  max_players?: number | null; // Backend snake_case
-  maxPlayers?: number; // For compatibility
-  max_players_per_table?: number; // Backend snake_case
-  maxPlayersPerTable?: number; // For compatibility
-  starting_stack?: number; // Backend snake_case
-  startingStack?: number; // For compatibility
-  blind_structure_template?: Array<{ small: number; big: number }>; // Backend snake_case
-  blindStructureTemplate?: Array<{ small: number; big: number }>; // For compatibility
-  blind_level_duration_minutes?: number; // Backend snake_case
-  blindLevelDurationMinutes?: number; // For compatibility
-  current_blind_level?: number;
-  level_ends_at?: string | null;
-  rebuy_count_limit?: number;
-  rebuy_window_minutes?: number;
-  created_at?: string; // Backend snake_case
-  createdAt?: string; // For compatibility
-  started_at?: string | null; // Backend snake_case
-  startedAt?: string; // For compatibility
-  ended_at?: string | null; // Backend snake_case
-  finishedAt?: string; // For compatibility
-  paused_at?: string | null;
-  pausedBlindLevel?: number;
-  pausedTimeRemaining?: number; // seconds remaining in current blind level
-  // Legacy config object (may not be present in backend response)
-  config?: {
-    startingStack: number;
-    blinds: { small: number; big: number };
-    maxPlayers: number;
-    minPlayers: number;
-    maxPlayersPerTable?: number;
-    startTime?: string;
-    blindLevels?: Array<{
-      level: number;
-      small: number;
-      big: number;
-      duration: number;
-    }>;
-  };
-  registeredPlayers?: number;
-  currentPlayers?: number;
-  tables?: Array<{
-    tableId: string;
-    gameId: string;
-    players: number;
-    maxPlayers: number;
-  }>;
-  prizePool?: number;
+// Blind Level
+export interface BlindLevel {
+  small: number;
+  big: number;
 }
 
-export interface TournamentPlayer {
-  userId: string;
+// Tournament Data (matches database)
+export interface TournamentData {
+  id: string;
+  host_id: string;
+  title: string;
+  description: string | null;
+  max_players: number | null;
+  max_players_per_table: number;
+  starting_stack: number;
+  blind_structure_template: BlindLevel[];
+  blind_level_duration_minutes: number;
+  status: TournamentStatusType;
+  current_blind_level: number;
+  level_ends_at: string | null;
+  started_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Tournament Status Object (runtime state)
+export interface TournamentStatusInfo {
+  tournamentId: string;
+  status: TournamentStatusType;
+  currentBlindLevel: number;
+  levelEndsAt: string | null;
+  tableCount: number;
+  totalPlayers: number;
+}
+
+// Participant (matches database + profiles join)
+export interface Participant {
+  id: string; // Participant record ID
+  user_id: string; // User's UUID
+  tournament_id: string;
+  status: ParticipantStatus;
+  current_stack: number;
+  current_table_id: string | null;
+  current_seat: number | null;
+  eliminated_at: string | null;
+  final_chips: number | null;
+  profiles?: {
+    username: string;
+  };
+}
+
+// Table Player (simplified player info for table state)
+export interface TablePlayer {
+  id: string;
+  seat: number;
+  chips: number;
+  status: string;
+}
+
+// Table State
+export interface TableState {
+  tableId: string;
+  status: string;
+  currentPhase: string;
+  playerCount: number;
+  activePlayerCount: number;
+  smallBlind: number;
+  bigBlind: number;
+  handNumber: number;
+  isPaused: boolean;
+  tournamentId: string;
+  tournamentTableIndex: number;
+  players: TablePlayer[];
+}
+
+// Tournament State (full state from get_tournament_state)
+export interface TournamentState {
+  tournament: TournamentData;
+  participants: Participant[];
+  tables: TableState[];
+  status: TournamentStatusInfo;
+  hostId: string;
+  canRegister: boolean;
+}
+
+// Leaderboard Entry
+export interface LeaderboardEntry {
+  rank: number;
+  user_id: string;
   username: string;
   chips: number;
-  position: number; // Current position/rank
+  status: ParticipantStatus;
   tableId?: string;
-  gameId?: string;
-  eliminatedAt?: string;
-  rebuyCount?: number;
 }
 
+// Tournament Leaderboard
 export interface TournamentLeaderboard {
   tournamentId: string;
-  players: TournamentPlayer[];
+  leaderboard: LeaderboardEntry[];
   totalPlayers: number;
-  currentPlayers: number;
-  prizePool: number;
-  payouts?: Array<{
-    position: number;
-    amount: number;
-  }>;
+  activePlayers: number;
 }
 
-// Raw response from backend get_tournament_state
+// Settings for UPDATE_SETTINGS action
+export interface TournamentSettings {
+  maxPlayers?: number;
+  maxPlayersPerTable?: number;
+  startingStack?: number;
+  blindStructureTemplate?: BlindLevel[];
+  blindLevelDurationMinutes?: number;
+}
+
+// ============================================
+// EVENT PAYLOAD TYPES
+// ============================================
+
+// Status & Registration Events
+export interface TournamentStatusChangedEvent {
+  tournamentId: string;
+  status: TournamentStatusType;
+  previousStatus: TournamentStatusType;
+  timestamp: string;
+}
+
+export interface TournamentPlayerRegisteredEvent {
+  tournamentId: string;
+  playerId: string;
+  participantCount: number;
+  timestamp: string;
+}
+
+export interface TournamentPlayerUnregisteredEvent {
+  tournamentId: string;
+  playerId: string;
+  participantCount: number;
+  timestamp: string;
+}
+
+export interface TournamentParticipantCountChangedEvent {
+  tournamentId: string;
+  participantCount: number;
+  timestamp: string;
+}
+
+// Tournament Gameplay Events
+export interface TournamentBlindLevelAdvancedEvent {
+  tournamentId: string;
+  level: number; // 0-indexed
+  smallBlind: number;
+  bigBlind: number;
+  levelEndsAt: string; // ISO timestamp when this level ends
+  timestamp: string;
+}
+
+export interface TournamentLevelWarningEvent {
+  tournamentId: string;
+  timeRemainingMs: number; // Milliseconds until next level
+  currentLevel: number;
+  timestamp: string;
+}
+
+export interface TournamentPlayerEliminatedEvent {
+  tournamentId: string;
+  playerId: string;
+  tableId: string;
+  finishPosition: number;
+  prizeAmount?: number;
+  timestamp: string;
+}
+
+export interface TournamentPlayerTransferredEvent {
+  tournamentId: string;
+  playerId: string;
+  sourceTableId: string;
+  targetTableId: string;
+  targetSeat: number;
+  timestamp: string;
+  // Aliases for compatibility
+  userId?: string;
+  fromTableId?: string;
+  toTableId?: string;
+  newTableId?: string;
+}
+
+export interface TournamentTablesBalancedEvent {
+  tournamentId: string;
+  timestamp: string;
+}
+
+export interface TournamentTablesMergedEvent {
+  tournamentId: string;
+  closedTableId: string;
+  targetTableId: string;
+  timestamp: string;
+}
+
+export interface TournamentCompletedEvent {
+  tournamentId: string;
+  winnerId: string;
+  results: Array<{
+    playerId: string;
+    position: number;
+    prize?: number;
+  }>;
+  timestamp: string;
+}
+
+// Full State Event
+export interface TournamentStateEvent {
+  tournamentId: string;
+  tournament: TournamentData | Tournament;
+  participants: TournamentPlayer[] | Participant[];
+  tables: TournamentTableInfo[] | TableState[];
+  status: TournamentStatusInfo | TournamentStatusType;
+  hostId: string;
+  canRegister?: boolean;
+  timestamp: string;
+}
+
+// ============================================
+// LEGACY/COMPATIBILITY TYPES (for existing code)
+// ============================================
+
+// Tournament interface with both snake_case and camelCase for compatibility
+export interface Tournament {
+  // Primary fields (snake_case from backend)
+  id?: string;
+  host_id?: string;
+  title?: string;
+  description?: string | null;
+  status?: TournamentStatusType;
+  max_players?: number | null;
+  max_players_per_table?: number;
+  starting_stack?: number;
+  blind_structure_template?: BlindLevel[];
+  blind_level_duration_minutes?: number;
+  current_blind_level?: number;
+  level_ends_at?: string | null;
+  created_at?: string;
+  started_at?: string | null;
+  ended_at?: string | null;
+  updated_at?: string;
+
+  // Compatibility aliases (camelCase)
+  tournamentId?: string;
+  hostId?: string;
+  name?: string;
+  maxPlayers?: number;
+  maxPlayersPerTable?: number;
+  startingStack?: number;
+  blindStructureTemplate?: BlindLevel[];
+  blindLevelDurationMinutes?: number;
+  createdAt?: string;
+  startedAt?: string;
+  finishedAt?: string;
+
+  // Legacy config object (deprecated)
+  config?: {
+    startingStack?: number;
+    blinds?: { small: number; big: number };
+    maxPlayers?: number;
+    minPlayers?: number;
+    maxPlayersPerTable?: number;
+  };
+}
+
+// TournamentPlayer - Legacy compatibility
+export interface TournamentPlayer {
+  // Backend snake_case
+  id?: string;
+  user_id?: string;
+  tournament_id?: string;
+  current_table_id?: string | null;
+  current_game_id?: string | null;
+  current_stack?: number | null;
+  current_seat?: number | null;
+  eliminated_at?: string | null;
+  final_chips?: number | null;
+
+  // Compatibility camelCase
+  userId?: string;
+  tableId?: string;
+  gameId?: string;
+  username?: string;
+  chips?: number;
+  position?: number;
+  eliminatedAt?: string;
+  rebuyCount?: number;
+  status?: ParticipantStatus;
+  profiles?: {
+    username: string;
+  };
+}
+
+// Table Info - flexible to accommodate both simple and full table states
+export interface TournamentTableInfo {
+  tableId: string;
+  gameId?: string;
+  players?: number | TablePlayer[];
+  maxPlayers?: number;
+  status?: string;
+  currentPhase?: string;
+  playerCount?: number;
+  activePlayerCount?: number;
+  smallBlind?: number;
+  bigBlind?: number;
+  handNumber?: number;
+  isPaused?: boolean;
+  tournamentId?: string;
+  tournamentTableIndex?: number;
+}
+
+// TournamentStateResponse - Legacy compatibility for existing pages
 export interface TournamentStateResponse {
   tournament: Tournament;
-  participants: TournamentPlayer[]; // Array of registered/active players
-  tables: Array<{
-    tableId: string;
-    gameId: string;
-    players: number;
-    maxPlayers: number;
-  }>;
-  status: TournamentStatus;
-  hostId: string;
-  canRegister?: boolean; // Whether the current user can register
-}
-
-// Computed state for frontend use
-export interface TournamentState {
-  tournament: Tournament;
   participants: TournamentPlayer[];
-  tables: Array<{
-    tableId: string;
-    gameId: string;
-    players: number;
-    maxPlayers: number;
-  }>;
-  status: TournamentStatus;
+  tables: TournamentTableInfo[];
+  status: TournamentStatusType | TournamentStatusInfo;
   hostId: string;
-  // Computed fields
-  currentPlayer?: TournamentPlayer;
-  isRegistered: boolean;
-  isHost: boolean;
-  canRegister: boolean;
-  canUnregister: boolean;
-  canStart: boolean; // Host can start tournament
-  canPause: boolean; // Host can pause tournament
-  canResume: boolean; // Host can resume tournament
-  canCancel: boolean; // Host can cancel tournament
+  canRegister?: boolean;
+  timestamp?: string;
 }
