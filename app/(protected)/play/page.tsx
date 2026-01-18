@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { PlayLayout } from "@/components/layout/PlayLayout";
 import { Card, CardContent } from "@/components/ui/card";
-import { Globe2, Bot, ChevronRight, Crown, Loader2 } from "lucide-react";
+import { Globe2, Bot, ChevronRight, Crown, Loader2, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
@@ -254,6 +254,20 @@ export default function PlayRootPage() {
                   <Crown className="h-4 w-4 text-slate-400" />
                 </div>
                 <h3 className="text-lg font-bold text-white">Host Game</h3>
+              </div>
+              <ChevronRight className="h-4 w-4 text-slate-500 group-hover:translate-x-1 transition-transform" />
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/play/tournaments/create" className="block group">
+          <Card className="!bg-[hsl(222.2,84%,4.9%)] border-slate-700 group-hover:border-slate-600 group-hover:!bg-slate-800 group-hover:shadow-lg">
+            <CardContent className="py-3 px-4 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-full bg-slate-800/50 flex items-center justify-center">
+                  <Trophy className="h-4 w-4 text-slate-400" />
+                </div>
+                <h3 className="text-lg font-bold text-white">Create Tournament</h3>
               </div>
               <ChevronRight className="h-4 w-4 text-slate-500 group-hover:translate-x-1 transition-transform" />
             </CardContent>
