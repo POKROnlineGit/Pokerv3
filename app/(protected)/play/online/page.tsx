@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { PlayLayout } from "@/components/layout/PlayLayout";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -12,12 +12,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useQueue } from "@/components/providers/QueueProvider";
-import { useSocket } from "@/lib/api/socket/client";
+import { useSocket, checkActiveStatus } from "@/lib/api/socket/client";
 import { Loader2, Search, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
 import { useToast } from "@/lib/hooks";
+import type { ActiveStatusResponse } from "@/lib/types/tournament";
 
 interface GameVariant {
   id: string;
@@ -45,98 +46,96 @@ export default function OnlinePlayPage() {
   const supabase = createClientComponentClient();
   const [checkingGame, setCheckingGame] = useState(true);
   const { toast } = useToast();
+  const hasRedirectedRef = useRef(false);
 
-  // 1. Check if user is in an active game and redirect
+  // 1. Consolidated active status check via socket
   useEffect(() => {
-    const checkActiveGame = async () => {
+    if (hasRedirectedRef.current) return;
+
+    const handleActiveStatus = (status: ActiveStatusResponse) => {
+      if (hasRedirectedRef.current) return;
+
+      // Check for recently left game (race condition prevention)
+      if (typeof window !== "undefined" && status.game) {
+        const recentlyLeftGame = sessionStorage.getItem("recentlyLeftGame");
+        const recentlyLeftTime = sessionStorage.getItem("recentlyLeftTime");
+        const timeSinceLeave = recentlyLeftTime
+          ? Date.now() - parseInt(recentlyLeftTime)
+          : Infinity;
+
+        // Skip redirect if this game was left within last 3 seconds
+        if (status.game.gameId === recentlyLeftGame && timeSinceLeave < 3000) {
+          setCheckingGame(false);
+          return;
+        }
+      }
+
+      // Priority 1: Active game (tournament or regular)
+      if (status.game) {
+        hasRedirectedRef.current = true;
+        if (status.game.isTournament) {
+          router.push(`/play/tournaments/game/${status.game.gameId}`);
+        } else {
+          router.push(`/play/game/${status.game.gameId}`);
+        }
+        return;
+      }
+
+      // Priority 2: Tournament involvement (registered or hosting)
+      if (status.tournament) {
+        hasRedirectedRef.current = true;
+        if (status.tournament.status === "active" && status.tournament.tableId) {
+          router.push(`/play/tournaments/game/${status.tournament.tableId}`);
+        } else {
+          router.push(`/play/tournaments/${status.tournament.tournamentId}`);
+        }
+        return;
+      }
+
+      // Priority 3: In queue - stay on this page (we're already on online page)
+      // No redirect needed
+
+      // Not in anything blocking - allow queue joining
+      setCheckingGame(false);
+    };
+
+    const performCheck = async () => {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
+        if (!socket.connected) {
+          socket.connect();
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        const status = await checkActiveStatus(socket);
+
+        if (status.error) {
+          console.error("[OnlinePage] Active status error:", status.error);
           setCheckingGame(false);
           return;
         }
 
-        // Query active or starting games
-        const { data: games } = await supabase
-          .from("games")
-          .select("id, player_ids, players, left_players")
-          .in("status", ["active", "starting"]);
-
-        if (games && games.length > 0) {
-          // Find game where user is a player
-          const userGame = games.find((g) => {
-            const userIdStr = String(user.id);
-
-            // Check if user left the game
-            const leftPlayers = Array.isArray(g.left_players)
-              ? g.left_players.map((id: any) => String(id))
-              : [];
-            if (leftPlayers.includes(userIdStr)) {
-              return false;
-            }
-
-            // Check player_ids array
-            if (g.player_ids && Array.isArray(g.player_ids)) {
-              if (g.player_ids.some((id: any) => String(id) === userIdStr)) {
-                return true;
-              }
-            }
-
-            // Fallback: check players JSONB
-            if (g.players && Array.isArray(g.players)) {
-              return g.players.some((p: any) => {
-                const playerId = p?.id || p?.user_id;
-                return playerId && String(playerId) === userIdStr;
-              });
-            }
-
-            return false;
-          });
-
-          if (userGame) {
-            // Skip local games
-            if (!userGame.id.startsWith("local-")) {
-              // Check if this is a recently left game (race condition prevention)
-              if (typeof window !== "undefined") {
-                const recentlyLeftGame =
-                  sessionStorage.getItem("recentlyLeftGame");
-                const recentlyLeftTime =
-                  sessionStorage.getItem("recentlyLeftTime");
-                const timeSinceLeave = recentlyLeftTime
-                  ? Date.now() - parseInt(recentlyLeftTime)
-                  : Infinity;
-
-                // Don't redirect if this game was left within last 3 seconds
-                if (userGame.id === recentlyLeftGame && timeSinceLeave < 3000) {
-                  return;
-                }
-              }
-
-              router.push(`/play/game/${userGame.id}`);
-              return;
-            }
-          }
-        }
+        handleActiveStatus(status);
       } catch (error) {
-        console.error("Error checking active game:", error);
-      } finally {
+        console.error("[OnlinePage] Error checking active status:", error);
         setCheckingGame(false);
       }
     };
 
-    checkActiveGame();
-  }, [supabase, router]);
+    performCheck();
+  }, [socket, router]);
 
   // 1.1. Listen for match_found events to redirect immediately
   useEffect(() => {
     if (!socket) return;
 
-    const handleMatchFound = (data: { gameId: string }) => {
+    const handleMatchFound = (data: { gameId: string; tournamentId?: string }) => {
       if (data?.gameId) {
-        // Redirect immediately when match is found
-        router.push(`/play/game/${data.gameId}`);
+        hasRedirectedRef.current = true;
+        if (data.tournamentId) {
+          router.push(`/play/tournaments/game/${data.gameId}`);
+        } else {
+          router.push(`/play/game/${data.gameId}`);
+        }
       }
     };
 

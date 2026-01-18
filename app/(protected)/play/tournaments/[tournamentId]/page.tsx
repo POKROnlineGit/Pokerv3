@@ -157,13 +157,11 @@ export default function TournamentDetailPage() {
 
   // Settings form state (for registration phase)
   const [settingsForm, setSettingsForm] = useState<{
-    maxPlayers: string;
     maxPlayersPerTable: string;
     startingStack: string;
     blindLevelDurationMinutes: string;
     blindStructure: BlindLevel[];
   }>({
-    maxPlayers: "",
     maxPlayersPerTable: "9",
     startingStack: "10000",
     blindLevelDurationMinutes: "10",
@@ -196,10 +194,6 @@ export default function TournamentDetailPage() {
         [];
 
       setSettingsForm({
-        maxPlayers:
-          tournament?.max_players?.toString() ||
-          tournament?.maxPlayers?.toString() ||
-          "",
         maxPlayersPerTable:
           tournament?.max_players_per_table?.toString() ||
           tournament?.maxPlayersPerTable?.toString() ||
@@ -719,13 +713,6 @@ export default function TournamentDetailPage() {
         blindStructureTemplate: settingsForm.blindStructure,
       };
 
-      if (settingsForm.maxPlayers && settingsForm.maxPlayers.trim()) {
-        const maxPlayersNum = parseInt(settingsForm.maxPlayers);
-        if (!isNaN(maxPlayersNum) && maxPlayersNum > 0) {
-          settings.maxPlayers = maxPlayersNum;
-        }
-      }
-
       const response = await updateTournamentSettings(tournamentId, settings);
 
       if ("error" in response) {
@@ -969,21 +956,6 @@ export default function TournamentDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 px-3 pb-3">
-                {/* Max Players */}
-                <div className="space-y-1">
-                  <Label className="text-xs text-slate-400">Max Players (Optional)</Label>
-                  <Input
-                    type="number"
-                    value={settingsForm.maxPlayers}
-                    onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, maxPlayers: e.target.value })
-                    }
-                    className="bg-slate-900 border-slate-800 h-7 text-xs"
-                    min="1"
-                    placeholder="Unlimited"
-                  />
-                </div>
-
                 {/* Players Per Table */}
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-400">Players Per Table</Label>
