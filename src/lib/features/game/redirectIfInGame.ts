@@ -24,7 +24,7 @@ export async function redirectIfInGame() {
     // This approach is reliable and works regardless of array query syntax
     const { data: games } = await supabase
       .from("games")
-      .select("id, player_ids, players")
+      .select("id, player_ids, players, tournament_id")
       .in("status", ["active", "starting"]);
 
     if (games && games.length > 0) {
@@ -47,7 +47,12 @@ export async function redirectIfInGame() {
       });
 
       if (game) {
-        redirect(`/play/game/${game.id}`);
+        // Redirect to tournament game page if it's a tournament game
+        if (game.tournament_id) {
+          redirect(`/play/tournaments/game/${game.id}`);
+        } else {
+          redirect(`/play/game/${game.id}`);
+        }
       }
     }
   }

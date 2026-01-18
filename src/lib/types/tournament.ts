@@ -224,6 +224,7 @@ export interface TournamentTablesMergedEvent {
 export interface TournamentCompletedEvent {
   tournamentId: string;
   winnerId: string;
+  winnerUsername?: string | null;
   results: Array<{
     playerId: string;
     position: number;
@@ -231,6 +232,53 @@ export interface TournamentCompletedEvent {
   }>;
   timestamp: string;
 }
+
+export interface TournamentCancelledEvent {
+  tournamentId: string;
+  reason: string;
+  timestamp: string;
+}
+
+// Reconnection Payloads
+export interface TournamentReconnectedPayload {
+  tournamentId: string;
+  status: "registration" | "active" | "paused";
+  title: string;
+  currentTableId: string | null;
+  isPlaying: boolean;
+  message: string;
+}
+
+export interface GameReconnectedPayload {
+  gameId: string;
+  tournamentId: string | null;
+  message: string;
+}
+
+// Check Tournament Status Response
+export interface TournamentStatusCheckResponse {
+  inTournament: boolean;
+  tournamentId: string | null;
+  status: string | null;
+  title: string | null;
+  currentTableId: string | null;
+  isPlaying: boolean;
+}
+
+// Tournament Event Types (for tournamentEvent wrapper)
+export type TournamentEventType =
+  | "TOURNAMENT_BLIND_LEVEL_ADVANCED"
+  | "TOURNAMENT_PLAYER_ELIMINATED"
+  | "TOURNAMENT_PLAYER_TRANSFERRED"
+  | "TOURNAMENT_TABLES_BALANCED"
+  | "TOURNAMENT_TABLES_MERGED"
+  | "TOURNAMENT_LEVEL_WARNING"
+  | "TOURNAMENT_STATUS_CHANGED"
+  | "TOURNAMENT_PLAYER_REGISTERED"
+  | "TOURNAMENT_PLAYER_UNREGISTERED"
+  | "TOURNAMENT_PARTICIPANT_COUNT_CHANGED"
+  | "TOURNAMENT_COMPLETED"
+  | "TOURNAMENT_CANCELLED";
 
 // Full State Event
 export interface TournamentStateEvent {
@@ -346,4 +394,38 @@ export interface TournamentStateResponse {
   hostId: string;
   canRegister?: boolean;
   timestamp?: string;
+}
+
+// ============================================
+// Active Status Check Types (consolidated check)
+// ============================================
+
+export interface ActiveStatusGameInfo {
+  gameId: string;
+  isTournament: boolean;
+  tournamentId: string | null;
+  status: "active" | "starting" | "waiting";
+}
+
+export interface ActiveStatusTournamentInfo {
+  tournamentId: string;
+  title: string;
+  status: "setup" | "registration" | "active" | "paused";
+  isHost: boolean;
+  isParticipant: boolean;
+  participantStatus: "registered" | "active" | null;
+  tableId: string | null; // Only set when in active tournament game
+}
+
+export interface ActiveStatusQueueInfo {
+  queueType: string;
+  position: number;
+  joinedAt: number;
+}
+
+export interface ActiveStatusResponse {
+  game: ActiveStatusGameInfo | null;
+  tournament: ActiveStatusTournamentInfo | null;
+  queue: ActiveStatusQueueInfo | null;
+  error?: string;
 }

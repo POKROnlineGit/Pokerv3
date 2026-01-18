@@ -1,259 +1,179 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState } from "react";
 import { PlayLayout } from "@/components/layout/PlayLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 import { useTournamentSocket } from "@/lib/api/socket/tournament";
-import { Tournament, TournamentStatusType } from "@/lib/types/tournament";
-import { useToast } from "@/lib/hooks";
-import { useTheme } from "@/components/providers/ThemeProvider";
-import { createClientComponentClient } from "@/lib/api/supabase/client";
-import {
-  Loader2,
-  ArrowLeft,
-  Trophy,
-  Users,
-  Clock,
-  Plus,
-  RefreshCw,
-} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Loader2, ArrowLeft, Trophy } from "lucide-react";
 import Link from "next/link";
+import { useTheme } from "@/components/providers/ThemeProvider";
+import { useToast } from "@/lib/hooks";
 
-// Status badge component
-function StatusBadge({ status }: { status: TournamentStatusType }) {
-  const statusConfig: Record<
-    TournamentStatusType,
-    { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
-  > = {
-    setup: { label: "Setup", variant: "secondary" },
-    registration: { label: "Registration Open", variant: "default" },
-    active: { label: "In Progress", variant: "default" },
-    paused: { label: "Paused", variant: "outline" },
-    completed: { label: "Completed", variant: "secondary" },
-    cancelled: { label: "Cancelled", variant: "destructive" },
-  };
-
-  const config = statusConfig[status] || { label: status, variant: "secondary" };
-
-  return (
-    <Badge variant={config.variant} className="capitalize">
-      {config.label}
-    </Badge>
-  );
-}
-
-export default function TournamentListPage() {
+export default function CreateTournamentPage() {
+  const { createTournament } = useTournamentSocket();
   const router = useRouter();
-  const { getActiveTournaments } = useTournamentSocket();
-  const { toast } = useToast();
   const { currentTheme } = useTheme();
-  const supabase = createClientComponentClient();
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Form State - Only title and description required for creation
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
 
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
+  // Get theme colors for button
   const primaryColor = currentTheme.colors.primary[0];
   const primaryColorHover = currentTheme.colors.primary[1] || primaryColor;
 
-  // Get current user
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        setCurrentUserId(data.user.id);
-      }
-    });
-  }, [supabase]);
-
-  // Fetch active tournaments
-  const fetchTournaments = async (showLoading = true) => {
-    if (showLoading) {
-      setIsLoading(true);
-    } else {
-      setIsRefreshing(true);
+  const handleCreateTournament = async () => {
+    // Validation - Only title is required
+    if (!title.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Tournament title is required",
+        variant: "destructive",
+      });
+      return;
     }
 
+    setIsLoading(true);
+
     try {
-      const response = await getActiveTournaments();
+      const payload: any = {
+        title: title.trim(),
+      };
+
+      if (description.trim()) {
+        payload.description = description.trim();
+      }
+
+      const response = await createTournament(payload);
 
       if ("error" in response) {
         toast({
-          title: "Error",
+          title: "Error Creating Tournament",
           description: response.error,
           variant: "destructive",
         });
+        setIsLoading(false);
         return;
       }
 
-      setTournaments(response.tournaments || []);
+      if (response.tournamentId) {
+        toast({
+          title: "Tournament Created",
+          description: "Configure your tournament settings before opening registration",
+          variant: "default",
+        });
+        router.push(`/play/tournaments/setup/${response.tournamentId}`);
+      } else {
+        toast({
+          title: "Error Creating Tournament",
+          description: "Failed to create tournament",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+      }
     } catch (error: any) {
-      console.error("[Tournaments] Failed to fetch:", error);
+      console.error("Failed to create tournament", error);
       toast({
-        title: "Error",
-        description: "Failed to load tournaments",
+        title: "Error Creating Tournament",
+        description: error.message || "An unexpected error occurred",
         variant: "destructive",
       });
-    } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   };
-
-  useEffect(() => {
-    fetchTournaments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleTournamentClick = (tournament: Tournament) => {
-    const id = tournament.id || tournament.tournamentId;
-    if (id) {
-      router.push(`/play/tournaments/${id}`);
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <PlayLayout title="Tournaments">
-        <div className="flex items-center justify-center py-10">
-          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-        </div>
-      </PlayLayout>
-    );
-  }
 
   return (
-    <PlayLayout
-      title="Tournaments"
+    <PlayLayout 
+      title="Create Tournament"
       footer={
-        <Link href="/play/tournaments/create" className="w-full">
-          <Button
-            size="lg"
-            className="w-full font-bold text-sm h-12"
-            style={{
-              background: `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = `linear-gradient(to right, ${primaryColorHover}, ${primaryColor})`;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`;
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Create Tournament
-          </Button>
-        </Link>
+        <Button
+          size="lg"
+          className="w-full font-bold text-sm h-12"
+          style={{
+            background: `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = `linear-gradient(to right, ${primaryColorHover}, ${primaryColor})`;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`;
+          }}
+          onClick={handleCreateTournament}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Trophy className="mr-2 h-4 w-4" />
+          )}
+          Create Tournament
+        </Button>
       }
     >
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/play"
-            className="inline-flex items-center text-xs text-slate-500 hover:text-white"
-          >
-            <ArrowLeft className="h-3 w-3 mr-1" /> Back
-          </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => fetchTournaments(false)}
-            disabled={isRefreshing}
-            className="h-7 text-xs"
-          >
-            <RefreshCw
-              className={`h-3 w-3 mr-1 ${isRefreshing ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
-        </div>
+        <Link href="/play" className="inline-flex items-center text-xs text-slate-500 hover:text-white">
+          <ArrowLeft className="h-3 w-3 mr-1" /> Back
+        </Link>
 
-        {/* Tournament List */}
-        {tournaments.length === 0 ? (
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="p-8 text-center">
-              <Trophy className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-slate-300 mb-2">
-                No Active Tournaments
-              </h3>
-              <p className="text-sm text-slate-400 mb-4">
-                There are no tournaments currently available. Create one to get
-                started!
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="p-3 flex items-start gap-2">
+            <div className="p-1.5 bg-slate-800/50 rounded-lg flex-shrink-0">
+              <Trophy className="h-4 w-4 text-slate-400" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-bold text-sm text-slate-300">Create Tournament</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Start by creating your tournament with a title. You'll configure the settings (blinds, players, etc.) after creation.
               </p>
-              <Link href="/play/tournaments/create">
-                <Button variant="outline">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Tournament
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-                {tournaments.map((tournament) => {
-              const id = tournament.id || tournament.tournamentId;
-              const hostId = tournament.host_id || tournament.hostId;
-              const isHost = currentUserId === hostId;
-              const status = tournament.status || "setup";
-              const title = tournament.title || tournament.name || "Untitled";
-              const maxPlayers = tournament.max_players || tournament.maxPlayers;
-              const playersPerTable =
-                tournament.max_players_per_table ||
-                tournament.maxPlayersPerTable ||
-                9;
+            </div>
+          </CardContent>
+        </Card>
 
-              return (
-                <Card
-                  key={id}
-                  className="bg-slate-800/50 border-slate-700 hover:border-slate-600 cursor-pointer transition-colors"
-                  onClick={() => handleTournamentClick(tournament)}
-                >
-                  <CardContent className="p-3">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <h3 className="font-semibold text-sm text-slate-200 truncate flex-1 min-w-0">
-                          {title}
-                        </h3>
-                        <StatusBadge status={status} />
-                        {isHost && (
-                          <Badge variant="outline" className="text-[10px] px-1 py-0">
-                            Host
-                          </Badge>
-                        )}
-                      </div>
-                      {tournament.description && (
-                        <p className="text-xs text-slate-400 line-clamp-1">
-                          {tournament.description}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
-                        <span className="flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {maxPlayers ? `Max ${maxPlayers}` : "Unlimited"}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Trophy className="h-3 w-3" />
-                          {playersPerTable}/table
-                        </span>
-                        {tournament.blind_level_duration_minutes ||
-                        tournament.blindLevelDurationMinutes ? (
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {tournament.blind_level_duration_minutes ||
-                              tournament.blindLevelDurationMinutes}m
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Tournament Title *</Label>
+            <Input 
+              type="text" 
+              value={title} 
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Enter tournament title"
+              className="bg-slate-900 border-slate-800 h-9 text-sm"
+              maxLength={100}
+            />
           </div>
-        )}
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Description (Optional)</Label>
+            <Input 
+              type="text" 
+              value={description} 
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter tournament description"
+              className="bg-slate-900 border-slate-800 h-9 text-sm"
+              maxLength={500}
+            />
+          </div>
+
+          <div className="p-3 bg-slate-800/30 border border-slate-700 rounded-lg">
+            <p className="text-xs text-slate-400">
+              <strong className="text-slate-300">Next Steps:</strong> After creating the tournament, you'll be able to configure:
+            </p>
+            <ul className="mt-1.5 text-xs text-slate-400 list-disc list-inside space-y-0.5">
+              <li>Starting stack and blind structure</li>
+              <li>Maximum players and players per table</li>
+              <li>Blind level duration</li>
+            </ul>
+            <p className="mt-1.5 text-xs text-slate-400">
+              Once settings are configured, you can open registration for players to join.
+            </p>
+          </div>
+        </div>
       </div>
     </PlayLayout>
   );

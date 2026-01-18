@@ -69,6 +69,7 @@ export function useGameRedirect() {
 
         const gameId = game.id;
         const gameStatus = game.status;
+        const tournamentId = game.tournament_id;
 
         // Skip local games (they use a different route)
         if (gameId.startsWith("local-")) {
@@ -82,15 +83,20 @@ export function useGameRedirect() {
 
         // Only redirect if game is starting or active
         if (gameStatus === "starting" || gameStatus === "active") {
-          // Don't redirect if already on the game page
-          if (pathname === `/play/game/${gameId}`) {
+          // Determine the correct route based on whether it's a tournament game
+          const targetPath = tournamentId
+            ? `/play/tournaments/game/${gameId}`
+            : `/play/game/${gameId}`;
+
+          // Don't redirect if already on the correct game page
+          if (pathname === targetPath || pathname === `/play/game/${gameId}` || pathname === `/play/tournaments/game/${gameId}`) {
             return;
           }
 
           // Small delay to ensure game is fully set up
           setTimeout(() => {
             if (mounted) {
-              router.push(`/play/game/${gameId}`);
+              router.push(targetPath);
             }
           }, 100);
         }

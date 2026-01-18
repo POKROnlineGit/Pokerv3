@@ -19,6 +19,7 @@ import {
   TournamentTablesMergedEvent,
   TournamentLevelWarningEvent,
   TournamentCompletedEvent,
+  TournamentCancelledEvent,
   TournamentStateEvent,
   TournamentStatusType,
   Tournament,
@@ -452,6 +453,38 @@ export function useTournamentSocket() {
     [socket]
   );
 
+  // ============================================
+  // STATUS CHECK
+  // ============================================
+
+  /**
+   * Check if user is currently in a tournament
+   * Returns tournament info if in a tournament
+   */
+  const checkTournamentStatus = useCallback((): Promise<{
+    inTournament: boolean;
+    tournamentId: string | null;
+    status: string | null;
+    title: string | null;
+    currentTableId: string | null;
+    isPlaying: boolean;
+  }> => {
+    return new Promise((resolve) => {
+      if (!socket.connected) socket.connect();
+
+      socket.emit("check_tournament_status", {}, (response: any) => {
+        resolve({
+          inTournament: response?.inTournament || false,
+          tournamentId: response?.tournamentId || null,
+          status: response?.status || null,
+          title: response?.title || null,
+          currentTableId: response?.currentTableId || null,
+          isPlaying: response?.isPlaying || false,
+        });
+      });
+    });
+  }, [socket]);
+
   return {
     // Tournament management
     createTournament,
@@ -477,6 +510,9 @@ export function useTournamentSocket() {
     joinTable,
     leaveTable,
     submitAction,
+
+    // Status check
+    checkTournamentStatus,
   };
 }
 
@@ -522,6 +558,8 @@ export function useTournamentEvents(
   const [tournamentStarted, setTournamentStarted] = useState<boolean>(false);
   const [tournamentCompleted, setTournamentCompleted] =
     useState<TournamentCompletedEvent | null>(null);
+  const [tournamentCancelled, setTournamentCancelled] =
+    useState<TournamentCancelledEvent | null>(null);
 
   useEffect(() => {
     if (!tournamentId) return;
@@ -645,6 +683,12 @@ export function useTournamentEvents(
       }
     };
 
+    const handleTournamentCancelled = (data: TournamentCancelledEvent) => {
+      if (data.tournamentId === tournamentId) {
+        setTournamentCancelled(data);
+      }
+    };
+
     // ============================================
     // STATE BROADCAST EVENT (SOURCE OF TRUTH)
     // ============================================
@@ -698,6 +742,7 @@ export function useTournamentEvents(
     socket.on("TOURNAMENT_TABLES_BALANCED", handleTablesBalanced);
     socket.on("TOURNAMENT_TABLES_MERGED", handleTablesMerged);
     socket.on("TOURNAMENT_COMPLETED", handleTournamentCompleted);
+    socket.on("TOURNAMENT_CANCELLED", handleTournamentCancelled);
     socket.on("tournamentState", handleTournamentState);
     socket.on("error", handleError);
 
@@ -720,6 +765,7 @@ export function useTournamentEvents(
       socket.off("TOURNAMENT_TABLES_BALANCED", handleTablesBalanced);
       socket.off("TOURNAMENT_TABLES_MERGED", handleTablesMerged);
       socket.off("TOURNAMENT_COMPLETED", handleTournamentCompleted);
+      socket.off("TOURNAMENT_CANCELLED", handleTournamentCancelled);
       socket.off("tournamentState", handleTournamentState);
       socket.off("error", handleError);
       socket.off("connect", joinRoom);
@@ -752,5 +798,6 @@ export function useTournamentEvents(
     levelWarning,
     tournamentStarted,
     tournamentCompleted,
+    tournamentCancelled,
   };
 }

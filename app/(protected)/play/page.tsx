@@ -1,119 +1,125 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { PlayLayout } from "@/components/layout/PlayLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Globe2, Bot, ChevronRight, Crown, Loader2, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
-import { useSocket } from "@/lib/api/socket/client";
-import { useQueue } from "@/components/providers/QueueProvider";
+import { useSocket, checkActiveStatus } from "@/lib/api/socket/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/hooks";
+import type { ActiveStatusResponse } from "@/lib/types/tournament";
 
 export default function PlayRootPage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
   const socket = useSocket();
-  const { inQueue, queueType } = useQueue();
   const [checking, setChecking] = useState(true);
   const [joinCode, setJoinCode] = useState("");
   const [isJoiningCode, setIsJoiningCode] = useState(false);
   const { toast } = useToast();
+  const hasRedirectedRef = useRef(false);
 
-  // 1. Check if user is in an active game and redirect
+  // Consolidated active status check via socket
   useEffect(() => {
-    const checkActiveGame = async () => {
+    if (hasRedirectedRef.current) return;
+
+    const handleActiveStatus = (status: ActiveStatusResponse) => {
+      if (hasRedirectedRef.current) return;
+      
+      // Check for recently left game (race condition prevention)
+      if (typeof window !== "undefined" && status.game) {
+        const recentlyLeftGame = sessionStorage.getItem("recentlyLeftGame");
+        const recentlyLeftTime = sessionStorage.getItem("recentlyLeftTime");
+        const timeSinceLeave = recentlyLeftTime
+          ? Date.now() - parseInt(recentlyLeftTime)
+          : Infinity;
+        
+        // Skip redirect if this game was left within last 3 seconds
+        if (status.game.gameId === recentlyLeftGame && timeSinceLeave < 3000) {
+          setChecking(false);
+          return;
+        }
+      }
+
+      // Priority 1: Active game (tournament or regular)
+      if (status.game) {
+        hasRedirectedRef.current = true;
+        if (status.game.isTournament) {
+          router.push(`/play/tournaments/game/${status.game.gameId}`);
+        } else {
+          router.push(`/play/game/${status.game.gameId}`);
+        }
+        return;
+      }
+
+      // Priority 2: Tournament involvement (registered or hosting)
+      if (status.tournament) {
+        hasRedirectedRef.current = true;
+        if (status.tournament.status === "active" && status.tournament.tableId) {
+          // Active tournament with assigned table - go to game
+          router.push(`/play/tournaments/game/${status.tournament.tableId}`);
+        } else {
+          // Setup, registration, paused, or waiting for table - go to lobby
+          router.push(`/play/tournaments/${status.tournament.tournamentId}`);
+        }
+        return;
+      }
+
+      // Priority 3: In queue - redirect to online page
+      if (status.queue) {
+        hasRedirectedRef.current = true;
+        router.push("/play/online");
+        return;
+      }
+
+      // Not in anything - allow normal navigation
+      setChecking(false);
+    };
+
+    const performCheck = async () => {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
+        // Wait for socket to be connected
+        if (!socket.connected) {
+          socket.connect();
+          // Wait a moment for connection
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        const status = await checkActiveStatus(socket);
+        
+        if (status.error) {
+          console.error("[PlayPage] Active status error:", status.error);
           setChecking(false);
           return;
         }
 
-        // Query active or starting games
-        const { data: games } = await supabase
-          .from("games")
-          .select("id, player_ids, players, left_players")
-          .in("status", ["active", "starting"]);
-
-        if (games && games.length > 0) {
-          // Find game where user is a player
-          const userGame = games.find((g) => {
-            const userIdStr = String(user.id);
-
-            // Check if user left the game
-            const leftPlayers = Array.isArray(g.left_players)
-              ? g.left_players.map((id: any) => String(id))
-              : [];
-            if (leftPlayers.includes(userIdStr)) {
-              return false;
-            }
-
-            // Check player_ids array
-            if (g.player_ids && Array.isArray(g.player_ids)) {
-              if (g.player_ids.some((id: any) => String(id) === userIdStr)) {
-                return true;
-              }
-            }
-
-            // Fallback: check players JSONB
-            if (g.players && Array.isArray(g.players)) {
-              return g.players.some((p: any) => {
-                const playerId = p?.id || p?.user_id;
-                return playerId && String(playerId) === userIdStr;
-              });
-            }
-
-            return false;
-          });
-
-          if (userGame) {
-            // Skip local games
-            if (!userGame.id.startsWith("local-")) {
-              // Check if this is a recently left game (race condition prevention)
-              if (typeof window !== "undefined") {
-                const recentlyLeftGame =
-                  sessionStorage.getItem("recentlyLeftGame");
-                const recentlyLeftTime =
-                  sessionStorage.getItem("recentlyLeftTime");
-                const timeSinceLeave = recentlyLeftTime
-                  ? Date.now() - parseInt(recentlyLeftTime)
-                  : Infinity;
-
-                // Don't redirect if this game was left within last 3 seconds
-                if (userGame.id === recentlyLeftGame && timeSinceLeave < 3000) {
-                  return;
-                }
-              }
-
-              router.push(`/play/game/${userGame.id}`);
-              return;
-            }
-          }
-        }
+        handleActiveStatus(status);
       } catch (error) {
-        console.error("Error checking active game:", error);
-      } finally {
+        console.error("[PlayPage] Error checking active status:", error);
         setChecking(false);
       }
     };
 
-    checkActiveGame();
-  }, [supabase, router]);
+    performCheck();
+  }, [socket, router]);
 
-  // 1.1. Listen for match_found events to redirect immediately
+  // Listen for match_found events to redirect immediately
   useEffect(() => {
     if (!socket) return;
 
-    const handleMatchFound = (data: { gameId: string }) => {
+    const handleMatchFound = (data: { gameId: string; tournamentId?: string }) => {
       if (data?.gameId) {
-        // Redirect immediately when match is found
-        router.push(`/play/game/${data.gameId}`);
+        hasRedirectedRef.current = true;
+        // Check if this is a tournament game
+        if (data.tournamentId) {
+          router.push(`/play/tournaments/game/${data.gameId}`);
+        } else {
+          router.push(`/play/game/${data.gameId}`);
+        }
       }
     };
 
@@ -123,13 +129,6 @@ export default function PlayRootPage() {
       socket.off("match_found", handleMatchFound);
     };
   }, [socket, router]);
-
-  // 2. Check if user is in queue and redirect to online lobby
-  useEffect(() => {
-    if (!checking && inQueue && queueType) {
-      router.push("/play/online");
-    }
-  }, [checking, inQueue, queueType, router]);
 
   const handleJoinByCode = async () => {
     // Validate format: 5 alphanumeric characters
@@ -260,7 +259,7 @@ export default function PlayRootPage() {
           </Card>
         </Link>
 
-        <Link href="/play/tournaments/create" className="block group">
+        <Link href="/play/tournaments" className="block group">
           <Card className="!bg-[hsl(222.2,84%,4.9%)] border-slate-700 group-hover:border-slate-600 group-hover:!bg-slate-800 group-hover:shadow-lg">
             <CardContent className="py-3 px-4 flex items-center justify-between">
               <div className="flex items-center gap-4">

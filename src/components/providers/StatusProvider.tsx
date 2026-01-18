@@ -76,17 +76,24 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     }
 
     const handleGameState = async (state: GameState) => {
-      // Determine if this is a private game
+      // Determine game type
       const isPrivate = (state as any).isPrivate || false;
+      const tournamentId = (state as any).tournamentId;
       
       // Determine the correct game path based on game type
-      const gamePath = isPrivate 
-        ? `/play/private/${state.gameId}`
-        : `/play/game/${state.gameId}`;
+      let gamePath: string;
+      if (tournamentId) {
+        gamePath = `/play/tournaments/game/${state.gameId}`;
+      } else if (isPrivate) {
+        gamePath = `/play/private/${state.gameId}`;
+      } else {
+        gamePath = `/play/game/${state.gameId}`;
+      }
       
-      // Reset redirect flag if we're already on the game page (check both routes)
+      // Reset redirect flag if we're already on the game page (check all routes)
       const isOnGamePage = pathname === `/play/game/${state.gameId}` || 
-                          pathname === `/play/private/${state.gameId}`;
+                          pathname === `/play/private/${state.gameId}` ||
+                          pathname === `/play/tournaments/game/${state.gameId}`;
       if (isOnGamePage) {
         isRedirectingRef.current = false;
         return;
@@ -158,11 +165,8 @@ export function StatusProvider({ children }: { children: ReactNode }) {
 
       // Redirect after delay (similar to match_found behavior)
       setTimeout(() => {
-        // Use the correct route based on game type
-        const redirectPath = isPrivate 
-          ? `/play/private/${state.gameId}`
-          : `/play/game/${state.gameId}`;
-        router.push(redirectPath);
+        // Use the gamePath computed earlier
+        router.push(gamePath);
         // Clear status after navigation
         setTimeout(() => {
           clearStatus("active-game");

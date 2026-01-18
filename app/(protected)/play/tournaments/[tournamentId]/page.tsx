@@ -23,6 +23,7 @@ import {
 } from "@/lib/types/tournament";
 import { useToast } from "@/lib/hooks";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
+import { TournamentRegistrationContent } from "@/components/features/tournament/TournamentRegistrationContent";
 import {
   Loader2,
   Users,
@@ -36,7 +37,12 @@ import {
   Table2,
   AlertTriangle,
   Check,
+  Settings,
+  Save,
+  Plus,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import Link from "next/link";
 
 // Status badge component
@@ -130,6 +136,7 @@ export default function TournamentDetailPage() {
     tournamentAdminAction,
     getTournamentLeaderboard,
     joinTable,
+    updateTournamentSettings,
   } = useTournamentSocket();
   const socket = useSocket();
   const { toast } = useToast();
@@ -145,7 +152,23 @@ export default function TournamentDetailPage() {
   const [isPausing, setIsPausing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [showLevelWarning, setShowLevelWarning] = useState<TournamentLevelWarningEvent | null>(null);
+  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const hasCheckedRef = useRef(false);
+
+  // Settings form state (for registration phase)
+  const [settingsForm, setSettingsForm] = useState<{
+    maxPlayers: string;
+    maxPlayersPerTable: string;
+    startingStack: string;
+    blindLevelDurationMinutes: string;
+    blindStructure: BlindLevel[];
+  }>({
+    maxPlayers: "",
+    maxPlayersPerTable: "9",
+    startingStack: "10000",
+    blindLevelDurationMinutes: "10",
+    blindStructure: [],
+  });
 
   // Get current user
   useEffect(() => {
@@ -155,6 +178,46 @@ export default function TournamentDetailPage() {
       }
     });
   }, [supabase]);
+
+  // Initialize settings form from tournament data (for registration phase)
+  useEffect(() => {
+    if (!tournamentData) return;
+    
+    const tournament = tournamentData.tournament;
+    const currentStatus: TournamentStatusType =
+      typeof tournamentData.status === "string"
+        ? (tournamentData.status as TournamentStatusType)
+        : ((tournamentData as any).status?.status || tournament?.status) as TournamentStatusType;
+
+    if (currentStatus === "registration") {
+      const blindStructureTemplate: BlindLevel[] =
+        tournament?.blind_structure_template ||
+        tournament?.blindStructureTemplate ||
+        [];
+
+      setSettingsForm({
+        maxPlayers:
+          tournament?.max_players?.toString() ||
+          tournament?.maxPlayers?.toString() ||
+          "",
+        maxPlayersPerTable:
+          tournament?.max_players_per_table?.toString() ||
+          tournament?.maxPlayersPerTable?.toString() ||
+          "9",
+        startingStack:
+          tournament?.starting_stack?.toString() ||
+          tournament?.startingStack?.toString() ||
+          "10000",
+        blindLevelDurationMinutes:
+          tournament?.blind_level_duration_minutes?.toString() ||
+          tournament?.blindLevelDurationMinutes?.toString() ||
+          "10",
+        blindStructure: blindStructureTemplate.length > 0
+          ? blindStructureTemplate
+          : [{ small: 10, big: 20 }, { small: 20, big: 40 }, { small: 50, big: 100 }],
+      });
+    }
+  }, [tournamentData]);
 
   // Handle tournament started - join assigned table
   const handleTournamentStarted = useCallback(async (startedTournamentId: string) => {
@@ -189,8 +252,8 @@ export default function TournamentDetailPage() {
             variant: "destructive",
           });
         } else {
-          // Navigate to game
-          router.push(`/play/game/${tableId}`);
+          // Navigate to tournament game page
+          router.push(`/play/tournaments/game/${tableId}`);
         }
       }
     }
@@ -221,7 +284,7 @@ export default function TournamentDetailPage() {
         variant: "destructive",
       });
     } else {
-      router.push(`/play/game/${newTableId}`);
+      router.push(`/play/tournaments/game/${newTableId}`);
     }
   }, [currentUserId, joinTable, router, toast]);
 
@@ -578,53 +641,480 @@ export default function TournamentDetailPage() {
 
   const handleGoToTable = () => {
     if (myTableId) {
-      router.push(`/play/game/${myTableId}`);
+      router.push(`/play/tournaments/game/${myTableId}`);
     }
+  };
+
+  const handleUpdateSettings = async () => {
+    // Validation
+    if (
+      !settingsForm.maxPlayersPerTable ||
+      parseInt(settingsForm.maxPlayersPerTable) < 2 ||
+      parseInt(settingsForm.maxPlayersPerTable) > 10
+    ) {
+      toast({
+        title: "Validation Error",
+        description: "Players per table must be between 2 and 10",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      !settingsForm.startingStack ||
+      parseInt(settingsForm.startingStack) <= 0
+    ) {
+      toast({
+        title: "Validation Error",
+        description: "Starting stack must be greater than 0",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      !settingsForm.blindLevelDurationMinutes ||
+      parseInt(settingsForm.blindLevelDurationMinutes) <= 0
+    ) {
+      toast({
+        title: "Validation Error",
+        description: "Blind level duration must be greater than 0",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (settingsForm.blindStructure.length === 0) {
+      toast({
+        title: "Validation Error",
+        description: "At least one blind level is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate blind structure
+    for (let i = 0; i < settingsForm.blindStructure.length; i++) {
+      const level = settingsForm.blindStructure[i];
+      if (level.small <= 0 || level.big <= 0 || level.big <= level.small) {
+        toast({
+          title: "Validation Error",
+          description: `Blind level ${i + 1}: Big blind must be greater than small blind, and both must be positive`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    setIsUpdatingSettings(true);
+
+    try {
+      // Build settings payload
+      const settings: any = {
+        maxPlayersPerTable: parseInt(settingsForm.maxPlayersPerTable),
+        startingStack: parseInt(settingsForm.startingStack),
+        blindLevelDurationMinutes: parseInt(
+          settingsForm.blindLevelDurationMinutes
+        ),
+        blindStructureTemplate: settingsForm.blindStructure,
+      };
+
+      if (settingsForm.maxPlayers && settingsForm.maxPlayers.trim()) {
+        const maxPlayersNum = parseInt(settingsForm.maxPlayers);
+        if (!isNaN(maxPlayersNum) && maxPlayersNum > 0) {
+          settings.maxPlayers = maxPlayersNum;
+        }
+      }
+
+      const response = await updateTournamentSettings(tournamentId, settings);
+
+      if ("error" in response) {
+        toast({
+          title: "Error Updating Settings",
+          description: response.error || "Failed to update tournament settings",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Settings Updated",
+        description: "Tournament settings have been saved successfully",
+        variant: "default",
+      });
+
+      // Refresh tournament data
+      const updatedResponse = await getTournamentState(tournamentId);
+      if (!("error" in updatedResponse)) {
+        setTournamentData(updatedResponse as TournamentStateResponse);
+      }
+    } catch (error: any) {
+      console.error("[Tournament] Failed to update settings:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update tournament settings",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdatingSettings(false);
+    }
+  };
+
+  // Helper functions for blind structure
+  const addBlindLevel = () => {
+    const lastLevel =
+      settingsForm.blindStructure[settingsForm.blindStructure.length - 1];
+    const newSmall = lastLevel ? lastLevel.big : 10;
+    const newBig = lastLevel ? lastLevel.big * 2 : 20;
+    setSettingsForm({
+      ...settingsForm,
+      blindStructure: [
+        ...settingsForm.blindStructure,
+        { small: newSmall, big: newBig },
+      ],
+    });
+  };
+
+  const removeBlindLevel = (index: number) => {
+    if (settingsForm.blindStructure.length > 1) {
+      setSettingsForm({
+        ...settingsForm,
+        blindStructure: settingsForm.blindStructure.filter(
+          (_, i) => i !== index
+        ),
+      });
+    }
+  };
+
+  const updateBlindLevel = (
+    index: number,
+    type: "small" | "big",
+    value: number
+  ) => {
+    const updated = [...settingsForm.blindStructure];
+    updated[index] = { ...updated[index], [type]: value };
+    setSettingsForm({ ...settingsForm, blindStructure: updated });
   };
 
   // ============================================
   // RENDER
   // ============================================
 
+  // Registration phase: use tableContent for main area, minimal sidebar
+  if (status === "registration") {
+    return (
+      <PlayLayout
+        title={tournament?.title || tournament?.name || "Tournament"}
+        tableContent={
+          <TournamentRegistrationContent
+            tournament={tournament!}
+            participants={participants}
+            isHost={isHost}
+            isRegistered={isRegistered}
+            currentUserId={currentUserId}
+            participantCount={participantCount}
+            canRegister={canRegister}
+          />
+        }
+        footer={
+          <div className="flex flex-col gap-2 w-full">
+            {/* Player registration actions */}
+            {!isHost && (
+              isRegistered ? (
+                <Button
+                  onClick={handleUnregister}
+                  disabled={isUnregistering}
+                  size="lg"
+                  variant="outline"
+                  className="w-full font-bold text-sm h-12"
+                >
+                  {isUnregistering ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <X className="mr-2 h-4 w-4" />
+                  )}
+                  Unregister
+                </Button>
+              ) : canRegister ? (
+                <Button
+                  onClick={handleRegister}
+                  disabled={isRegistering}
+                  size="lg"
+                  className="w-full font-bold text-sm h-12"
+                >
+                  {isRegistering ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Users className="mr-2 h-4 w-4" />
+                  )}
+                  Register
+                </Button>
+              ) : null
+            )}
+
+            {/* Host start button */}
+            {isHost && (
+              <>
+                <Button
+                  onClick={handleStart}
+                  disabled={isStarting || participants.length < 2}
+                  size="lg"
+                  className="w-full font-bold text-sm h-12"
+                >
+                  {isStarting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="mr-2 h-4 w-4" />
+                  )}
+                  Start Tournament
+                </Button>
+                <Button
+                  onClick={handleUpdateSettings}
+                  disabled={isUpdatingSettings}
+                  variant="outline"
+                  size="lg"
+                  className="w-full font-bold text-sm h-10"
+                >
+                  {isUpdatingSettings ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  Save Settings
+                </Button>
+                <Button
+                  onClick={handleCancel}
+                  disabled={isCancelling}
+                  size="lg"
+                  variant="destructive"
+                  className="w-full font-bold text-sm h-10"
+                >
+                  {isCancelling ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Square className="mr-2 h-4 w-4" />
+                      Cancel
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+          </div>
+        }
+      >
+        {/* Minimal sidebar content for registration phase */}
+        <div className="space-y-3">
+          <Link
+            href="/play/tournaments"
+            className="inline-flex items-center text-sm text-slate-500 hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" /> Back
+          </Link>
+
+          {/* Status badges */}
+          {isHost && (
+            <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center gap-2">
+              <Trophy className="h-3 w-3 text-blue-400 flex-shrink-0" />
+              <p className="text-blue-400 text-xs font-medium truncate">
+                You are the host
+              </p>
+            </div>
+          )}
+
+          {isRegistered && (
+            <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-2">
+              <Check className="h-3 w-3 text-emerald-400 flex-shrink-0" />
+              <p className="text-emerald-400 text-xs font-medium truncate">
+                You are registered
+              </p>
+            </div>
+          )}
+
+          {/* Quick stats */}
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs text-slate-400 truncate">Players</p>
+                  <p className="text-lg font-bold truncate">
+                    {participantCount !== null ? participantCount : participants.length}
+                    {tournament?.max_players && (
+                      <span className="text-slate-500 text-xs font-normal">
+                        /{tournament.max_players}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {isHost && participants.length < 2 && (
+            <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+              <p className="text-amber-400 text-xs">
+                Need at least 2 players to start
+              </p>
+            </div>
+          )}
+
+          {/* Tournament Settings (Host only) */}
+          {isHost && (
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader className="pb-2 px-3 pt-3">
+                <CardTitle className="text-xs font-medium text-slate-300 flex items-center gap-2">
+                  <Settings className="h-3 w-3" />
+                  Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 px-3 pb-3">
+                {/* Max Players */}
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-400">Max Players (Optional)</Label>
+                  <Input
+                    type="number"
+                    value={settingsForm.maxPlayers}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, maxPlayers: e.target.value })
+                    }
+                    className="bg-slate-900 border-slate-800 h-7 text-xs"
+                    min="1"
+                    placeholder="Unlimited"
+                  />
+                </div>
+
+                {/* Players Per Table */}
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-400">Players Per Table</Label>
+                  <Input
+                    type="number"
+                    value={settingsForm.maxPlayersPerTable}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        maxPlayersPerTable: e.target.value,
+                      })
+                    }
+                    className="bg-slate-900 border-slate-800 h-7 text-xs"
+                    min="2"
+                    max="10"
+                  />
+                </div>
+
+                {/* Starting Stack */}
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-400">Starting Stack</Label>
+                  <Input
+                    type="number"
+                    value={settingsForm.startingStack}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        startingStack: e.target.value,
+                      })
+                    }
+                    className="bg-slate-900 border-slate-800 h-7 text-xs"
+                    min="1"
+                  />
+                </div>
+
+                {/* Level Duration */}
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-400">Level Duration (minutes)</Label>
+                  <Input
+                    type="number"
+                    value={settingsForm.blindLevelDurationMinutes}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        blindLevelDurationMinutes: e.target.value,
+                      })
+                    }
+                    className="bg-slate-900 border-slate-800 h-7 text-xs"
+                    min="1"
+                  />
+                </div>
+
+                {/* Blind Structure */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-slate-400">Blind Structure</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={addBlindLevel}
+                      className="h-5 px-2 text-xs"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add
+                    </Button>
+                  </div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {settingsForm.blindStructure.map((level, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-1 bg-slate-900/50 p-1 rounded"
+                      >
+                        <Input
+                          type="number"
+                          value={level.small}
+                          onChange={(e) =>
+                            updateBlindLevel(
+                              index,
+                              "small",
+                              parseInt(e.target.value) || 0
+                            )
+                          }
+                          className="bg-slate-800 border-slate-700 h-6 text-xs flex-1"
+                          min="1"
+                          placeholder="SB"
+                        />
+                        <span className="text-xs text-slate-500">/</span>
+                        <Input
+                          type="number"
+                          value={level.big}
+                          onChange={(e) =>
+                            updateBlindLevel(
+                              index,
+                              "big",
+                              parseInt(e.target.value) || 0
+                            )
+                          }
+                          className="bg-slate-800 border-slate-700 h-6 text-xs flex-1"
+                          min="1"
+                          placeholder="BB"
+                        />
+                        {settingsForm.blindStructure.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeBlindLevel(index)}
+                            className="h-6 w-6 p-0"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </PlayLayout>
+    );
+  }
+
+  // Other statuses: use detailed sidebar (no tableContent)
   return (
     <PlayLayout
       title={tournament?.title || tournament?.name || "Tournament"}
       footer={
         <div className="flex flex-col gap-2 w-full">
-          {/* Player actions */}
-          {!isHost && status === "registration" && (
-            isRegistered ? (
-              <Button
-                onClick={handleUnregister}
-                disabled={isUnregistering}
-                size="lg"
-                variant="outline"
-                className="w-full font-bold text-sm h-12"
-              >
-                {isUnregistering ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <X className="mr-2 h-4 w-4" />
-                )}
-                Unregister
-              </Button>
-            ) : canRegister ? (
-              <Button
-                onClick={handleRegister}
-                disabled={isRegistering}
-                size="lg"
-                className="w-full font-bold text-sm h-12"
-              >
-                {isRegistering ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Users className="mr-2 h-4 w-4" />
-                )}
-                Register
-              </Button>
-            ) : null
-          )}
-
           {/* Go to table button for active players */}
           {isRegistered && status === "active" && myTableId && (
             <Button
@@ -637,23 +1127,7 @@ export default function TournamentDetailPage() {
             </Button>
           )}
 
-          {/* Host actions */}
-          {isHost && status === "registration" && (
-            <Button
-              onClick={handleStart}
-              disabled={isStarting || participants.length < 2}
-              size="lg"
-              className="w-full font-bold text-sm h-12"
-            >
-              {isStarting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Play className="mr-2 h-4 w-4" />
-              )}
-              Start Tournament
-            </Button>
-          )}
-
+          {/* Host actions for active/paused */}
           {isHost && (status === "active" || status === "paused") && (
             <div className="flex gap-2">
               <Button
@@ -688,7 +1162,8 @@ export default function TournamentDetailPage() {
             </div>
           )}
 
-          {isHost && status !== "active" && status !== "paused" && status !== "completed" && status !== "cancelled" && (
+          {/* Cancel button for setup status */}
+          {isHost && status === "setup" && (
             <Button
               onClick={handleCancel}
               disabled={isCancelling}
@@ -739,15 +1214,6 @@ export default function TournamentDetailPage() {
         </div>
 
         {/* Status banners */}
-        {isRegistered && status === "registration" && (
-          <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-2">
-            <Check className="h-3 w-3 text-emerald-400 flex-shrink-0" />
-            <p className="text-emerald-400 text-xs font-medium truncate">
-              You are registered
-            </p>
-          </div>
-        )}
-
         {isHost && (
           <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center gap-2">
             <Trophy className="h-3 w-3 text-blue-400 flex-shrink-0" />
