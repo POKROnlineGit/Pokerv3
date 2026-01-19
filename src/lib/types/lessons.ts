@@ -1,3 +1,5 @@
+import type { Card } from "@/lib/types/poker";
+
 export type LessonCategory = 'beginner' | 'intermediate' | 'advanced';
 
 export type ContentBlockType = 'header' | 'text' | 'list' | 'info_card' | 'tool_link' | 'image' | 'poker_hand' | 'range_grid';
@@ -12,7 +14,7 @@ export interface ContentBlock {
   items?: string[]; // For lists
   url?: string; // For images
   alt?: string; // For images
-  cards?: string[]; // For poker_hand (e.g. ['As', 'Kh'])
+  cards?: Card[]; // For poker_hand (e.g. ['As', 'Kh'])
   hands?: string[]; // For range_grid (e.g. ['AA', 'AKs', 'AKo'])
   caption?: string; // Optional caption for both image and poker_hand
 }

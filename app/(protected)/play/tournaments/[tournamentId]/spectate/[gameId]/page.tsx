@@ -21,6 +21,11 @@ import {
   TournamentCompletedEvent,
   BlindLevel,
   TournamentStatusType,
+  TournamentStatusInfo,
+  TournamentTableInfo,
+  getStatusString,
+  getStatusInfo,
+  isStatusInfo,
 } from "@/lib/types/tournament";
 import {
   Users,
@@ -124,57 +129,44 @@ export default function TournamentSpectatePage() {
   const { toast } = useToast();
   const { setStatus, clearStatus } = useStatus();
 
-  // Derived tournament values
+  // Derived tournament values - use type-safe utilities
+  const statusInfo = tournamentInfo ? getStatusInfo(tournamentInfo) : null;
+
   const blindStructure =
-    tournamentInfo?.tournament?.blind_structure_template ||
-    (tournamentInfo?.tournament as any)?.blindStructureTemplate ||
-    [];
+    tournamentInfo?.tournament?.blind_structure_template || [];
 
   const currentBlindLevel = useMemo(() => {
-    if (typeof tournamentInfo?.status === "object") {
-      return (tournamentInfo.status as any).currentBlindLevel ?? 0;
-    }
+    if (statusInfo) return statusInfo.currentBlindLevel;
     return tournamentInfo?.tournament?.current_blind_level ?? 0;
-  }, [tournamentInfo]);
+  }, [statusInfo, tournamentInfo?.tournament?.current_blind_level]);
 
   const levelEndsAt = useMemo(() => {
-    if (typeof tournamentInfo?.status === "object") {
-      return (tournamentInfo.status as any).levelEndsAt;
-    }
-    return tournamentInfo?.tournament?.level_ends_at;
-  }, [tournamentInfo]);
+    if (statusInfo) return statusInfo.levelEndsAt;
+    return tournamentInfo?.tournament?.level_ends_at ?? null;
+  }, [statusInfo, tournamentInfo?.tournament?.level_ends_at]);
 
   const currentBlinds = blindStructure[currentBlindLevel] || { small: 0, big: 0 };
   const nextBlinds: BlindLevel | null = blindStructure[currentBlindLevel + 1] || null;
 
   const playersRemaining = useMemo(() => {
-    if (typeof tournamentInfo?.status === "object") {
-      return (tournamentInfo.status as any).totalPlayers ?? 0;
-    }
+    if (statusInfo) return statusInfo.totalPlayers;
     return (
       tournamentInfo?.participants?.filter(
-        (p) => p.status === "active" || (p as any).status === "playing"
+        (p) => p.status === "active"
       ).length ?? 0
     );
-  }, [tournamentInfo]);
+  }, [statusInfo, tournamentInfo?.participants]);
 
   const tablesRemaining = useMemo(() => {
-    if (typeof tournamentInfo?.status === "object") {
-      return (tournamentInfo.status as any).tableCount ?? 0;
-    }
+    if (statusInfo) return statusInfo.tableCount;
     return tournamentInfo?.tables?.length ?? 0;
-  }, [tournamentInfo]);
+  }, [statusInfo, tournamentInfo?.tables?.length]);
 
-  const tournamentName =
-    tournamentInfo?.tournament?.title ||
-    (tournamentInfo?.tournament as any)?.name;
+  const tournamentName = tournamentInfo?.tournament?.title || "Tournament";
 
-  const tournamentStatus: TournamentStatusType =
-    typeof tournamentInfo?.status === "string"
-      ? tournamentInfo.status
-      : (tournamentInfo?.status as any)?.status ||
-        tournamentInfo?.tournament?.status ||
-        "active";
+  const tournamentStatus: TournamentStatusType = tournamentInfo
+    ? getStatusString(tournamentInfo.status, tournamentInfo.tournament?.status)
+    : "active";
 
   const isHost = currentUserId === tournamentInfo?.hostId;
 
@@ -191,7 +183,9 @@ export default function TournamentSpectatePage() {
   const tableMaxSeats = useMemo(() => {
     if (!tournamentInfo?.tables) return undefined;
     const table = tournamentInfo.tables.find((t) => t.tableId === gameId);
-    return (table as any)?.maxSeats || tournamentInfo?.tournament?.max_players_per_table;
+    // Check various possible property names for max seats
+    const tableInfo = table as TournamentTableInfo | undefined;
+    return tableInfo?.maxPlayers || tournamentInfo?.tournament?.max_players_per_table;
   }, [tournamentInfo?.tables, tournamentInfo?.tournament?.max_players_per_table, gameId]);
 
   // Get current user
@@ -300,7 +294,7 @@ export default function TournamentSpectatePage() {
 
     // Tournament events
     const handleTournamentState = (state: TournamentStateResponse) => {
-      if (mounted && (state as any).tournamentId === tournamentId) {
+      if (mounted && state.tournamentId === tournamentId) {
         setTournamentInfo(state);
       }
     };
@@ -309,16 +303,25 @@ export default function TournamentSpectatePage() {
       if (mounted && data.tournamentId === tournamentId) {
         setTournamentInfo((prev) => {
           if (!prev) return prev;
+          const prevStatusInfo = getStatusInfo(prev);
           return {
             ...prev,
-            status:
-              typeof prev.status === "object"
-                ? {
-                    ...(prev.status as any),
-                    currentBlindLevel: data.level,
-                    levelEndsAt: data.levelEndsAt,
-                  }
-                : prev.status,
+            // Update statusInfo if it exists
+            statusInfo: prevStatusInfo
+              ? {
+                  ...prevStatusInfo,
+                  currentBlindLevel: data.level,
+                  levelEndsAt: data.levelEndsAt,
+                }
+              : undefined,
+            // Also update status if it's an object (legacy format)
+            status: isStatusInfo(prev.status)
+              ? {
+                  ...prev.status,
+                  currentBlindLevel: data.level,
+                  levelEndsAt: data.levelEndsAt,
+                }
+              : prev.status,
             tournament: {
               ...prev.tournament,
               current_blind_level: data.level,

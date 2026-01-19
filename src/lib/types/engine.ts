@@ -61,10 +61,29 @@ export interface EnginePot {
 // =============================================================================
 
 export interface EngineConfig {
-  maxPlayers: number;
-  smallBlind: number;
-  bigBlind: number;
+  /** Blind structure (backend format) */
+  blinds?: { small: number; big: number };
+  /** Buy-in amount */
   buyIn: number;
+  /** Maximum players */
+  maxPlayers: number;
+  /** Action timeout in milliseconds */
+  actionTimeoutMs?: number;
+  /** Variant identifier */
+  variantSlug?: string;
+  /** Whether private game */
+  isPrivate?: boolean;
+  /** Host user ID */
+  hostId?: string;
+  /** Tournament ID */
+  tournamentId?: string;
+  /** Table index in tournament */
+  tournamentTableIndex?: number;
+  /** Starting stack (tournaments) */
+  startingStack?: number;
+  // Legacy fields for backwards compatibility
+  smallBlind?: number;
+  bigBlind?: number;
   turnTimer?: number;
 }
 
@@ -124,6 +143,10 @@ export interface EngineContext {
   maxPlayers?: number;
   handNumber: number;
   handHistory?: unknown[];
+  /** Remaining deck (only on server, removed before sending to clients) */
+  deck?: string[];
+  /** Status message */
+  message?: string | null;
   config?: EngineConfig;
   showdownResults?: ShowdownResults;
 

@@ -1,8 +1,12 @@
 import { TexasHoldemEngine } from '@backend/domain/game/engine/TexasHoldemEngine';
-import { EffectType } from '@backend/domain/game/types';
+import { EffectType } from '@backend/shared/types/engine.js';
 import { makeDecision } from '@backend/domain/game/bots/botStrategies.js';
-import type { EngineContext, EnginePlayer, GameResult, Effect } from '@/lib/types/engine';
 import type { GameState } from '@/lib/types/poker';
+
+// =============================================================================
+// LOCAL TYPE DEFINITIONS FOR BACKEND ENGINE INTERFACE
+// These match the JavaScript engine output and are used for local bot games only
+// =============================================================================
 
 interface LocalGameConfig {
   maxPlayers: number;
@@ -15,10 +19,83 @@ interface LocalGameConfig {
   variantSlug?: string;
 }
 
+/** Local player type matching backend engine output */
+interface LocalPlayer {
+  id: string;
+  username: string;
+  seat: number;
+  chips: number;
+  currentBet: number;
+  totalBet: number;
+  holeCards: string[];
+  folded: boolean;
+  allIn: boolean;
+  isBot: boolean;
+  isOffline: boolean;
+  isGhost: boolean;
+  status: string;
+  eligibleToBet: boolean;
+  hasActed: boolean;
+  leaving: boolean;
+  left: boolean;
+  revealedIndices: number[];
+  lastAction: string | null;
+}
+
+/** Local context type matching backend engine output */
+interface LocalEngineContext {
+  gameId: string;
+  type: string;
+  status: string;
+  currentPhase: string;
+  players: LocalPlayer[];
+  communityCards: string[];
+  pots: Array<{ amount: number; eligiblePlayers?: string[]; contributors?: string[] }>;
+  currentActorSeat: number | null;
+  firstActorSeat: number | null;
+  buttonSeat: number;
+  sbSeat: number;
+  bbSeat: number;
+  smallBlind: number;
+  bigBlind: number;
+  minRaise: number;
+  lastRaiseAmount: number | null;
+  handNumber: number;
+  actionDeadline: string | null;
+  config: LocalGameConfig;
+  showdownResults: unknown;
+  isPrivate: boolean;
+  hostId: string | null;
+  isPaused: boolean;
+  tournamentId: string | null;
+  // Additional computed fields
+  dealerSeat?: number;
+  highBet?: number;
+  left_players?: string[];
+}
+
+/** Effect type from backend engine */
+interface LocalEffect {
+  type: string;
+  targetPhase?: string;
+  delayMs?: number;
+  reason?: string;
+  [key: string]: unknown;
+}
+
+/** Result type from backend engine */
+interface LocalGameResult {
+  success: boolean;
+  state: LocalEngineContext;
+  events: unknown[];
+  effects: LocalEffect[];
+}
+
 // Extended UI state that includes all game fields
 type UIGameState = GameState & {
   dealerSeat?: number;
   totalPot?: number;
+  highBet?: number;
 };
 
 export class LocalGameManager {
@@ -38,7 +115,7 @@ export class LocalGameManager {
     this.setupPlayers(heroId, config.startingStack || 200);
 
     // Send initial state (empty table) so UI can mount and render
-    const initialUiState = this.engine.getPlayerContext(this.currentHeroId) as UIGameState;
+    const initialUiState = this.engine.getPlayerContext(this.currentHeroId) as unknown as UIGameState;
     this.updateUI(initialUiState);
 
     // Delay Initial Deal: Give UI 500ms to mount and render empty table before cards appear
@@ -54,7 +131,7 @@ export class LocalGameManager {
     if (this.isDestroyed) return;
 
     console.log('[LocalGame] Starting game...');
-    const result = this.engine.executeTransition('preflop') as GameResult;
+    const result = this.engine.executeTransition('preflop') as unknown as LocalGameResult;
     this.processResult(result);
   }
 
@@ -72,9 +149,9 @@ export class LocalGameManager {
     const players = maxPlayers === 2 ? playersData.slice(0, 2) : playersData;
     this.engine.addPlayers(players);
 
-    const ctx = this.engine.context as EngineContext;
+    const ctx = this.engine.context as unknown as LocalEngineContext;
     if (ctx.players) {
-        ctx.players.forEach((p: EnginePlayer) => {
+        ctx.players.forEach((p: LocalPlayer) => {
             p.status = 'ACTIVE';
             p.folded = false;
             p.left = false;
@@ -89,36 +166,36 @@ export class LocalGameManager {
   public handleAction(actionType: string, amount?: number) {
     if (this.isDestroyed) return;
 
-    const context = this.engine.context as EngineContext;
-    const player = context.players?.find((p: EnginePlayer) => p.id === this.currentHeroId);
+    const context = this.engine.context as unknown as LocalEngineContext;
+    const player = context.players?.find((p: LocalPlayer) => p.id === this.currentHeroId);
     if (!player) return;
 
     const action = {
-      type: actionType,
+      type: actionType as 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'allin',
       seat: player.seat,
       amount: amount,
       gameId: this.engine.gameId
     };
 
     console.log('[LocalGame] Hero Action:', action);
-    const result = this.engine.processAction(action) as GameResult;
+    const result = this.engine.processAction(action as Parameters<typeof this.engine.processAction>[0]) as unknown as LocalGameResult;
     this.processResult(result);
   }
 
-  private processResult(result: GameResult) {
+  private processResult(result: LocalGameResult) {
     if (this.isDestroyed) return;
 
     // Force Context Refresh: Explicitly overwrite context with result.state if it exists
     // This ensures we have the latest state from the engine
     if (result.state) {
-      this.engine.context = result.state;
+      (this.engine as { context: unknown }).context = result.state;
     }
 
     // Use the engine's context directly for mapping (live object, not snapshot)
-    const ctx = this.engine.context as EngineContext;
+    const ctx = this.engine.context as unknown as LocalEngineContext;
 
-    const uiState = this.engine.getPlayerContext(this.currentHeroId) as UIGameState & {
-      players: Array<EnginePlayer & { bet?: number; wager?: number; betAmount?: number; isDealer?: boolean; isSb?: boolean; isBb?: boolean }>;
+    const uiState = this.engine.getPlayerContext(this.currentHeroId) as unknown as UIGameState & {
+      players: Array<LocalPlayer & { bet?: number; wager?: number; betAmount?: number; isDealer?: boolean; isSb?: boolean; isBb?: boolean }>;
       pots?: Array<{ amount: number; value?: number; contributors?: string[]; eligiblePlayers?: string[] }>;
     };
 
@@ -131,7 +208,7 @@ export class LocalGameManager {
     if (uiState.players) {
         uiState.players.forEach((p) => {
             // FIX: Force Number conversion for seat matching
-            const rawPlayer = ctx.players.find((raw: EnginePlayer) => Number(raw.seat) === Number(p.seat));
+            const rawPlayer = ctx.players.find((raw: LocalPlayer) => Number(raw.seat) === Number(p.seat));
 
             if (rawPlayer) {
                 // Use currentBet directly (matches engine schema)
@@ -195,8 +272,8 @@ export class LocalGameManager {
             // Fallback for empty contributors
             if (contributors.length === 0 && amount > 0) {
                 contributors = ctx.players
-                    .filter((p: EnginePlayer) => !p.folded && p.status === 'ACTIVE')
-                    .map((p: EnginePlayer) => p.id);
+                    .filter((p: LocalPlayer) => !p.folded && p.status === 'ACTIVE')
+                    .map((p: LocalPlayer) => p.id);
             }
 
             // Return object with BOTH 'amount' and 'value' to handle property naming mismatches
@@ -214,30 +291,29 @@ export class LocalGameManager {
     uiState.minRaise = ctx.minRaise || ctx.bigBlind || 0;
     // Calculate highBet from players if not directly available (engine uses _getCurrentBet())
     const calculatedHighBet = ctx.highBet ||
-      (ctx.players?.length > 0 ? Math.max(...ctx.players.map((p: EnginePlayer) => p.currentBet || 0), 0) : 0);
+      (ctx.players?.length > 0 ? Math.max(...ctx.players.map((p: LocalPlayer) => p.currentBet || 0), 0) : 0);
     uiState.highBet = calculatedHighBet;
-    uiState.bigBlind = ctx.bigBlind || ctx.config?.bigBlind || 0;
-    uiState.smallBlind = ctx.smallBlind || ctx.config?.smallBlind || 0;
+    uiState.bigBlind = ctx.bigBlind || ctx.config?.blinds?.big || 0;
+    uiState.smallBlind = ctx.smallBlind || ctx.config?.blinds?.small || 0;
 
     // Map Phase: Ensure currentPhase and handNumber are available to UI
     // Engine uses currentPhase for rounds (preflop, flop, turn, river, showdown)
-    uiState.currentPhase = ctx.currentPhase || 'preflop';
+    uiState.currentPhase = ctx.currentPhase as GameState["currentPhase"];
     uiState.handNumber = ctx.handNumber || 1;
 
     this.updateUI(uiState as UIGameState);
 
     if (result.effects) {
-      result.effects.forEach((effect: Effect) => {
+      result.effects.forEach((effect: LocalEffect) => {
         if (this.isDestroyed) return;
 
         switch (effect.type) {
           case EffectType.SCHEDULE_TRANSITION:
-            const transitionEffect = effect as { targetPhase: string; delayMs: number };
             const timer = setTimeout(() => {
               if (this.isDestroyed) return;
-              const nextRes = this.engine.executeTransition(transitionEffect.targetPhase) as GameResult;
+              const nextRes = this.engine.executeTransition(effect.targetPhase as Parameters<typeof this.engine.executeTransition>[0]) as unknown as LocalGameResult;
               this.processResult(nextRes);
-            }, transitionEffect.delayMs);
+            }, effect.delayMs || 0);
             this.timers.push(timer);
             break;
 
@@ -246,8 +322,7 @@ export class LocalGameManager {
              break;
 
            case EffectType.GAME_END:
-             const endEffect = effect as { reason?: string };
-             console.log('[LocalGame] Game Ended:', endEffect.reason);
+             console.log('[LocalGame] Game Ended:', effect.reason);
              break;
         }
       });
@@ -259,11 +334,11 @@ export class LocalGameManager {
   private checkBotTurn() {
     if (this.isDestroyed) return;
 
-    const ctx = this.engine.context as EngineContext;
+    const ctx = this.engine.context as unknown as LocalEngineContext;
     if (ctx.status !== 'active' && ctx.status !== 'waiting') return;
     if (ctx.currentPhase === 'showdown') return;
 
-    const actor = ctx.players?.find((p: EnginePlayer) => p.seat === ctx.currentActorSeat);
+    const actor = ctx.players?.find((p: LocalPlayer) => p.seat === ctx.currentActorSeat);
     if (actor && actor.isBot) {
         if (this.botTimeout) clearTimeout(this.botTimeout);
 
@@ -274,10 +349,10 @@ export class LocalGameManager {
     }
   }
 
-  private executeBotMove(actor: EnginePlayer) {
+  private executeBotMove(actor: LocalPlayer) {
      if (this.isDestroyed) return;
 
-     const ctx = this.engine.context as EngineContext;
+     const ctx = this.engine.context as unknown as LocalEngineContext;
 
      // Use backend bot strategies - assign different strategies to different bots
      const botStrategies = ['aggressive', 'balanced', 'tight', 'loose', 'calling'];
@@ -292,7 +367,7 @@ export class LocalGameManager {
      action.seat = actor.seat;
      action.gameId = this.engine.gameId;
 
-     const result = this.engine.processAction(action) as GameResult;
+     const result = this.engine.processAction(action) as unknown as LocalGameResult;
      this.processResult(result);
   }
 

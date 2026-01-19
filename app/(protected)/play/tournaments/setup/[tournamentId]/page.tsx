@@ -9,7 +9,7 @@ import {
   useTournamentSocket,
   useTournamentEvents,
 } from "@/lib/api/socket/tournament";
-import { TournamentStateResponse, normalizeTournament, BlindLevel } from "@/lib/types/tournament";
+import { TournamentStateResponse, normalizeTournament, BlindLevel, getStatusString } from "@/lib/types/tournament";
 import { useToast } from "@/lib/hooks";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
@@ -110,13 +110,9 @@ export default function TournamentSetupPage() {
           return;
         }
 
-        // Extract status and hostId
-        const status =
-          typeof response.status === "string"
-            ? response.status
-            : (response as any).status?.status ||
-              (response as any).tournament?.status;
-        const hostId = response.hostId || (response as any).tournament?.host_id;
+        // Extract status and hostId using type-safe utilities
+        const status = getStatusString(response.status, response.tournament?.status);
+        const hostId = response.hostId || response.tournament?.host_id;
 
         // Check if user is host
         const isHost = hostId === currentUserId;
@@ -423,10 +419,7 @@ export default function TournamentSetupPage() {
   const tournament = tournamentData.tournament;
   const hostId = tournamentData.hostId || tournament.host_id;
   const isHost = currentUserId ? hostId === currentUserId : false;
-  const status =
-    typeof tournamentData.status === "string"
-      ? tournamentData.status
-      : (tournamentData as any).status?.status || tournament.status;
+  const status = getStatusString(tournamentData.status, tournament.status);
 
   // Don't render if not host (redirect is handled in useEffect above)
   if (!isHost) {

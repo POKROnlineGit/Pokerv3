@@ -1,10 +1,11 @@
 "use client";
 
 import { Card } from "@/components/common/Card";
+import type { Card as CardType } from "@/lib/types/poker";
 
 interface HandRanking {
   name: string;
-  cards: string[];
+  cards: CardType[];
   rank: number;
 }
 
@@ -137,7 +138,7 @@ export function HandRankingsSidebar({
                       key={`${card}-${index}`}
                       style={{ marginLeft: index > 0 ? "-1.5rem" : "0" }}
                     >
-                      <Card card={card as any} />
+                      <Card card={card} />
                     </div>
                   ))}
                 </div>

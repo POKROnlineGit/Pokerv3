@@ -186,7 +186,7 @@ export function LessonRenderer({ lesson }: LessonRendererProps) {
               {block.cards && block.cards.length > 0 ? (
                 block.cards.map((card, i) => (
                   <div key={i} className="flex-shrink-0" style={{ width: '5rem', height: '7rem' }}>
-                    <PokerCard card={card as any} />
+                    <PokerCard card={card} />
                   </div>
                 ))
               ) : (

@@ -51,14 +51,44 @@ export interface TournamentData {
   updated_at: string;
 }
 
-// Tournament Status Object (runtime state)
+// Tournament Status Object (runtime state) - detailed info separate from status string
 export interface TournamentStatusInfo {
-  tournamentId: string;
-  status: TournamentStatusType;
   currentBlindLevel: number;
   levelEndsAt: string | null;
-  tableCount: number;
   totalPlayers: number;
+  activePlayers: number;
+  tableCount: number;
+}
+
+/**
+ * Type guard to check if status is TournamentStatusInfo (object) vs TournamentStatusType (string)
+ */
+export function isStatusInfo(status: TournamentStatusType | TournamentStatusInfo): status is TournamentStatusInfo {
+  return typeof status === "object" && status !== null && "currentBlindLevel" in status;
+}
+
+/**
+ * Extract status string from either format
+ */
+export function getStatusString(status: TournamentStatusType | TournamentStatusInfo | undefined, fallback: TournamentStatusType = "registration"): TournamentStatusType {
+  if (!status) return fallback;
+  if (typeof status === "string") return status;
+  // If it's an object with a nested status property (legacy format)
+  if ("status" in status && typeof (status as Record<string, unknown>).status === "string") {
+    return (status as Record<string, unknown>).status as TournamentStatusType;
+  }
+  return fallback;
+}
+
+/**
+ * Extract status info from response, handling both formats
+ */
+export function getStatusInfo(response: { status?: TournamentStatusType | TournamentStatusInfo; statusInfo?: TournamentStatusInfo }): TournamentStatusInfo | null {
+  // Prefer explicit statusInfo field
+  if (response.statusInfo) return response.statusInfo;
+  // Fall back to status if it's an object
+  if (response.status && isStatusInfo(response.status)) return response.status;
+  return null;
 }
 
 // Participant (matches database + profiles join)
@@ -424,10 +454,15 @@ export interface TournamentTableInfo {
 // Note: tournament and participants come as raw database format (snake_case)
 // Use normalizeTournament() and normalizeParticipant() to convert
 export interface TournamentStateResponse {
+  /** Tournament ID (may be included in broadcast events) */
+  tournamentId?: string;
   tournament: TournamentData;
   participants: Participant[];
   tables: TournamentTableInfo[] | TableState[];
+  /** Status string (preferred) or legacy object format */
   status: TournamentStatusType | TournamentStatusInfo;
+  /** Detailed status info (new format from backend) */
+  statusInfo?: TournamentStatusInfo;
   hostId: string;
   canRegister?: boolean;
   timestamp?: string;
@@ -537,6 +572,7 @@ export interface GetTournamentStateResponse extends SocketCallbackResponse {
   participants?: Participant[];
   tables?: TournamentTableInfo[] | TableState[];
   status?: TournamentStatusType | TournamentStatusInfo;
+  statusInfo?: TournamentStatusInfo;
   hostId?: string;
   canRegister?: boolean;
 }

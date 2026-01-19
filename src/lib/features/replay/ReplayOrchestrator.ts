@@ -13,7 +13,7 @@ import {
   indexToCard,
 } from "@backend/domain/handHistory/PokerCodec";
 import type { GameState } from "@/lib/types/poker";
-import type { GameResult, EngineContext, EngineCard } from "@/lib/types/engine";
+import type { GameResult, EngineContext, EngineCard, Effect, TransitionOverrides, EngineAction } from "@/lib/types/engine";
 import { getErrorMessage } from "@/lib/utils";
 
 export interface ReplayInput {
@@ -74,6 +74,29 @@ const SUIT_MAP: Record<string, "hearts" | "diamonds" | "clubs" | "spades"> = {
   c: "clubs",
   s: "spades",
 };
+
+/** JSON-serialized player data from engine context */
+interface RawPlayer {
+  id?: string;
+  name?: string;
+  seat?: number;
+  chips?: number;
+  currentBet?: number;
+  totalBet?: number;
+  holeCards?: Array<string | { display?: string }>;
+  folded?: boolean;
+  allIn?: boolean;
+  isBot?: boolean;
+  left?: boolean;
+  revealedIndices?: number[];
+}
+
+/** JSON-serialized pot data */
+interface RawPot {
+  amount: number;
+  contributors?: string[];
+  eligiblePlayers?: string[];
+}
 
 /**
  * Helper function to create engine config from variant string
@@ -343,12 +366,12 @@ export class ReplayOrchestrator {
         }
 
         // EXECUTE: Player Action
-        const engineAction: any = {
+        const engineAction = {
           seat,
           type: engineActionType,
           amount: action.amount,
           index: revealIndex,
-        };
+        } as Parameters<typeof this.engine.processAction>[0];
 
         const result = this.engine.processAction(
           engineAction
@@ -380,7 +403,7 @@ export class ReplayOrchestrator {
         // EXECUTE: Auto-Transitions (Engine-Driven)
         // We listen for the engine requesting a transition via effects
         // Helper function to process transitions recursively
-        const processTransitions = (effects: any[]): void => {
+        const processTransitions = (effects: Effect[]): void => {
           // Check game status before processing transitions
           const ctxCheck = this.engine.context as unknown as EngineContext;
           if (
@@ -393,7 +416,7 @@ export class ReplayOrchestrator {
           }
 
           for (const effect of effects) {
-            if (effect.type === "SCHEDULE_TRANSITION") {
+            if (effect.type === "SCHEDULE_TRANSITION" && "targetPhase" in effect) {
               const targetPhase = effect.targetPhase;
 
               // Skip preflop transitions - these are for the next hand, not this replay
@@ -402,7 +425,7 @@ export class ReplayOrchestrator {
               }
 
               // Prepare historical cards if dealing a street
-              let overrides: any = null;
+              let overrides: TransitionOverrides | null = null;
               if (["flop", "turn", "river"].includes(targetPhase)) {
                 const boardIndices = this.getBoardIndicesForStreet(targetPhase);
                 overrides = {
@@ -414,8 +437,8 @@ export class ReplayOrchestrator {
 
               // Execute the transition
               const transResult = this.engine.executeTransition(
-                targetPhase,
-                overrides as unknown as null
+                targetPhase as Parameters<typeof this.engine.executeTransition>[0],
+                overrides as Parameters<typeof this.engine.executeTransition>[1]
               ) as unknown as GameResult;
               if (!transResult.success) {
                 throw new Error(`Auto-transition to ${targetPhase} failed`);
@@ -472,11 +495,11 @@ export class ReplayOrchestrator {
 
   private indexToCardObject(index: number): EngineCard {
     const str = indexToCard(index);
-    const rankChar = str[0];
+    const rankChar = str[0] as EngineCard["rank"];
     const suitChar = str[1].toLowerCase();
     return {
       suit: SUIT_MAP[suitChar],
-      rank: rankChar as any,
+      rank: rankChar,
       value: RANK_VALUES[rankChar],
       display: str,
     };
@@ -486,10 +509,31 @@ export class ReplayOrchestrator {
     const ctx = this.engine.context as unknown as EngineContext;
     // Reconstruct clean GameState object from engine context
     // This logic mirrors the previous implementation but ensures deep clone via JSON
-    const rawState = JSON.parse(JSON.stringify(ctx));
+    const rawState = JSON.parse(JSON.stringify(ctx)) as {
+      gameId: string;
+      status: string;
+      currentPhase: string;
+      players: RawPlayer[];
+      communityCards: Array<string | { display?: string }>;
+      pots: RawPot[];
+      currentActorSeat: number | null;
+      buttonSeat: number;
+      sbSeat: number;
+      bbSeat: number;
+      smallBlind: number;
+      bigBlind: number;
+      minRaise: number;
+      handNumber: number;
+      actionDeadline?: string | null;
+      config?: {
+        buyIn?: number;
+        maxPlayers?: number;
+        blinds?: { small: number; big: number };
+      };
+    };
 
-    const playersBefore = rawState.players || [];
-    const mappedPlayers = playersBefore.map((p: any) => {
+    const playersBefore: RawPlayer[] = rawState.players || [];
+    const mappedPlayers = playersBefore.map((p: RawPlayer) => {
       // Handle holeCards the same way as getPlayerContext does
       // Mirror the structure: check if holeCards exists before processing
       let holeCards: string[] = [];
@@ -501,20 +545,21 @@ export class ReplayOrchestrator {
 
         const isShowdown = rawState.currentPhase === "showdown";
         const activeNonFoldedPlayers = (rawState.players || []).filter(
-          (pl: any) => !pl.folded && !pl.left
+          (pl: RawPlayer) => !pl.folded && !pl.left
         );
         const activePlayersCount = activeNonFoldedPlayers.length;
         const playersWithChips = (rawState.players || []).filter(
-          (pl: any) => pl.chips > 0 && !pl.folded && !pl.left
+          (pl: RawPlayer) => (pl.chips ?? 0) > 0 && !pl.folded && !pl.left
         );
         const currentBet = Math.max(
-          ...(rawState.players || []).map((pl: any) => pl.currentBet || 0)
+          0,
+          ...(rawState.players || []).map((pl: RawPlayer) => pl.currentBet || 0)
         );
         const activePlayersForBalance = (rawState.players || []).filter(
-          (pl: any) => !pl.folded && !pl.left
+          (pl: RawPlayer) => !pl.folded && !pl.left
         );
         const isBettingBalanced = activePlayersForBalance.every(
-          (pl: any) => pl.allIn || (pl.currentBet || 0) === currentBet
+          (pl: RawPlayer) => pl.allIn || (pl.currentBet || 0) === currentBet
         );
         const isRunout =
           playersWithChips.length <= 1 &&
@@ -523,7 +568,7 @@ export class ReplayOrchestrator {
 
         // Map holeCards - respect revealedIndices, similar to getPlayerContext
         const isSelf = this.currentUserId && p.id === this.currentUserId;
-        holeCards = p.holeCards.map((c: any, index: number) => {
+        holeCards = p.holeCards.map((c: string | { display?: string }, index: number) => {
           // Always reveal own cards (hero)
           if (isSelf) {
             return typeof c === "string" ? c : c?.display || "HIDDEN";
@@ -567,7 +612,7 @@ export class ReplayOrchestrator {
 
       return {
         id: p.id || "",
-        name: p.name || `Player ${p.seat || "?"}`,
+        username: p.name || `Player ${p.seat || "?"}`,
         seat: p.seat || 0,
         chips: p.chips || 0,
         currentBet: p.currentBet || 0,
@@ -581,23 +626,27 @@ export class ReplayOrchestrator {
       };
     });
 
-    const finalPlayers = mappedPlayers.filter((p: any) => p.id); // Filter out players without IDs
+    const finalPlayers = mappedPlayers.filter((p) => p.id); // Filter out players without IDs
 
     return {
       gameId: rawState.gameId,
       status: rawState.status,
       currentPhase: rawState.currentPhase || "preflop",
       players: finalPlayers,
-      communityCards: (rawState.communityCards || []).map((c: any) =>
-        typeof c === "string" ? c : c?.display || c
+      communityCards: (rawState.communityCards || []).map((c) =>
+        typeof c === "string" ? c : c?.display || ""
       ),
       pot: rawState.pots?.[0]?.amount || 0,
       sidePots:
-        rawState.pots?.slice(1).map((pot: any) => ({
+        rawState.pots?.slice(1).map((pot: RawPot) => ({
           amount: pot.amount,
           eligibleSeats: [], // Simplified for replay display
         })) || [],
-      pots: rawState.pots,
+      pots: rawState.pots?.map((pot: RawPot) => ({
+        amount: pot.amount,
+        contributors: pot.contributors || pot.eligiblePlayers || [],
+        eligiblePlayers: pot.eligiblePlayers,
+      })) || [],
       currentActorSeat: rawState.currentActorSeat,
       buttonSeat: rawState.buttonSeat,
       dealerSeat: rawState.buttonSeat,
@@ -607,6 +656,7 @@ export class ReplayOrchestrator {
         ? new Date(rawState.actionDeadline).getTime()
         : null,
       minRaise: rawState.minRaise,
+      betsThisRound: rawState.players?.map((p) => p.currentBet || 0) || [],
       handNumber: rawState.handNumber,
       bigBlind: rawState.bigBlind,
       smallBlind: rawState.smallBlind,

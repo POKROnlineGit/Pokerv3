@@ -384,7 +384,7 @@ export default function TournamentGamePage() {
 
       // Check if heads up
       const activePlayers = state.players.filter(
-        (p) => p.chips > 0 && !(p as any).left
+        (p) => p.chips > 0 && !p.left
       );
       setIsHeadsUp(activePlayers.length === 2);
 
