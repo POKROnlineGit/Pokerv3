@@ -400,7 +400,7 @@ export default function TournamentDetailPage() {
     if (!tournamentId) return;
     setIsSpectatingLoading(tableId);
     // Navigate to the spectate page
-    router.push(`/play/tournaments/spectate/${tableId}?tournamentId=${tournamentId}`);
+    router.push(`/play/tournaments/${tournamentId}/spectate/${tableId}`);
   }, [tournamentId, router]);
 
   // Check tournament state on load

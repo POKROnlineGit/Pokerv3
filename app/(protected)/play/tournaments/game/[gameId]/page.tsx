@@ -482,6 +482,50 @@ export default function TournamentGamePage() {
       }
     };
 
+    // Handle socket errors
+    const handleSocketError = (error: { error?: string; message?: string }) => {
+      if (!mounted) return;
+
+      const errorMessage = error.error || error.message || "An error occurred";
+      console.error("[TournamentGame] Socket error:", errorMessage);
+
+      if (errorMessage.includes("Game not found") || errorMessage.includes("Tournament not found")) {
+        // Retry logic similar to standard game page
+        const maxRetries = 3;
+        const retryDelay = 500;
+
+        if (joinRetryCountRef.current < maxRetries) {
+          joinRetryCountRef.current += 1;
+          setTimeout(() => {
+            if (!mounted) return;
+            socket.emit("joinGame", { gameId });
+          }, retryDelay);
+        } else {
+          // All retries exhausted
+          joinRetryCountRef.current = 0;
+          mounted = false;
+          toast({
+            title: "Game Not Found",
+            description: "This tournament game no longer exists.",
+            variant: "destructive",
+          });
+          setTimeout(() => {
+            router.replace("/play");
+          }, 1500);
+        }
+      } else if (errorMessage.includes("Not a player in this game")) {
+        toast({
+          title: "Access Denied",
+          description: "You are not a player in this tournament game.",
+          variant: "destructive",
+        });
+        mounted = false;
+        setTimeout(() => {
+          router.replace("/play");
+        }, 1500);
+      }
+    };
+
     // Register event listeners
     socket.on("gameState", handleGameState);
     socket.on("turn_timer_started", handleTurnTimerStarted);
@@ -492,6 +536,7 @@ export default function TournamentGamePage() {
     socket.on("TOURNAMENT_BLIND_LEVEL_ADVANCED", handleBlindLevelAdvanced);
     socket.on("TOURNAMENT_LEVEL_WARNING", handleLevelWarning);
     socket.on("TOURNAMENT_PLAYER_ELIMINATED", handlePlayerEliminated);
+    socket.on("error", handleSocketError);
 
     connectAndJoin();
 
@@ -506,13 +551,14 @@ export default function TournamentGamePage() {
       socket.off("TOURNAMENT_BLIND_LEVEL_ADVANCED", handleBlindLevelAdvanced);
       socket.off("TOURNAMENT_LEVEL_WARNING", handleLevelWarning);
       socket.off("TOURNAMENT_PLAYER_ELIMINATED", handlePlayerEliminated);
+      socket.off("error", handleSocketError);
 
       // Leave tournament room
       if (tournamentId) {
         socket.emit("leave_tournament_room", { tournamentId });
       }
     };
-  }, [currentUserId, gameId, toast]);
+  }, [currentUserId, gameId, tournamentId, toast]);
 
   // Status management
   useEffect(() => {

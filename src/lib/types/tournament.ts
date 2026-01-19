@@ -451,3 +451,32 @@ export interface ActiveStatusResponse {
   queue: ActiveStatusQueueInfo | null;
   error?: string;
 }
+
+// ============================================
+// TOURNAMENT RESULTS TYPES
+// ============================================
+
+export interface TournamentResultsResponse {
+  tournament: {
+    id: string;
+    title: string;
+    status: string;
+    hostId: string;
+    startedAt: string | null;
+    endedAt: string | null;
+    startingStack: number;
+    maxPlayers: number;
+  };
+  participants: TournamentResultParticipant[];
+  isEnded: boolean;
+}
+
+export interface TournamentResultParticipant {
+  odanUserId: string;
+  username: string;
+  placement: number | null;
+  finalStack: number;
+  status: string;
+  eliminatedAt: string | null;
+  rebuyCount: number;
+}

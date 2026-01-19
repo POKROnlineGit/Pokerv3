@@ -31,6 +31,7 @@ interface PokerTableProps {
     activeSeat: number;
   } | null; // Turn timer data from turn_timer_started event
   isSyncing?: boolean; // Whether we're currently syncing authoritative state
+  maxSeats?: number; // Override for seat count (e.g., from tournament config)
 }
 
 // Calculate seat positions using sin/cos for equal spacing
@@ -71,6 +72,7 @@ export function PokerTable({
   playerDisconnectTimers = {},
   turnTimer = null,
   isSyncing = false,
+  maxSeats,
 }: PokerTableProps) {
   const { isEnabled: debugMode } = useDebugMode();
   const isMobile = useIsMobile();
@@ -274,7 +276,8 @@ export function PokerTable({
   // Dynamic seat count based on game type
   const NUM_SEATS = isHeadsUp
     ? 2
-    : gameState.config?.maxPlayers ||
+    : maxSeats ||
+      gameState.config?.maxPlayers ||
       (gameState.players.length > 0
         ? Math.max(...gameState.players.map((p) => p.seat))
         : 6);

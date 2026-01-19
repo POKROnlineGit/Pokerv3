@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useMemo } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { PokerTable } from "@/components/features/game/PokerTable";
 import { PlayLayout } from "@/components/layout/PlayLayout";
 import { GameState } from "@/lib/types/poker";
@@ -101,9 +101,8 @@ function StatusBadge({ status }: { status: TournamentStatusType }) {
 export default function TournamentSpectatePage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const gameId = params.gameId as string;
-  const tournamentId = searchParams.get("tournamentId");
+  const tournamentId = params.tournamentId as string;
 
   // Game state
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -187,6 +186,13 @@ export default function TournamentSpectatePage() {
       ? table.tournamentTableIndex + 1
       : 1;
   }, [tournamentInfo?.tables, gameId]);
+
+  // Get table max seats for PokerTable
+  const tableMaxSeats = useMemo(() => {
+    if (!tournamentInfo?.tables) return undefined;
+    const table = tournamentInfo.tables.find((t) => t.tableId === gameId);
+    return (table as any)?.maxSeats || tournamentInfo?.tournament?.max_players_per_table;
+  }, [tournamentInfo?.tables, tournamentInfo?.tournament?.max_players_per_table, gameId]);
 
   // Get current user
   useEffect(() => {
@@ -461,6 +467,7 @@ export default function TournamentSpectatePage() {
           <PokerTable
             gameState={gameState}
             currentUserId="" // Empty string since spectators don't have a seat
+            maxSeats={tableMaxSeats}
           />
 
           {/* Paused overlay */}

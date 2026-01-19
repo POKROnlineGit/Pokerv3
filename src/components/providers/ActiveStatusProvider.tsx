@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useSocket } from '@/lib/api/socket/client'
 import { useStatus } from '@/components/providers/StatusProvider'
@@ -170,6 +170,7 @@ export function ActiveStatusProvider({ children }: { children: ReactNode }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isHost, setIsHost] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const lastTournamentIdRef = useRef<string | null>(null)
 
   // Popup states
   const [showActive, setShowActive] = useState(false)
@@ -182,6 +183,11 @@ export function ActiveStatusProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const { setStatus, clearStatus } = useStatus()
+
+  // Keep a last-known tournament id around for cases where completion payload is missing/aliased.
+  useEffect(() => {
+    if (tournamentId) lastTournamentIdRef.current = tournamentId
+  }, [tournamentId])
 
   // Get current user ID
   useEffect(() => {
@@ -435,7 +441,7 @@ export function ActiveStatusProvider({ children }: { children: ReactNode }) {
                 message: 'Returning to spectate...',
               })
               setTimeout(() => {
-                router.push(`/play/tournaments/spectate/${gameId}?tournamentId=${gameTournamentId}`)
+                router.push(`/play/tournaments/${gameTournamentId}/spectate/${gameId}`)
                 clearStatus('game-reconnect')
               }, 1500)
               return
@@ -606,7 +612,7 @@ export function ActiveStatusProvider({ children }: { children: ReactNode }) {
       setTimeout(() => {
         if (data.isSpectating && data.tournamentId) {
           // Navigate to spectate page
-          router.push(`/play/tournaments/spectate/${data.gameId}?tournamentId=${data.tournamentId}`)
+          router.push(`/play/tournaments/${data.tournamentId}/spectate/${data.gameId}`)
         } else if (data.tournamentId) {
           router.push(`/play/tournaments/game/${data.gameId}`)
         } else {
@@ -638,8 +644,23 @@ export function ActiveStatusProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const handleTournamentCompleted = (data: TournamentCompletedEvent) => {
-      setCompletedData(data)
+    const handleTournamentCompleted = (data: TournamentCompletedEvent | any) => {
+      const resolvedTournamentId =
+        data?.tournamentId ??
+        data?.tournament_id ??
+        lastTournamentIdRef.current
+
+      const normalized: TournamentCompletedEvent = {
+        tournamentId: resolvedTournamentId || '',
+        winnerId: data?.winnerId ?? data?.winner_id ?? '',
+        winnerUsername: data?.winnerUsername ?? data?.winner_username ?? null,
+        results: Array.isArray(data?.results) ? data.results : [],
+        timestamp: data?.timestamp ?? new Date().toISOString(),
+      }
+
+      if (normalized.tournamentId) lastTournamentIdRef.current = normalized.tournamentId
+
+      setCompletedData(normalized)
       setShowCompleted(true)
       clearTournamentState()
     }
@@ -731,9 +752,9 @@ export function ActiveStatusProvider({ children }: { children: ReactNode }) {
 
   // Popup handlers
   const handleCompletedViewResults = useCallback(() => {
-    if (completedData?.tournamentId) {
-      router.push(`/play/tournaments/${completedData.tournamentId}`)
-    }
+    const id = completedData?.tournamentId || lastTournamentIdRef.current
+    if (id) router.push(`/play/tournaments/${id}/results`)
+    else router.push('/play/tournaments')
     setShowCompleted(false)
     setCompletedData(null)
   }, [completedData, router])
