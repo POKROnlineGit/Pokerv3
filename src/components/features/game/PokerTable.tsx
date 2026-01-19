@@ -926,7 +926,7 @@ export function PokerTable({
                         ? "text-gray-400"
                         : isDisconnected
                         ? "text-blue-300"
-                        : (player as any).status === "WAITING_FOR_NEXT_HAND"
+                        : player.status === "WAITING_FOR_NEXT_HAND"
                         ? "text-amber-300 opacity-75"
                         : "text-white"
                     )}
@@ -941,7 +941,7 @@ export function PokerTable({
                   </div>
 
                   {/* Waiting for next hand badge */}
-                  {(player as any).status === "WAITING_FOR_NEXT_HAND" &&
+                  {player.status === "WAITING_FOR_NEXT_HAND" &&
                     !hasLeft && (
                       <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-amber-600/80 text-white text-[10px] px-2 py-0.5 rounded-full z-25">
                         Waiting for next round
@@ -1142,9 +1142,9 @@ export function PokerTable({
                   // - For others: use revealedIndices metadata during showdown for partial reveals
                   // - If no revealedIndices metadata is present, fall back to legacy HIDDEN/null logic
                   const revealedIndices: number[] = Array.isArray(
-                    (player as any).revealedIndices
+                    player.revealedIndices
                   )
-                    ? ((player as any).revealedIndices as number[])
+                    ? player.revealedIndices
                     : [];
 
                   // Check if cards are new (for animation trigger)

@@ -1,5 +1,6 @@
 import { createServerComponentClient } from "@/lib/api/supabase/client";
 import { NextResponse } from "next/server";
+import { getErrorMessage } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +22,10 @@ export async function GET() {
 
     // Ensure we always return an array
     return NextResponse.json(data || []);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[Ranges Presets API] Unexpected error:", err);
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      { error: getErrorMessage(err) },
       { status: 500 }
     );
   }

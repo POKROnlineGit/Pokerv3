@@ -12,6 +12,7 @@ import { Loader2, ArrowLeft, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { useToast } from "@/lib/hooks";
+import { getErrorMessage } from "@/lib/utils";
 
 export default function CreateTournamentPage() {
   const { createTournament } = useTournamentSocket();
@@ -77,11 +78,11 @@ export default function CreateTournamentPage() {
         });
         setIsLoading(false);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to create tournament", error);
       toast({
         title: "Error Creating Tournament",
-        description: error.message || "An unexpected error occurred",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
       setIsLoading(false);

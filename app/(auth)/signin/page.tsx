@@ -12,6 +12,7 @@ import { Loader2 } from "lucide-react";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { ThemeBackground } from "@/components/theme/ThemeBackground";
 import Image from "next/image";
+import { getErrorMessage } from "@/lib/utils";
 
 export default function SignInPage() {
   const searchParams = useSearchParams();
@@ -97,8 +98,8 @@ export default function SignInPage() {
       if (error) throw error;
       router.refresh();
       router.push(next);
-    } catch (err: any) {
-      setError(err.message || "Failed to sign in");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err) || "Failed to sign in");
     } finally {
       setLoading(false);
     }

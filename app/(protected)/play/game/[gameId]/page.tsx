@@ -258,7 +258,7 @@ export default function GamePage() {
 
       // Wait for connection
       const onConnect = () => {
-        if (mounted) {
+        if (mounted && socket) {
           // Reset retry count on fresh connection attempt
           joinRetryCountRef.current = 0;
           if (joinRetryTimeoutRef.current) {
@@ -374,7 +374,7 @@ export default function GamePage() {
           }
 
           // Detect actual phase from server (may be "waiting")
-          const serverPhase = state.currentPhase || "preflop";
+          const serverPhase: GameState["currentPhase"] = state.currentPhase || "preflop";
           const isWaitingPhase = serverPhase === "waiting";
 
           // BLOCK WAITING TRANSITION DURING ACTIVE HAND
@@ -471,7 +471,7 @@ export default function GamePage() {
               : isWaitingPhase
               ? "preflop" // Map "waiting" to "preflop" for UI (adapter does this too)
               : state.currentPhase ||
-                (serverPhase === "waiting"
+                ((serverPhase as string) === "waiting"
                   ? "preflop"
                   : (serverPhase as GameState["currentPhase"])) ||
                 "preflop",
@@ -566,7 +566,7 @@ export default function GamePage() {
 
       // Listen for reconnect
       socket.on("connect", () => {
-        if (mounted) {
+        if (mounted && socket) {
           setIsDisconnected(false);
           // Reset retry count on reconnect
           joinRetryCountRef.current = 0;
@@ -1071,7 +1071,7 @@ export default function GamePage() {
 
             // Wait 500ms, then retry joinGame only (server will handle state sync)
             joinRetryTimeoutRef.current = setTimeout(() => {
-              if (!mounted) return;
+              if (!mounted || !socket) return;
               socket.emit("joinGame", gameId);
             }, retryDelay);
           } else {

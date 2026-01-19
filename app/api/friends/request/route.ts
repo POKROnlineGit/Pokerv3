@@ -1,5 +1,6 @@
 import { createServerComponentClient } from '@/lib/api/supabase/client';
 import { NextResponse } from 'next/server';
+import { getErrorMessage } from '@/lib/utils';
 
 export async function POST(req: Request) {
   try {
@@ -56,8 +57,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
 

@@ -60,6 +60,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import Link from "next/link";
+import { getErrorMessage } from "@/lib/utils";
 
 // Status badge component
 function StatusBadge({ status }: { status: TournamentStatusType }) {
@@ -437,11 +438,11 @@ export default function TournamentDetailPage() {
         joinTournamentRoom(tournamentId).catch((err) => {
           console.error("[Tournament] Failed to join room:", err);
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("[Tournament] Error checking state:", error);
         toast({
           title: "Error",
-          description: "Failed to load tournament",
+          description: getErrorMessage(error),
           variant: "destructive",
         });
         router.replace("/play/tournaments");
@@ -544,10 +545,10 @@ export default function TournamentDetailPage() {
           setTournamentData(updated as TournamentStateResponse);
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Failed to register",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -576,10 +577,10 @@ export default function TournamentDetailPage() {
           setTournamentData(updated as TournamentStateResponse);
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Failed to unregister",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -612,10 +613,10 @@ export default function TournamentDetailPage() {
           description: "The tournament has begun!",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Failed to start tournament",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -640,10 +641,10 @@ export default function TournamentDetailPage() {
           description: `Tournament has been ${status === "paused" ? "resumed" : "paused"}`,
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message,
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -672,10 +673,10 @@ export default function TournamentDetailPage() {
         });
         router.replace("/play/tournaments");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message,
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -714,10 +715,10 @@ export default function TournamentDetailPage() {
           setTournamentData(updated as TournamentStateResponse);
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Failed to ban player",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -746,10 +747,10 @@ export default function TournamentDetailPage() {
         });
         router.replace("/play/tournaments");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Failed to leave tournament",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -853,11 +854,11 @@ export default function TournamentDetailPage() {
       if (!("error" in updatedResponse)) {
         setTournamentData(updatedResponse as TournamentStateResponse);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[Tournament] Failed to update settings:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to update tournament settings",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

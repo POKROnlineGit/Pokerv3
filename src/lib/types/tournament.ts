@@ -495,3 +495,92 @@ export interface TournamentResultParticipant {
   eliminatedAt: string | null;
   rebuyCount: number;
 }
+
+// ============================================
+// SOCKET CALLBACK RESPONSE TYPES
+// ============================================
+
+/**
+ * Base response type for socket callbacks
+ */
+export interface SocketCallbackResponse {
+  success?: boolean;
+  error?: string;
+}
+
+/**
+ * Create tournament callback response
+ */
+export interface CreateTournamentResponse extends SocketCallbackResponse {
+  tournamentId?: string;
+}
+
+/**
+ * Register/Unregister tournament callback response
+ */
+export interface TournamentRegistrationResponse extends SocketCallbackResponse {
+  // success or error only
+}
+
+/**
+ * Admin action callback response
+ */
+export interface TournamentAdminActionResponse extends SocketCallbackResponse {
+  // success or error only
+}
+
+/**
+ * Get tournament state callback response
+ */
+export interface GetTournamentStateResponse extends SocketCallbackResponse {
+  tournament?: TournamentData;
+  participants?: Participant[];
+  tables?: TournamentTableInfo[] | TableState[];
+  status?: TournamentStatusType | TournamentStatusInfo;
+  hostId?: string;
+  canRegister?: boolean;
+}
+
+/**
+ * Get tournament results callback response
+ */
+export interface GetTournamentResultsResponse extends SocketCallbackResponse {
+  tournament?: TournamentResultsResponse["tournament"];
+  participants?: TournamentResultParticipant[];
+  isEnded?: boolean;
+}
+
+/**
+ * Join tournament room callback response
+ */
+export interface JoinTournamentRoomResponse extends SocketCallbackResponse {
+  // success or error only
+}
+
+/**
+ * Leave tournament room callback response
+ */
+export interface LeaveTournamentRoomResponse extends SocketCallbackResponse {
+  // success or error only
+}
+
+/**
+ * Join/Leave game callback response
+ */
+export interface GameRoomResponse extends SocketCallbackResponse {
+  // success or error only
+}
+
+/**
+ * Get game state callback response
+ */
+export interface GetGameStateResponse extends SocketCallbackResponse {
+  gameState?: import("./poker").GameState;
+}
+
+/**
+ * Tournament spectate room callback response
+ */
+export interface SpectatorRoomResponse extends SocketCallbackResponse {
+  // success or error only
+}

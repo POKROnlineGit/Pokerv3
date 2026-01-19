@@ -105,7 +105,7 @@ export function StatusProvider({ children }: { children: ReactNode }) {
       }
 
       // Check if game is finished/completed - don't redirect to finished games
-      const gameStatus = state.status || state.currentPhase;
+      const gameStatus = (state.status || state.currentPhase) as string;
       if (
         gameStatus === "finished" ||
         gameStatus === "complete" ||

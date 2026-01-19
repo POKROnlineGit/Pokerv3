@@ -17,6 +17,7 @@ import { createClientComponentClient } from "@/lib/api/supabase/client";
 import { Play, Pause, SkipForward, SkipBack, X, AlertCircle } from "lucide-react";
 // @ts-ignore - Importing from shared backend
 import { PokerCodec } from "@backend/domain/handHistory/PokerCodec";
+import { getErrorMessage } from "@/lib/utils";
 
 interface HandSummary {
   id: string;
@@ -109,17 +110,17 @@ export function ReplayViewer({
       let buffer: Uint8Array;
       try {
         buffer = PokerCodec.fromHex(hand.replay_data);
-      } catch (hexError: any) {
+      } catch (hexError: unknown) {
         console.error("[ReplayViewer] Failed to convert hex to buffer:", hexError);
-        throw new Error(`Failed to parse hex string: ${hexError?.message || "Unknown error"}`);
+        throw new Error(`Failed to parse hex string: ${getErrorMessage(hexError)}`);
       }
 
       let decoded: any;
       try {
         decoded = PokerCodec.decode(buffer);
-      } catch (decodeError: any) {
+      } catch (decodeError: unknown) {
         console.error("[ReplayViewer] Failed to decode buffer:", decodeError);
-        throw new Error(`Failed to decode replay data: ${decodeError?.message || "Unknown error"}`);
+        throw new Error(`Failed to decode replay data: ${getErrorMessage(decodeError)}`);
       }
 
       // Build config from hand history if available
@@ -148,10 +149,9 @@ export function ReplayViewer({
       };
 
       return input;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[ReplayViewer] Error in decode process:", error);
-      console.error("[ReplayViewer] Error stack:", error?.stack);
-      setOrchestrationError(`Failed to decode hand data: ${error?.message || "Unknown error"}`);
+      setOrchestrationError(`Failed to decode hand data: ${getErrorMessage(error)}`);
       setIsLoading(false);
       return null;
     }
@@ -239,8 +239,8 @@ export function ReplayViewer({
       const result = orchestrator.generateReplay();
       setIsLoading(false);
       return result;
-    } catch (error: any) {
-      setOrchestrationError(error?.message || "Failed to generate replay");
+    } catch (error: unknown) {
+      setOrchestrationError(getErrorMessage(error));
       setIsLoading(false);
       return null;
     }

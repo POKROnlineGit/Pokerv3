@@ -23,6 +23,7 @@ import {
   Coins,
 } from "lucide-react";
 import Link from "next/link";
+import { getErrorMessage } from "@/lib/utils";
 
 export default function TournamentResultsPage() {
   const params = useParams();
@@ -91,9 +92,9 @@ export default function TournamentResultsPage() {
             }
           }
         );
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[TournamentResults] Error:", err);
-        setError(err.message || "Failed to load tournament results");
+        setError(getErrorMessage(err));
         setIsLoading(false);
       }
     };

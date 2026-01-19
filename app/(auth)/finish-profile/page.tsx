@@ -18,6 +18,7 @@ import { useTheme } from "@/components/providers/ThemeProvider";
 import { ThemeBackground } from "@/components/theme/ThemeBackground";
 import Image from "next/image";
 import { Filter } from "bad-words";
+import { getErrorMessage } from "@/lib/utils";
 
 export default function FinishProfilePage() {
   const [username, setUsername] = useState("");
@@ -150,8 +151,8 @@ export default function FinishProfilePage() {
       // Success - redirect to home
       setLoading(false);
       router.push("/");
-    } catch (err: any) {
-      setError(err.message || "Failed to update username. Please try again.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err) || "Failed to update username. Please try again.");
       setLoading(false);
     }
   };

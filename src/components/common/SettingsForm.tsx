@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Filter } from 'bad-words'
+import { getErrorMessage } from '@/lib/utils'
 
 interface SettingsFormProps {
   initialUsername: string
@@ -163,8 +164,8 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
       setTimeout(() => {
         router.refresh()
       }, 1000)
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(getErrorMessage(err))
     } finally {
       setLoading(false)
     }

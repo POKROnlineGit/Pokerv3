@@ -13,6 +13,7 @@ import { useTheme } from "@/components/providers/ThemeProvider";
 import { ThemeBackground } from "@/components/theme/ThemeBackground";
 import Image from "next/image";
 import { Filter } from "bad-words";
+import { getErrorMessage } from "@/lib/utils";
 
 export default function SignUpPage() {
   // State for method selection vs form
@@ -132,8 +133,8 @@ export default function SignUpPage() {
         // Auto-confirmed, redirect to play
         router.push('/play');
       }
-    } catch (err: any) {
-      setError(err.message || "Failed to sign up");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err) || "Failed to sign up");
       setLoading(false);
     }
   };

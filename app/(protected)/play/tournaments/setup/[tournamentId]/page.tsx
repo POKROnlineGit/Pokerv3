@@ -9,7 +9,7 @@ import {
   useTournamentSocket,
   useTournamentEvents,
 } from "@/lib/api/socket/tournament";
-import { TournamentStateResponse } from "@/lib/types/tournament";
+import { TournamentStateResponse, normalizeTournament, BlindLevel } from "@/lib/types/tournament";
 import { useToast } from "@/lib/hooks";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
+import { getErrorMessage } from "@/lib/utils";
 
 export default function TournamentSetupPage() {
   const params = useParams();
@@ -138,11 +139,11 @@ export default function TournamentSetupPage() {
         joinTournamentRoom(tournamentId).catch((err) => {
           console.error("[Tournament] Failed to join room:", err);
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Failed to fetch tournament state", error);
         toast({
           title: "Error",
-          description: "Failed to load tournament",
+          description: getErrorMessage(error),
           variant: "destructive",
         });
         router.push("/play");
@@ -188,17 +189,16 @@ export default function TournamentSetupPage() {
       const status =
         typeof tournamentData.status === "string"
           ? tournamentData.status
-          : (tournamentData as any).status?.status || tournament.status;
+          : (tournamentData as TournamentStateResponse & { status: { status: string } }).status?.status || tournament.status;
 
       if (status === "setup") {
+        // Normalize tournament data for consistent camelCase access
+        const normalized = normalizeTournament(tournament);
+
         // Initialize form with existing values or defaults
-        const blindStructureTemplate =
-          tournament.blind_structure_template ||
-          tournament.blindStructureTemplate ||
-          [];
         const existingBlindStructure =
-          blindStructureTemplate.length > 0
-            ? blindStructureTemplate.map((level: any) => ({
+          normalized.blindStructureTemplate.length > 0
+            ? normalized.blindStructureTemplate.map((level: BlindLevel) => ({
                 small: level.small,
                 big: level.big,
               }))
@@ -209,24 +209,10 @@ export default function TournamentSetupPage() {
               ];
 
         setSettingsForm({
-          maxPlayers:
-            tournament.max_players?.toString() ||
-            tournament.maxPlayers?.toString() ||
-            "",
-          maxPlayersPerTable:
-            tournament.max_players_per_table?.toString() ||
-            tournament.maxPlayersPerTable?.toString() ||
-            tournament.config?.maxPlayersPerTable?.toString() ||
-            "9",
-          startingStack:
-            tournament.starting_stack?.toString() ||
-            tournament.startingStack?.toString() ||
-            tournament.config?.startingStack?.toString() ||
-            "10000",
-          blindLevelDurationMinutes:
-            tournament.blind_level_duration_minutes?.toString() ||
-            tournament.blindLevelDurationMinutes?.toString() ||
-            "10",
+          maxPlayers: normalized.maxPlayers?.toString() || "",
+          maxPlayersPerTable: normalized.maxPlayersPerTable?.toString() || "9",
+          startingStack: normalized.startingStack?.toString() || "10000",
+          blindLevelDurationMinutes: normalized.blindLevelDurationMinutes?.toString() || "10",
           blindStructure: existingBlindStructure,
         });
       }
@@ -372,11 +358,11 @@ export default function TournamentSetupPage() {
       if (!("error" in updatedResponse)) {
         setTournamentData(updatedResponse as TournamentStateResponse);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[Tournament] Failed to update settings:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to update tournament settings",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -412,11 +398,11 @@ export default function TournamentSetupPage() {
 
       // Redirect to main tournament page after opening registration
       router.replace(`/play/tournaments/${tournamentId}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[Tournament] Failed to open registration:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to open tournament registration",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -455,7 +441,7 @@ export default function TournamentSetupPage() {
 
   return (
     <PlayLayout
-      title={`Setup: ${tournament.title || tournament.name || "Tournament"}`}
+      title={`Setup: ${tournament.title || "Tournament"}`}
       footer={
         <div className="flex flex-col gap-2 w-full">
           <Button

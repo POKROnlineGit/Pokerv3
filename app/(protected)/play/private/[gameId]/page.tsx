@@ -8,8 +8,9 @@ import { ActionPopup } from "@/components/features/game/ActionPopup";
 import { LeaveGameButton } from "@/components/features/game/LeaveGameButton";
 import { getSocket, useSocket } from "@/lib/api/socket/client";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
-import { GameState } from "@/lib/types/poker";
+import { GameState, Player, PendingJoinRequest, GameSpectator } from "@/lib/types/poker";
 import { useToast } from "@/lib/hooks";
+import { getErrorMessage } from "@/lib/utils";
 import {
   Loader2,
   Play,
@@ -112,7 +113,7 @@ export default function PrivateGamePage() {
       if (currentUserId) {
         const wasPlayer = wasPlayerRef.current;
         const isNowPlayer = state.players.some((p) => p.id === currentUserId);
-        const isNowSpectator = (state as any).isPrivate && !isNowPlayer;
+        const isNowSpectator = state.isPrivate && !isNowPlayer;
 
         // If transitioned from player to spectator, show notification
         if (wasPlayer && isNowSpectator) {
@@ -133,18 +134,16 @@ export default function PrivateGamePage() {
       let mainPot = 0;
       let sidePots: Array<{ amount: number; eligibleSeats: number[] }> = [];
 
-      if ((state as any).pots && Array.isArray((state as any).pots)) {
-        const potsArray = (state as any).pots;
+      if (state.pots && Array.isArray(state.pots)) {
+        const potsArray = state.pots;
         if (potsArray.length > 0) {
           mainPot = potsArray[0]?.amount || 0;
           // Convert eligiblePlayers (UUIDs) to eligibleSeats (seat numbers)
-          sidePots = potsArray.slice(1).map((pot: any) => ({
+          sidePots = potsArray.slice(1).map((pot) => ({
             amount: pot?.amount || 0,
             eligibleSeats: (pot?.eligiblePlayers || [])
               .map((playerId: string) => {
-                const player = state.players?.find(
-                  (p: any) => p.id === playerId
-                );
+                const player = state.players?.find((p) => p.id === playerId);
                 return player?.seat || 0;
               })
               .filter((seat: number) => seat > 0),
@@ -157,33 +156,30 @@ export default function PrivateGamePage() {
       }
 
       // Clean up pendingRequests for players who are now seated
-      const privateState = state as GameState & { pendingRequests?: any[] };
-      let cleanedPendingRequests = privateState.pendingRequests || [];
+      let cleanedPendingRequests = state.pendingRequests || [];
       if (cleanedPendingRequests.length > 0) {
         const seatedPlayerIds = state.players.map((p) => p.id);
-        cleanedPendingRequests = cleanedPendingRequests.filter((req: any) => {
-          const requestUserId = req.id || req.playerId || req.userId;
+        cleanedPendingRequests = cleanedPendingRequests.filter((req) => {
+          const requestUserId = req.odanUserId || req.odanRequestId;
           return !seatedPlayerIds.includes(requestUserId);
         });
       }
 
       // Normalize pendingRequests to ensure username field is present
       const normalizedPendingRequests = (cleanedPendingRequests || []).map(
-        (req: any) => ({
-          id: req.id || req.playerId || req.userId || "",
-          username: req.username || "Unknown", // Backend sends it directly, not nested
-          userId: req.userId || req.playerId || req.id,
-          playerId: req.playerId || req.id || req.userId,
-          chips: req.chips || 0,
-          // Preserve other fields
-          ...req,
+        (req) => ({
+          odanUserId: req.odanUserId || "",
+          odanRequestId: req.odanRequestId || "",
+          username: req.username || "Unknown",
+          requestedAt: req.requestedAt || "",
+          type: req.type || "join",
         })
       );
 
       // Normalize players to ensure username field is present
-      const normalizedPlayers = Array.isArray(state.players)
-        ? state.players.map((p: any) => ({
-            id: p.id || p.userId || p.user_id || "",
+      const normalizedPlayers: Player[] = Array.isArray(state.players)
+        ? state.players.map((p) => ({
+            id: p.id || "",
             username: p.username || `Player ${p.seat || ""}`,
             seat: p.seat || 0,
             chips: typeof p.chips === "number" ? p.chips : 0,
@@ -191,7 +187,7 @@ export default function PrivateGamePage() {
             totalBet: p.totalBet ?? p.totalBetThisHand ?? 0,
             holeCards: Array.isArray(p.holeCards)
               ? p.holeCards.filter(
-                  (c: any): c is string => typeof c === "string"
+                  (c: unknown): c is string => typeof c === "string"
                 )
               : [],
             folded: Boolean(p.folded),
@@ -210,7 +206,7 @@ export default function PrivateGamePage() {
         : [];
 
       // Create normalized state with pot/sidePots in UI format
-      const normalizedState: GameState & { pendingRequests?: any[] } = {
+      const normalizedState: GameState = {
         ...state,
         players: normalizedPlayers,
         pot: mainPot,
@@ -224,7 +220,7 @@ export default function PrivateGamePage() {
       };
 
       // Clear turn timer if game is paused (timers are not processed on backend when paused)
-      const isPaused = (state as any).isPaused || false;
+      const isPaused = state.isPaused || false;
       if (isPaused) {
         setTurnTimer(null);
       } else {
@@ -256,9 +252,10 @@ export default function PrivateGamePage() {
       setIsSyncing(false);
     };
 
-    const onError = (err: any) => {
+    const onError = (err: unknown) => {
+      const errorMessage = getErrorMessage(err);
       // Handle specific error messages with user-friendly toasts
-      if (err.message === "Not enough players") {
+      if (errorMessage === "Not enough players") {
         toast({
           variant: "destructive",
           title: "Cannot Start Game",
@@ -269,10 +266,10 @@ export default function PrivateGamePage() {
         toast({
           variant: "destructive",
           title: "Error",
-          description: err.message,
+          description: errorMessage,
         });
       }
-      if (err.message === "Game not found") router.push("/play");
+      if (errorMessage === "Game not found") router.push("/play");
     };
 
     const onTurnTimerStarted = (data: {
@@ -439,29 +436,21 @@ export default function PrivateGamePage() {
     />
   );
 
-  // Private game layout logic
-  const privateGameState = gameState as GameState & {
-    hostId?: string;
-    isPaused?: boolean;
-    pendingRequests?: any[];
-  };
-  const isHost = privateGameState.hostId === currentUserId;
-  const isPaused = privateGameState.isPaused || false;
-  const pendingRequests = privateGameState.pendingRequests || [];
+  // Private game layout logic - GameState already has these fields
+  const isHost = gameState.hostId === currentUserId;
+  const isPaused = gameState.isPaused || false;
+  const pendingRequests = gameState.pendingRequests || [];
   const isSeated = gameState.players.some((p) => p.id === currentUserId);
-  const isSpectator = privateGameState.isPrivate && !isSeated;
+  const isSpectator = gameState.isPrivate && !isSeated;
   const isHostSpectator = isHost && isSpectator;
   const hasPendingRequest = pendingRequests.some(
-    (r: any) =>
-      r.id === currentUserId ||
-      r.playerId === currentUserId ||
-      r.userId === currentUserId
+    (r) => r.odanUserId === currentUserId
   );
   // Show request button if no pending request (or if rejected, allow requesting again)
   const showRequestButton = !hasPendingRequest;
 
   // Host Actions
-  const handleAdminAction = (type: string, payload: any = {}) => {
+  const handleAdminAction = (type: string, payload: Record<string, unknown> = {}) => {
     if (!socketHook.connected) return;
     socketHook.emit("admin_action", { gameId, type, ...payload });
   };
@@ -474,7 +463,7 @@ export default function PrivateGamePage() {
     handleAdminAction("ADMIN_KICK", { playerId });
   };
 
-  const handleApprove = (request: any) => {
+  const handleApprove = (request: PendingJoinRequest) => {
     handleAdminAction("ADMIN_APPROVE", { request });
   };
 
@@ -626,12 +615,12 @@ export default function PrivateGamePage() {
                 <div className="space-y-2">
                   <div className="text-xs text-slate-400 mb-2">
                     Current: $
-                    {privateGameState.smallBlind ||
-                      privateGameState.config?.smallBlind ||
+                    {gameState.smallBlind ||
+                      gameState.config?.smallBlind ||
                       0}{" "}
                     / $
-                    {privateGameState.bigBlind ||
-                      privateGameState.config?.bigBlind ||
+                    {gameState.bigBlind ||
+                      gameState.config?.bigBlind ||
                       0}
                   </div>
                   <div className="space-y-2">
@@ -641,8 +630,8 @@ export default function PrivateGamePage() {
                       value={newSmallBlind}
                       onChange={(e) => setNewSmallBlind(e.target.value)}
                       placeholder={(
-                        privateGameState.smallBlind ||
-                        privateGameState.config?.smallBlind ||
+                        gameState.smallBlind ||
+                        gameState.config?.smallBlind ||
                         0
                       ).toString()}
                       className="bg-slate-900 border-slate-800"
@@ -655,8 +644,8 @@ export default function PrivateGamePage() {
                       value={newBigBlind}
                       onChange={(e) => setNewBigBlind(e.target.value)}
                       placeholder={(
-                        privateGameState.bigBlind ||
-                        privateGameState.config?.bigBlind ||
+                        gameState.bigBlind ||
+                        gameState.config?.bigBlind ||
                         0
                       ).toString()}
                       className="bg-slate-900 border-slate-800"
@@ -699,9 +688,8 @@ export default function PrivateGamePage() {
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {pendingRequests.map((req: any) => {
-                      const requestUserId =
-                        req.id || req.playerId || req.userId;
+                    {pendingRequests.map((req) => {
+                      const requestUserId = req.odanUserId;
                       return (
                         <div
                           key={requestUserId}
@@ -839,29 +827,27 @@ export default function PrivateGamePage() {
             <AccordionItem value="spectators" className="border-slate-800">
               <AccordionTrigger className="text-sm">
                 View Spectators
-                {(privateGameState as any).spectators?.length > 0 && (
+                {gameState.spectators && gameState.spectators.length > 0 && (
                   <Badge className="ml-2 bg-blue-500">
-                    {(privateGameState as any).spectators.length}
+                    {gameState.spectators.length}
                   </Badge>
                 )}
               </AccordionTrigger>
               <AccordionContent>
-                {!(privateGameState as any).spectators?.length ? (
+                {!gameState.spectators?.length ? (
                   <p className="text-xs text-slate-500 py-2">No spectators.</p>
                 ) : (
                   <div className="space-y-2">
-                    {(privateGameState as any).spectators.map(
-                      (spectator: any) => (
-                        <div
-                          key={spectator.userId}
-                          className="flex items-center justify-between bg-slate-900/50 p-2 rounded border border-slate-800"
-                        >
-                          <span className="text-sm font-medium">
-                            {spectator.username || "Unknown"}
-                          </span>
-                        </div>
-                      )
-                    )}
+                    {gameState.spectators.map((spectator) => (
+                      <div
+                        key={spectator.odanUserId}
+                        className="flex items-center justify-between bg-slate-900/50 p-2 rounded border border-slate-800"
+                      >
+                        <span className="text-sm font-medium">
+                          {spectator.username || "Unknown"}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </AccordionContent>
@@ -970,7 +956,7 @@ export default function PrivateGamePage() {
     <div className="flex items-center gap-3 w-full">
       {isHost && (
         <>
-          {privateGameState.status === "waiting" ? (
+          {gameState.status === "waiting" ? (
             <Button
               className="bg-emerald-600 hover:bg-emerald-700 flex-[0_0_48%]"
               onClick={() => handleAdminAction("ADMIN_START_GAME")}
@@ -1008,7 +994,7 @@ export default function PrivateGamePage() {
         <PokerTable
           gameState={{
             ...gameState,
-            hostId: privateGameState.hostId,
+            hostId: gameState.hostId,
           }}
           currentUserId={currentUserId}
           isHeadsUp={gameState.config?.maxPlayers === 2}

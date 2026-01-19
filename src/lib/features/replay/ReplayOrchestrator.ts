@@ -14,6 +14,7 @@ import {
 } from "@backend/domain/handHistory/PokerCodec";
 import type { GameState } from "@/lib/types/poker";
 import type { GameResult, EngineContext, EngineCard } from "@/lib/types/engine";
+import { getErrorMessage } from "@/lib/utils";
 
 export interface ReplayInput {
   gameId: string;
@@ -362,9 +363,10 @@ export class ReplayOrchestrator {
             currentActor: ctx.currentActorSeat,
             phase: ctx.currentPhase,
           });
-          const errEvent = result.events.find((e: any) => e.type === "ERROR");
+          const errEvent = result.events.find((e) => e.type === "ERROR");
+          const errorPayload = errEvent?.payload as { message?: string } | undefined;
           throw new Error(
-            errEvent?.payload?.message || "Engine rejected action"
+            errorPayload?.message || "Engine rejected action"
           );
         }
 
@@ -442,11 +444,11 @@ export class ReplayOrchestrator {
       }
 
       return { frames };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[ReplayOrchestrator] Generation failed:", err);
       return {
         frames,
-        error: err.message,
+        error: getErrorMessage(err),
         stoppedAtActionIndex: actionIndex,
       };
     }

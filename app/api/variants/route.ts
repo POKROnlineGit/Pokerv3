@@ -1,5 +1,6 @@
 import { createServerComponentClient } from "@/lib/api/supabase/client";
 import { NextResponse } from "next/server";
+import { getErrorMessage } from "@/lib/utils";
 
 export const dynamic = 'force-dynamic';
 
@@ -20,10 +21,10 @@ export async function GET() {
     
     // Ensure we always return an array
     return NextResponse.json(data || []);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Variants API] Unexpected error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch variants' }, 
+      { error: getErrorMessage(error) },
       { status: 500 }
     );
   }

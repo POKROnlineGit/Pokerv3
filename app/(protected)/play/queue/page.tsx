@@ -9,6 +9,7 @@ import { useSocket } from "@/lib/api/socket/client";
 import { useQueue } from "@/components/providers/ActiveStatusProvider";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { X, Loader2 } from "lucide-react";
+import { getErrorMessage } from "@/lib/utils";
 
 export default function QueuePage() {
   const router = useRouter();
@@ -81,10 +82,10 @@ export default function QueuePage() {
         }
 
         socket.emit('join_queue', { queueType: type });
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[Queue] Error joining queue via socket:', err);
         if (mounted) {
-          setError(err.message || 'Failed to join queue');
+          setError(getErrorMessage(err));
           setLoading(false);
         }
       }
@@ -110,7 +111,7 @@ export default function QueuePage() {
   const handleLeaveQueue = async () => {
     try {
       leaveQueue(type); // Clears global state + emits socket event
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Error handled silently - user will be redirected anyway
     } finally {
       router.push('/play/online');

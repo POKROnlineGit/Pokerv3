@@ -27,6 +27,20 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { useIsMobile } from "@/lib/hooks";
+import type { User } from "@supabase/supabase-js";
+
+interface SubMenuItem {
+  href: string;
+  label: string;
+}
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  submenu?: SubMenuItem[];
+  badge?: number | null;
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -34,7 +48,7 @@ export function Sidebar() {
   const supabase = createClientComponentClient();
   const { currentTheme } = useTheme();
   const [pendingCount, setPendingCount] = useState(0);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [hoveredSubmenu, setHoveredSubmenu] = useState<string | null>(null);
   const isMobile = useIsMobile();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -130,7 +144,7 @@ export function Sidebar() {
     setIsMobileSidebarOpen(false);
   };
 
-  const navItems = [
+  const navItems: NavItem[] = [
     {
       href: "/play",
       label: "Play",
@@ -331,10 +345,10 @@ export function Sidebar() {
                                 <Icon className="h-5 w-5" />
                                 <span>{item.label}</span>
                                 {!item.submenu &&
-                                  (item as any).badge !== null &&
-                                  (item as any).badge !== undefined && (
+                                  item.badge !== null &&
+                                  item.badge !== undefined && (
                                     <Badge variant="destructive">
-                                      {(item as any).badge}
+                                      {item.badge}
                                     </Badge>
                                   )}
                               </div>

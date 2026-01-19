@@ -125,7 +125,7 @@ export function useGameRedirect() {
             // No filter - we'll check player_ids in JavaScript
           },
           (payload) => {
-            handleGameRedirect(payload.new, "INSERT");
+            handleGameRedirect(payload.new as DatabaseGameRow, "INSERT");
           }
         )
         .on(
@@ -145,7 +145,7 @@ export function useGameRedirect() {
               oldStatus !== newStatus &&
               (newStatus === "starting" || newStatus === "active")
             ) {
-              handleGameRedirect(payload.new, "UPDATE");
+              handleGameRedirect(payload.new as DatabaseGameRow, "UPDATE");
             }
           }
         )
