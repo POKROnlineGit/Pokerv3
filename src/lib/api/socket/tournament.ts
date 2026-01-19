@@ -20,6 +20,8 @@ import {
   TournamentLevelWarningEvent,
   TournamentCompletedEvent,
   TournamentCancelledEvent,
+  TournamentPlayerBannedEvent,
+  TournamentPlayerLeftEvent,
   TournamentStateEvent,
   TournamentStatusType,
   Tournament,
@@ -180,6 +182,24 @@ export function useTournamentSocket() {
         playerId,
         sourceTableId,
         targetTableId,
+      });
+    },
+    [tournamentAdminAction]
+  );
+
+  /**
+   * Ban a player from the tournament (host only)
+   * Works in both registration and active states
+   */
+  const banPlayer = useCallback(
+    (
+      tournamentId: string,
+      playerId: string,
+      reason?: string
+    ): Promise<{ success: boolean } | { error: string }> => {
+      return tournamentAdminAction(tournamentId, "BAN_PLAYER", {
+        playerId,
+        reason,
       });
     },
     [tournamentAdminAction]
@@ -492,6 +512,7 @@ export function useTournamentSocket() {
     updateTournamentSettings,
     registerPlayerByHost,
     transferPlayer,
+    banPlayer,
 
     // Player registration
     registerTournament,
@@ -529,6 +550,8 @@ export function useTournamentEvents(
     onTournamentCompleted?: (data: TournamentCompletedEvent) => void;
     onPlayerEliminated?: (data: TournamentPlayerEliminatedEvent) => void;
     onLevelWarning?: (data: TournamentLevelWarningEvent) => void;
+    onPlayerBanned?: (data: TournamentPlayerBannedEvent) => void;
+    onPlayerLeft?: (data: TournamentPlayerLeftEvent) => void;
   }
 ) {
   const socket = useSocket();
@@ -539,6 +562,8 @@ export function useTournamentEvents(
     onTournamentCompleted,
     onPlayerEliminated,
     onLevelWarning,
+    onPlayerBanned,
+    onPlayerLeft,
   } = options || {};
 
   // State for real-time updates
@@ -560,6 +585,10 @@ export function useTournamentEvents(
     useState<TournamentCompletedEvent | null>(null);
   const [tournamentCancelled, setTournamentCancelled] =
     useState<TournamentCancelledEvent | null>(null);
+  const [playerBanned, setPlayerBanned] =
+    useState<TournamentPlayerBannedEvent | null>(null);
+  const [playerLeft, setPlayerLeft] =
+    useState<TournamentPlayerLeftEvent | null>(null);
 
   useEffect(() => {
     if (!tournamentId) return;
@@ -689,6 +718,22 @@ export function useTournamentEvents(
       }
     };
 
+    const handlePlayerBanned = (data: TournamentPlayerBannedEvent) => {
+      if (data.tournamentId === tournamentId) {
+        setPlayerBanned(data);
+        setParticipantCount(data.participantCount);
+        onPlayerBanned?.(data);
+      }
+    };
+
+    const handlePlayerLeft = (data: TournamentPlayerLeftEvent) => {
+      if (data.tournamentId === tournamentId) {
+        setPlayerLeft(data);
+        setParticipantCount(data.participantCount);
+        onPlayerLeft?.(data);
+      }
+    };
+
     // ============================================
     // STATE BROADCAST EVENT (SOURCE OF TRUTH)
     // ============================================
@@ -743,6 +788,8 @@ export function useTournamentEvents(
     socket.on("TOURNAMENT_TABLES_MERGED", handleTablesMerged);
     socket.on("TOURNAMENT_COMPLETED", handleTournamentCompleted);
     socket.on("TOURNAMENT_CANCELLED", handleTournamentCancelled);
+    socket.on("TOURNAMENT_PLAYER_BANNED", handlePlayerBanned);
+    socket.on("TOURNAMENT_PLAYER_LEFT", handlePlayerLeft);
     socket.on("tournamentState", handleTournamentState);
     socket.on("error", handleError);
 
@@ -766,6 +813,8 @@ export function useTournamentEvents(
       socket.off("TOURNAMENT_TABLES_MERGED", handleTablesMerged);
       socket.off("TOURNAMENT_COMPLETED", handleTournamentCompleted);
       socket.off("TOURNAMENT_CANCELLED", handleTournamentCancelled);
+      socket.off("TOURNAMENT_PLAYER_BANNED", handlePlayerBanned);
+      socket.off("TOURNAMENT_PLAYER_LEFT", handlePlayerLeft);
       socket.off("tournamentState", handleTournamentState);
       socket.off("error", handleError);
       socket.off("connect", joinRoom);
@@ -786,6 +835,8 @@ export function useTournamentEvents(
     onTournamentCompleted,
     onPlayerEliminated,
     onLevelWarning,
+    onPlayerBanned,
+    onPlayerLeft,
   ]);
 
   return {
@@ -799,5 +850,7 @@ export function useTournamentEvents(
     tournamentStarted,
     tournamentCompleted,
     tournamentCancelled,
+    playerBanned,
+    playerLeft,
   };
 }

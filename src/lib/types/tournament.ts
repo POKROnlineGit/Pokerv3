@@ -23,7 +23,8 @@ export type TournamentAdminActionType =
   | "RESUME_TOURNAMENT" // paused → active
   | "CANCEL_TOURNAMENT" // any → cancelled
   | "REGISTER_PLAYER" // Host registers another player
-  | "TRANSFER_PLAYER"; // Manual player transfer
+  | "TRANSFER_PLAYER" // Manual player transfer
+  | "BAN_PLAYER"; // Host bans a player
 
 // Blind Level
 export interface BlindLevel {
@@ -239,6 +240,25 @@ export interface TournamentCancelledEvent {
   timestamp: string;
 }
 
+export interface TournamentPlayerBannedEvent {
+  tournamentId: string;
+  playerId: string;
+  reason?: string;
+  wasActive: boolean;
+  tableId?: string | null;
+  participantCount: number;
+  timestamp: string;
+}
+
+export interface TournamentPlayerLeftEvent {
+  tournamentId: string;
+  playerId: string;
+  wasActive: boolean;
+  tableId?: string | null;
+  participantCount: number;
+  timestamp: string;
+}
+
 // Reconnection Payloads
 export interface TournamentReconnectedPayload {
   tournamentId: string;
@@ -278,7 +298,9 @@ export type TournamentEventType =
   | "TOURNAMENT_PLAYER_UNREGISTERED"
   | "TOURNAMENT_PARTICIPANT_COUNT_CHANGED"
   | "TOURNAMENT_COMPLETED"
-  | "TOURNAMENT_CANCELLED";
+  | "TOURNAMENT_CANCELLED"
+  | "TOURNAMENT_PLAYER_BANNED"
+  | "TOURNAMENT_PLAYER_LEFT";
 
 // Full State Event
 export interface TournamentStateEvent {

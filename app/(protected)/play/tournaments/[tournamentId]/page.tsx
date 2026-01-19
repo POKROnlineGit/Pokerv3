@@ -19,6 +19,8 @@ import {
   TournamentPlayerTransferredEvent,
   TournamentLevelWarningEvent,
   TournamentPlayerEliminatedEvent,
+  TournamentPlayerBannedEvent,
+  TournamentPlayerLeftEvent,
   BlindLevel,
 } from "@/lib/types/tournament";
 import { useToast } from "@/lib/hooks";
@@ -40,9 +42,18 @@ import {
   Settings,
   Save,
   Plus,
+  Ban,
+  LogOut,
+  Copy,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import Link from "next/link";
 
 // Status badge component
@@ -137,6 +148,7 @@ export default function TournamentDetailPage() {
     getTournamentLeaderboard,
     joinTable,
     updateTournamentSettings,
+    banPlayer,
   } = useTournamentSocket();
   const socket = useSocket();
   const { toast } = useToast();
@@ -153,6 +165,8 @@ export default function TournamentDetailPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [showLevelWarning, setShowLevelWarning] = useState<TournamentLevelWarningEvent | null>(null);
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
+  const [isBanning, setIsBanning] = useState<string | null>(null); // Tracks which player is being banned
+  const [isLeaving, setIsLeaving] = useState(false);
   const hasCheckedRef = useRef(false);
 
   // Settings form state (for registration phase)
@@ -318,6 +332,41 @@ export default function TournamentDetailPage() {
     }
   }, [currentUserId, toast]);
 
+  // Handle player banned
+  const handlePlayerBanned = useCallback(async (data: TournamentPlayerBannedEvent) => {
+    if (data.playerId === currentUserId) {
+      toast({
+        title: "Banned",
+        description: data.reason || "You have been banned from this tournament",
+        variant: "destructive",
+      });
+      router.replace("/play/tournaments");
+    } else {
+      // Another player was banned - refresh state
+      const updated = await getTournamentState(tournamentId);
+      if (!("error" in updated)) {
+        setTournamentData(updated as TournamentStateResponse);
+      }
+    }
+  }, [currentUserId, toast, router, tournamentId, getTournamentState]);
+
+  // Handle player left
+  const handlePlayerLeft = useCallback(async (data: TournamentPlayerLeftEvent) => {
+    if (data.playerId === currentUserId) {
+      toast({
+        title: "Left Tournament",
+        description: "You have left the tournament",
+      });
+      router.replace("/play/tournaments");
+    } else {
+      // Another player left - refresh state
+      const updated = await getTournamentState(tournamentId);
+      if (!("error" in updated)) {
+        setTournamentData(updated as TournamentStateResponse);
+      }
+    }
+  }, [currentUserId, toast, router, tournamentId, getTournamentState]);
+
   const {
     tournamentState: realTimeState,
     statusChange,
@@ -333,6 +382,8 @@ export default function TournamentDetailPage() {
     onTournamentCompleted: handleTournamentCompleted,
     onLevelWarning: handleLevelWarning,
     onPlayerEliminated: handlePlayerEliminated,
+    onPlayerBanned: handlePlayerBanned,
+    onPlayerLeft: handlePlayerLeft,
   });
 
   // Check tournament state on load
@@ -639,6 +690,74 @@ export default function TournamentDetailPage() {
     }
   };
 
+  const handleBanPlayer = async (playerId: string) => {
+    if (!confirm("Are you sure you want to ban this player from the tournament?")) {
+      return;
+    }
+
+    setIsBanning(playerId);
+    try {
+      const response = await banPlayer(tournamentId, playerId);
+      if ("error" in response) {
+        toast({
+          title: "Error Banning Player",
+          description: response.error,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Player Banned",
+          description: "The player has been removed from the tournament",
+        });
+        // Refresh state
+        const updated = await getTournamentState(tournamentId);
+        if (!("error" in updated)) {
+          setTournamentData(updated as TournamentStateResponse);
+        }
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to ban player",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBanning(null);
+    }
+  };
+
+  const handleLeaveTournament = async () => {
+    if (!confirm("Are you sure you want to leave this tournament?")) {
+      return;
+    }
+
+    setIsLeaving(true);
+    try {
+      const response = await unregisterTournament(tournamentId);
+      if ("error" in response) {
+        toast({
+          title: "Error Leaving Tournament",
+          description: response.error,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Left Tournament",
+          description: "You have left the tournament",
+        });
+        router.replace("/play/tournaments");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to leave tournament",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLeaving(false);
+    }
+  };
+
   const handleUpdateSettings = async () => {
     // Validation
     if (
@@ -801,6 +920,8 @@ export default function TournamentDetailPage() {
             currentUserId={currentUserId}
             participantCount={participantCount}
             canRegister={canRegister}
+            onBanPlayer={handleBanPlayer}
+            isBanning={isBanning}
           />
         }
         footer={
@@ -839,77 +960,70 @@ export default function TournamentDetailPage() {
               ) : null
             )}
 
-            {/* Host start button */}
+            {/* Host buttons - Start and End side by side */}
             {isHost && (
-              <>
+              <div className="flex gap-2">
                 <Button
                   onClick={handleStart}
                   disabled={isStarting || participants.length < 2}
                   size="lg"
-                  className="w-full font-bold text-sm h-12"
+                  className="flex-1 font-bold text-sm h-12"
                 >
                   {isStarting ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <Play className="mr-2 h-4 w-4" />
                   )}
-                  Start Tournament
-                </Button>
-                <Button
-                  onClick={handleUpdateSettings}
-                  disabled={isUpdatingSettings}
-                  variant="outline"
-                  size="lg"
-                  className="w-full font-bold text-sm h-10"
-                >
-                  {isUpdatingSettings ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="mr-2 h-4 w-4" />
-                  )}
-                  Save Settings
+                  Start
                 </Button>
                 <Button
                   onClick={handleCancel}
                   disabled={isCancelling}
                   size="lg"
                   variant="destructive"
-                  className="w-full font-bold text-sm h-10"
+                  className="flex-1 font-bold text-sm h-12"
                 >
                   {isCancelling ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    <>
-                      <Square className="mr-2 h-4 w-4" />
-                      Cancel
-                    </>
+                    <Square className="mr-2 h-4 w-4" />
                   )}
+                  End
                 </Button>
-              </>
+              </div>
             )}
           </div>
         }
       >
-        {/* Minimal sidebar content for registration phase */}
-        <div className="space-y-3">
-          <Link
-            href="/play/tournaments"
-            className="inline-flex items-center text-sm text-slate-500 hover:text-white"
-          >
-            <ArrowLeft className="h-4 w-4 mr-1" /> Back
-          </Link>
-
-          {/* Status badges */}
-          {isHost && (
-            <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center gap-2">
-              <Trophy className="h-3 w-3 text-blue-400 flex-shrink-0" />
-              <p className="text-blue-400 text-xs font-medium truncate">
-                You are the host
-              </p>
+        {/* Sidebar content styled like private game host */}
+        <div className="space-y-6">
+          {/* Header Info */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg text-white">Tournament Lobby</h3>
+              {isHost && (
+                <Badge
+                  variant="secondary"
+                  className="text-xs bg-amber-500/10 text-amber-500 border-amber-500/20"
+                >
+                  HOST
+                </Badge>
+              )}
             </div>
-          )}
 
-          {isRegistered && (
+            {/* Back link */}
+            <Link
+              href="/play/tournaments"
+              className="inline-flex items-center text-xs text-slate-500 hover:text-white"
+            >
+              <ArrowLeft className="h-3 w-3 mr-1" /> Back to Tournaments
+            </Link>
+          </div>
+
+          <Separator className="bg-slate-800" />
+
+          {/* Status indicators */}
+          {isRegistered && !isHost && (
             <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-2">
               <Check className="h-3 w-3 text-emerald-400 flex-shrink-0" />
               <p className="text-emerald-400 text-xs font-medium truncate">
@@ -917,26 +1031,6 @@ export default function TournamentDetailPage() {
               </p>
             </div>
           )}
-
-          {/* Quick stats */}
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-slate-400 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-xs text-slate-400 truncate">Players</p>
-                  <p className="text-lg font-bold truncate">
-                    {participantCount !== null ? participantCount : participants.length}
-                    {tournament?.max_players && (
-                      <span className="text-slate-500 text-xs font-normal">
-                        /{tournament.max_players}
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
           {isHost && participants.length < 2 && (
             <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
@@ -946,135 +1040,195 @@ export default function TournamentDetailPage() {
             </div>
           )}
 
-          {/* Tournament Settings (Host only) */}
-          {isHost && (
-            <Card className="bg-slate-800/50 border-slate-700">
-              <CardHeader className="pb-2 px-3 pt-3">
-                <CardTitle className="text-xs font-medium text-slate-300 flex items-center gap-2">
-                  <Settings className="h-3 w-3" />
-                  Settings
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 px-3 pb-3">
-                {/* Players Per Table */}
-                <div className="space-y-1">
-                  <Label className="text-xs text-slate-400">Players Per Table</Label>
-                  <Input
-                    type="number"
-                    value={settingsForm.maxPlayersPerTable}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        maxPlayersPerTable: e.target.value,
-                      })
-                    }
-                    className="bg-slate-900 border-slate-800 h-7 text-xs"
-                    min="2"
-                    max="10"
-                  />
-                </div>
-
-                {/* Starting Stack */}
-                <div className="space-y-1">
-                  <Label className="text-xs text-slate-400">Starting Stack</Label>
-                  <Input
-                    type="number"
-                    value={settingsForm.startingStack}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        startingStack: e.target.value,
-                      })
-                    }
-                    className="bg-slate-900 border-slate-800 h-7 text-xs"
-                    min="1"
-                  />
-                </div>
-
-                {/* Level Duration */}
-                <div className="space-y-1">
-                  <Label className="text-xs text-slate-400">Level Duration (minutes)</Label>
-                  <Input
-                    type="number"
-                    value={settingsForm.blindLevelDurationMinutes}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        blindLevelDurationMinutes: e.target.value,
-                      })
-                    }
-                    className="bg-slate-900 border-slate-800 h-7 text-xs"
-                    min="1"
-                  />
-                </div>
-
-                {/* Blind Structure */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs text-slate-400">Blind Structure</Label>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={addBlindLevel}
-                      className="h-5 px-2 text-xs"
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add
-                    </Button>
+          {/* Accordion sections (Host view) */}
+          {isHost ? (
+            <Accordion
+              type="single"
+              collapsible
+              defaultValue="settings"
+              className="w-full"
+            >
+              {/* Tournament Settings */}
+              <AccordionItem value="settings" className="border-slate-800">
+                <AccordionTrigger className="text-sm">
+                  Tournament Settings
+                </AccordionTrigger>
+                <AccordionContent className="space-y-3 pt-2">
+                  {/* Players Per Table */}
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-400">Players Per Table</Label>
+                    <Input
+                      type="number"
+                      value={settingsForm.maxPlayersPerTable}
+                      onChange={(e) =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          maxPlayersPerTable: e.target.value,
+                        })
+                      }
+                      className="bg-slate-900 border-slate-800 h-7 text-xs"
+                      min="2"
+                      max="10"
+                    />
                   </div>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {settingsForm.blindStructure.map((level, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center gap-1 bg-slate-900/50 p-1 rounded"
+
+                  {/* Starting Stack */}
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-400">Starting Stack</Label>
+                    <Input
+                      type="number"
+                      value={settingsForm.startingStack}
+                      onChange={(e) =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          startingStack: e.target.value,
+                        })
+                      }
+                      className="bg-slate-900 border-slate-800 h-7 text-xs"
+                      min="1"
+                    />
+                  </div>
+
+                  {/* Level Duration */}
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-400">Level Duration (minutes)</Label>
+                    <Input
+                      type="number"
+                      value={settingsForm.blindLevelDurationMinutes}
+                      onChange={(e) =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          blindLevelDurationMinutes: e.target.value,
+                        })
+                      }
+                      className="bg-slate-900 border-slate-800 h-7 text-xs"
+                      min="1"
+                    />
+                  </div>
+
+                  {/* Blind Structure */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-slate-400">Blind Structure</Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={addBlindLevel}
+                        className="h-5 px-2 text-xs"
                       >
-                        <Input
-                          type="number"
-                          value={level.small}
-                          onChange={(e) =>
-                            updateBlindLevel(
-                              index,
-                              "small",
-                              parseInt(e.target.value) || 0
-                            )
-                          }
-                          className="bg-slate-800 border-slate-700 h-6 text-xs flex-1"
-                          min="1"
-                          placeholder="SB"
-                        />
-                        <span className="text-xs text-slate-500">/</span>
-                        <Input
-                          type="number"
-                          value={level.big}
-                          onChange={(e) =>
-                            updateBlindLevel(
-                              index,
-                              "big",
-                              parseInt(e.target.value) || 0
-                            )
-                          }
-                          className="bg-slate-800 border-slate-700 h-6 text-xs flex-1"
-                          min="1"
-                          placeholder="BB"
-                        />
-                        {settingsForm.blindStructure.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeBlindLevel(index)}
-                            className="h-6 w-6 p-0"
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add
+                      </Button>
+                    </div>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {settingsForm.blindStructure.map((level, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-1 bg-slate-900/50 p-1 rounded"
+                        >
+                          <Input
+                            type="number"
+                            value={level.small}
+                            onChange={(e) =>
+                              updateBlindLevel(
+                                index,
+                                "small",
+                                parseInt(e.target.value) || 0
+                              )
+                            }
+                            className="bg-slate-800 border-slate-700 h-6 text-xs flex-1"
+                            min="1"
+                            placeholder="SB"
+                          />
+                          <span className="text-xs text-slate-500">/</span>
+                          <Input
+                            type="number"
+                            value={level.big}
+                            onChange={(e) =>
+                              updateBlindLevel(
+                                index,
+                                "big",
+                                parseInt(e.target.value) || 0
+                              )
+                            }
+                            className="bg-slate-800 border-slate-700 h-6 text-xs flex-1"
+                            min="1"
+                            placeholder="BB"
+                          />
+                          {settingsForm.blindStructure.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeBlindLevel(index)}
+                              className="h-6 w-6 p-0"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+
+                  {/* Save Settings Button inside accordion */}
+                  <Button
+                    onClick={handleUpdateSettings}
+                    disabled={isUpdatingSettings}
+                    className="w-full"
+                    size="sm"
+                  >
+                    {isUpdatingSettings ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}
+                    Save Settings
+                  </Button>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Participants Overview */}
+              <AccordionItem value="participants" className="border-slate-800">
+                <AccordionTrigger className="text-sm">
+                  Participants
+                  {participants.length > 0 && (
+                    <Badge className="ml-2 bg-emerald-500">
+                      {participantCount !== null ? participantCount : participants.length}
+                    </Badge>
+                  )}
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="text-xs text-slate-400 py-2">
+                    {participantCount !== null ? participantCount : participants.length}
+                    {tournament?.max_players && ` / ${tournament.max_players}`} players registered
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          ) : (
+            /* Non-host view - simple info */
+            <div className="space-y-3">
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs text-slate-400 truncate">Players</p>
+                      <p className="text-lg font-bold truncate">
+                        {participantCount !== null ? participantCount : participants.length}
+                        {tournament?.max_players && (
+                          <span className="text-slate-500 text-xs font-normal">
+                            /{tournament.max_players}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
         </div>
       </PlayLayout>
@@ -1096,6 +1250,24 @@ export default function TournamentDetailPage() {
             >
               <Table2 className="mr-2 h-4 w-4" />
               Go to Table
+            </Button>
+          )}
+
+          {/* Leave Tournament button for non-host players */}
+          {!isHost && isRegistered && (status === "active" || status === "paused") && (
+            <Button
+              onClick={handleLeaveTournament}
+              disabled={isLeaving}
+              size="lg"
+              variant="outline"
+              className="w-full font-bold text-sm h-10 text-red-400 border-red-400/30 hover:bg-red-500/10"
+            >
+              {isLeaving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <LogOut className="mr-2 h-4 w-4" />
+              )}
+              Leave Tournament
             </Button>
           )}
 
@@ -1327,11 +1499,29 @@ export default function TournamentDetailPage() {
                           <Badge variant="destructive" className="text-[10px] px-1 py-0 flex-shrink-0">Out</Badge>
                         )}
                       </div>
-                      {(status === "active" || status === "paused") && chips !== undefined && (
-                        <span className="text-slate-400 font-mono text-xs ml-2 flex-shrink-0">
-                          {chips.toLocaleString()}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {(status === "active" || status === "paused") && chips !== undefined && (
+                          <span className="text-slate-400 font-mono text-xs">
+                            {chips.toLocaleString()}
+                          </span>
+                        )}
+                        {isHost && !isMe && pStatus !== "eliminated" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleBanPlayer(playerId!)}
+                            disabled={isBanning === playerId}
+                            className="h-5 w-5 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                            title="Ban player"
+                          >
+                            {isBanning === playerId ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Ban className="h-3 w-3" />
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

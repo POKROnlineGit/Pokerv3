@@ -13,7 +13,10 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
+  Ban,
+  Loader2,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { TournamentStateResponse, BlindLevel } from "@/lib/types/tournament";
 import { useState } from "react";
 
@@ -39,6 +42,8 @@ interface TournamentRegistrationContentProps {
   currentUserId: string | null;
   participantCount: number | null;
   canRegister: boolean;
+  onBanPlayer?: (playerId: string) => void;
+  isBanning?: string | null;
 }
 
 export function TournamentRegistrationContent({
@@ -49,6 +54,8 @@ export function TournamentRegistrationContent({
   currentUserId,
   participantCount,
   canRegister,
+  onBanPlayer,
+  isBanning,
 }: TournamentRegistrationContentProps) {
   const [showAllBlinds, setShowAllBlinds] = useState(false);
 
@@ -224,14 +231,32 @@ export function TournamentRegistrationContent({
                             {username}
                           </span>
                         </div>
-                        {isMe && (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] px-1.5 py-0.5 text-blue-400 border-blue-400/30"
-                          >
-                            You
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {isMe && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] px-1.5 py-0.5 text-blue-400 border-blue-400/30"
+                            >
+                              You
+                            </Badge>
+                          )}
+                          {isHost && !isMe && onBanPlayer && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onBanPlayer(playerId!)}
+                              disabled={isBanning === playerId}
+                              className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                              title="Ban player"
+                            >
+                              {isBanning === playerId ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Ban className="h-3 w-3" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
