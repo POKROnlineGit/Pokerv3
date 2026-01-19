@@ -10,11 +10,20 @@ export function StatusOverlay() {
   const { currentStatus } = useStatus();
   const pathname = usePathname();
 
-  // Hide queue status on /play and /play/queue pages
+  // Get current path for exclusion checks
+  const currentPath =
+    pathname || (typeof window !== "undefined" ? window.location.pathname : "");
+
+  // Hide queue status on /play/online and /play/queue pages
   if (currentStatus?.id === "queue") {
-    const currentPath =
-      pathname || (typeof window !== "undefined" ? window.location.pathname : "");
     if (currentPath === "/play/online" || currentPath.startsWith("/play/queue")) {
+      return null;
+    }
+  }
+
+  // Hide tournament status on /play/tournaments pages
+  if (currentStatus?.id === "tournament") {
+    if (currentPath.startsWith("/play/tournaments")) {
       return null;
     }
   }

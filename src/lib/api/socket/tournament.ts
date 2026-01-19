@@ -473,38 +473,6 @@ export function useTournamentSocket() {
     [socket]
   );
 
-  // ============================================
-  // STATUS CHECK
-  // ============================================
-
-  /**
-   * Check if user is currently in a tournament
-   * Returns tournament info if in a tournament
-   */
-  const checkTournamentStatus = useCallback((): Promise<{
-    inTournament: boolean;
-    tournamentId: string | null;
-    status: string | null;
-    title: string | null;
-    currentTableId: string | null;
-    isPlaying: boolean;
-  }> => {
-    return new Promise((resolve) => {
-      if (!socket.connected) socket.connect();
-
-      socket.emit("check_tournament_status", {}, (response: any) => {
-        resolve({
-          inTournament: response?.inTournament || false,
-          tournamentId: response?.tournamentId || null,
-          status: response?.status || null,
-          title: response?.title || null,
-          currentTableId: response?.currentTableId || null,
-          isPlaying: response?.isPlaying || false,
-        });
-      });
-    });
-  }, [socket]);
-
   return {
     // Tournament management
     createTournament,
@@ -531,9 +499,6 @@ export function useTournamentSocket() {
     joinTable,
     leaveTable,
     submitAction,
-
-    // Status check
-    checkTournamentStatus,
   };
 }
 

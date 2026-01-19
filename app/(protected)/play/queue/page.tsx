@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
 import { useSocket } from "@/lib/api/socket/client";
-import { useQueue } from "@/components/providers/QueueProvider";
+import { useQueue } from "@/components/providers/ActiveStatusProvider";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { X, Loader2 } from "lucide-react";
 

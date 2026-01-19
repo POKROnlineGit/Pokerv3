@@ -6,8 +6,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { createServerComponentClient } from "@/lib/api/supabase/client";
 import { ToastProvider } from "@/components/providers/ToastProvider";
 import { GameRedirectProvider } from "@/components/layout/GameRedirectProvider";
-import { QueueProvider } from "@/components/providers/QueueProvider";
-import { TournamentStatusProvider } from "@/components/providers/TournamentStatusProvider";
+import { ActiveStatusProvider } from "@/components/providers/ActiveStatusProvider";
 import { StatusProvider } from "@/components/providers/StatusProvider";
 import { StatusOverlay } from "@/components/ui/StatusOverlay";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
@@ -149,21 +148,19 @@ export default async function RootLayout({
           <ThemeBackground />
           <GameRedirectProvider />
           <StatusProvider>
-            <QueueProvider>
-              <TournamentStatusProvider>
-                <ToastProvider>
-                  {showSidebar ? (
-                    <div className="flex h-screen">
-                      <Sidebar />
-                      <main className="flex-1 overflow-auto">{children}</main>
-                    </div>
-                  ) : (
-                    <main>{children}</main>
-                  )}
-                  <StatusOverlay />
-                </ToastProvider>
-              </TournamentStatusProvider>
-            </QueueProvider>
+            <ActiveStatusProvider>
+              <ToastProvider>
+                {showSidebar ? (
+                  <div className="flex h-screen">
+                    <Sidebar />
+                    <main className="flex-1 overflow-auto">{children}</main>
+                  </div>
+                ) : (
+                  <main>{children}</main>
+                )}
+                <StatusOverlay />
+              </ToastProvider>
+            </ActiveStatusProvider>
           </StatusProvider>
         </ThemeProvider>
         <GoogleAnalytics gaId="G-TP41LB8QH9" />

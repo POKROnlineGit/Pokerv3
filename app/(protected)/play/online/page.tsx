@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useQueue } from "@/components/providers/QueueProvider";
+import { useQueue } from "@/components/providers/ActiveStatusProvider";
 import { useSocket, checkActiveStatus } from "@/lib/api/socket/client";
 import { Loader2, Search, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";

@@ -626,8 +626,8 @@ export function Sidebar() {
           })}
         </div>
 
-        {/* Toggle Button - At bottom of nav */}
-        <div>
+        {/* Toggle Button - At bottom of nav with space above */}
+        <div className="mt-auto">
           <Tooltip text={isMinimized ? "Grow" : "Shrink"} show={isMinimized}>
             <button
               onClick={toggleSidebar}
