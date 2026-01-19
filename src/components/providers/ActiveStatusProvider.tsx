@@ -18,6 +18,7 @@ interface ActiveStatusResponse {
     isTournament: boolean
     tournamentId: string | null
     status: 'active' | 'starting' | 'waiting'
+    isSpectating?: boolean
   } | null
   tournament: {
     tournamentId: string
@@ -418,6 +419,44 @@ export function ActiveStatusProvider({ children }: { children: ReactNode }) {
           return
         }
 
+        // Handle active game (including spectating)
+        if (response.game) {
+          const { gameId, isTournament, tournamentId: gameTournamentId, isSpectating } = response.game
+
+          // Don't redirect if already on the correct page
+          if (!pathname?.includes(gameId)) {
+            if (isSpectating && gameTournamentId) {
+              // Spectating a tournament table - redirect to spectate page
+              setStatus({
+                id: 'game-reconnect',
+                priority: 80,
+                type: 'success',
+                title: 'Reconnecting to Spectate',
+                message: 'Returning to spectate...',
+              })
+              setTimeout(() => {
+                router.push(`/play/tournaments/spectate/${gameId}?tournamentId=${gameTournamentId}`)
+                clearStatus('game-reconnect')
+              }, 1500)
+              return
+            } else if (isTournament && gameTournamentId) {
+              // Active tournament game - redirect to tournament game page
+              setStatus({
+                id: 'game-reconnect',
+                priority: 80,
+                type: 'success',
+                title: 'Reconnecting',
+                message: 'Returning to game...',
+              })
+              setTimeout(() => {
+                router.push(`/play/tournaments/game/${gameId}`)
+                clearStatus('game-reconnect')
+              }, 1500)
+              return
+            }
+          }
+        }
+
         // Update queue state
         if (response.queue) {
           setInQueue(true)
@@ -554,17 +593,21 @@ export function ActiveStatusProvider({ children }: { children: ReactNode }) {
       gameId: string
       tournamentId?: string | null
       message?: string
+      isSpectating?: boolean
     }) => {
       setStatus({
         id: 'game-reconnect',
         priority: 80,
         type: 'success',
-        title: 'Reconnecting',
-        message: data.message || 'Returning to game...',
+        title: data.isSpectating ? 'Reconnecting to Spectate' : 'Reconnecting',
+        message: data.message || (data.isSpectating ? 'Returning to spectate...' : 'Returning to game...'),
       })
 
       setTimeout(() => {
-        if (data.tournamentId) {
+        if (data.isSpectating && data.tournamentId) {
+          // Navigate to spectate page
+          router.push(`/play/tournaments/spectate/${data.gameId}?tournamentId=${data.tournamentId}`)
+        } else if (data.tournamentId) {
           router.push(`/play/tournaments/game/${data.gameId}`)
         } else {
           router.push(`/play/game/${data.gameId}`)

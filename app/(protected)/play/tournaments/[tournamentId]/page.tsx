@@ -28,8 +28,6 @@ import { createClientComponentClient } from "@/lib/api/supabase/client";
 import { TournamentRegistrationContent } from "@/components/features/tournament/TournamentRegistrationContent";
 import { TournamentOverview } from "@/components/features/tournament/TournamentOverview";
 import { TournamentTableList } from "@/components/features/tournament/TournamentTableList";
-import { TournamentSpectatorView } from "@/components/features/tournament/TournamentSpectatorView";
-import { GameState } from "@/lib/types/poker";
 import {
   Loader2,
   Users,
@@ -153,8 +151,6 @@ export default function TournamentDetailPage() {
     joinTable,
     updateTournamentSettings,
     banPlayer,
-    spectateTournamentTable,
-    stopSpectatingTournament,
   } = useTournamentSocket();
   const socket = useSocket();
   const { toast } = useToast();
@@ -175,9 +171,7 @@ export default function TournamentDetailPage() {
   const [isLeaving, setIsLeaving] = useState(false);
   const hasCheckedRef = useRef(false);
 
-  // Spectator state
-  const [spectatingTableId, setSpectatingTableId] = useState<string | null>(null);
-  const [spectatorGameState, setSpectatorGameState] = useState<GameState | null>(null);
+  // Spectator loading state (for button)
   const [isSpectatingLoading, setIsSpectatingLoading] = useState<string | null>(null);
 
   // Settings form state (for registration phase)
@@ -386,7 +380,6 @@ export default function TournamentDetailPage() {
     levelWarning,
     tournamentStarted,
     tournamentCompleted,
-    tablesMerged,
   } = useTournamentEvents(tournamentId, {
     currentUserId,
     onTournamentStarted: handleTournamentStarted,
@@ -398,92 +391,17 @@ export default function TournamentDetailPage() {
     onPlayerLeft: handlePlayerLeft,
   });
 
-  // ============================================
-  // SPECTATOR SOCKET LISTENER
-  // ============================================
-
-  // Listen for game state updates while spectating
-  useEffect(() => {
-    if (!spectatingTableId || !socket) return;
-
-    const handleGameState = (gameState: GameState) => {
-      // Only update if this is for our spectated table
-      if (gameState.gameId === spectatingTableId) {
-        setSpectatorGameState(gameState);
-      }
-    };
-
-    socket.on("gameState", handleGameState);
-
-    return () => {
-      socket.off("gameState", handleGameState);
-    };
-  }, [spectatingTableId, socket]);
-
-  // Handle table merged while spectating - return to overview
-  useEffect(() => {
-    if (!tablesMerged || !spectatingTableId) return;
-
-    // If the table we're spectating was closed, go back to overview
-    if (tablesMerged.closedTableId === spectatingTableId) {
-      toast({
-        title: "Table Merged",
-        description: "The table you were watching has been merged",
-      });
-      setSpectatingTableId(null);
-      setSpectatorGameState(null);
-    }
-  }, [tablesMerged, spectatingTableId, toast]);
-
-  // Handle tournament completed while spectating
-  useEffect(() => {
-    if (tournamentCompleted && spectatingTableId) {
-      setSpectatingTableId(null);
-      setSpectatorGameState(null);
-    }
-  }, [tournamentCompleted, spectatingTableId]);
 
   // ============================================
   // SPECTATOR HANDLERS
   // ============================================
 
-  const handleSpectate = useCallback(async (tableId: string) => {
+  const handleSpectate = useCallback((tableId: string) => {
     if (!tournamentId) return;
-
     setIsSpectatingLoading(tableId);
-    try {
-      const response = await spectateTournamentTable(tournamentId, tableId);
-      if (!response.success) {
-        toast({
-          title: "Cannot Spectate",
-          description: response.error || "Failed to spectate table",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      setSpectatingTableId(tableId);
-      if (response.gameState) {
-        setSpectatorGameState(response.gameState);
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to spectate table",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSpectatingLoading(null);
-    }
-  }, [tournamentId, spectateTournamentTable, toast]);
-
-  const handleStopSpectating = useCallback(async () => {
-    if (!tournamentId) return;
-
-    await stopSpectatingTournament(tournamentId);
-    setSpectatingTableId(null);
-    setSpectatorGameState(null);
-  }, [tournamentId, stopSpectatingTournament]);
+    // Navigate to the spectate page
+    router.push(`/play/tournaments/spectate/${tableId}?tournamentId=${tournamentId}`);
+  }, [tournamentId, router]);
 
   // Check tournament state on load
   useEffect(() => {
@@ -623,11 +541,6 @@ export default function TournamentDetailPage() {
   // Determine if user can spectate
   // Host can always spectate, eliminated players can spectate, active players cannot
   const canSpectate = isHost || isEliminated || !myTableId;
-
-  // Get spectated table index for display
-  const spectatedTableIndex = spectatingTableId
-    ? (tables.find((t) => t.tableId === spectatingTableId)?.tournamentTableIndex ?? 0) + 1
-    : 0;
 
   // ============================================
   // ACTION HANDLERS
@@ -1349,62 +1262,7 @@ export default function TournamentDetailPage() {
   // ============================================
 
   if (status === "active" || status === "paused") {
-    // If spectating, show the spectator view
-    if (spectatingTableId && spectatorGameState) {
-      return (
-        <PlayLayout
-          title={tournament?.title || tournament?.name || "Tournament"}
-          tableContent={
-            <TournamentSpectatorView
-              gameState={spectatorGameState}
-              tableIndex={spectatedTableIndex}
-              currentBlindLevel={currentBlindLevel}
-              blindStructure={blindStructure}
-              levelEndsAt={levelEndsAt ?? null}
-              isPaused={status === "paused"}
-              onBack={handleStopSpectating}
-            />
-          }
-        >
-          {/* Minimal sidebar while spectating */}
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <h3 className="font-bold text-sm text-white">Spectating</h3>
-              <Link
-                href="/play/tournaments"
-                className="inline-flex items-center text-xs text-slate-500 hover:text-white"
-              >
-                <ArrowLeft className="h-3 w-3 mr-1" /> Back to Tournaments
-              </Link>
-            </div>
-
-            <Separator className="bg-slate-800" />
-
-            {/* Quick Stats */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Level</span>
-                <span className="font-mono text-white">
-                  {currentBlindLevel + 1} ({currentBlinds.small}/{currentBlinds.big})
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Players</span>
-                <span className="text-white">
-                  {participants.filter((p) => p.status !== "eliminated").length}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Tables</span>
-                <span className="text-white">{tables.length}</span>
-              </div>
-            </div>
-          </div>
-        </PlayLayout>
-      );
-    }
-
-    // Default view: Tournament overview with table list
+    // Tournament overview with table list
     return (
       <PlayLayout
         title={tournament?.title || tournament?.name || "Tournament"}
