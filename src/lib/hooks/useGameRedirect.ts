@@ -3,6 +3,17 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
+
+// Database row type for games table (from Supabase realtime)
+interface DatabaseGameRow {
+  id: string;
+  status: "waiting" | "starting" | "active" | "finished" | "complete";
+  tournament_id?: string | null;
+  player_ids?: string[];
+  left_players?: string[];
+  players?: Array<{ id?: string; user_id?: string }>;
+}
 
 /**
  * Global hook that automatically redirects users to their game
@@ -17,7 +28,7 @@ export function useGameRedirect() {
 
   useEffect(() => {
     let mounted = true;
-    let channel: any = null;
+    let channel: RealtimeChannel | null = null;
 
     const setupRedirect = async () => {
       // Get current user
@@ -28,16 +39,16 @@ export function useGameRedirect() {
       if (!user || !mounted) return;
 
       // Helper function to check if user is a player in the game
-      const isUserInGame = (game: any, userId: string): boolean => {
+      const isUserInGame = (game: DatabaseGameRow, userId: string): boolean => {
         // First check player_ids array (generated column)
         const playerIds = game.player_ids || [];
         const userIdStr = String(userId);
         const playerIdsStr = Array.isArray(playerIds)
-          ? playerIds.map((id: any) => String(id))
+          ? playerIds.map((id: string) => String(id))
           : [];
 
         const leftPlayers = Array.isArray(game.left_players)
-          ? game.left_players.map((id: any) => String(id))
+          ? game.left_players.map((id: string) => String(id))
           : [];
 
         if (leftPlayers.includes(userIdStr)) {
@@ -51,7 +62,7 @@ export function useGameRedirect() {
         // Fallback: check players JSONB directly (in case player_ids is not populated yet)
         const players = game.players || [];
         if (Array.isArray(players)) {
-          return players.some((p: any) => {
+          return players.some((p) => {
             const playerId = p?.id || p?.user_id;
             return playerId && String(playerId) === userIdStr;
           });
@@ -62,7 +73,7 @@ export function useGameRedirect() {
 
       // Helper function to handle game redirect
       const handleGameRedirect = (
-        game: any,
+        game: DatabaseGameRow,
         eventType: "INSERT" | "UPDATE"
       ) => {
         if (!mounted) return;

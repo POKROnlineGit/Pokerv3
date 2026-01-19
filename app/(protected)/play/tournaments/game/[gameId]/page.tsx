@@ -22,6 +22,9 @@ import {
   TournamentLevelWarningEvent,
   TournamentPlayerEliminatedEvent,
   BlindLevel,
+  normalizeTournament,
+  normalizeParticipant,
+  TournamentStatusInfo,
 } from "@/lib/types/tournament";
 import {
   Users,
@@ -248,53 +251,50 @@ export default function TournamentGamePage() {
     }
   }, [gameState?.players, gameState?.communityCards, currentUserId]);
 
-  // Derived tournament values
-  const blindStructure =
-    tournamentInfo?.tournament?.blind_structure_template ||
-    (tournamentInfo?.tournament as any)?.blindStructureTemplate ||
-    [];
+  // Derived tournament values (normalized)
+  const normalizedTournamentData = useMemo(() => {
+    if (!tournamentInfo?.tournament) return null;
+    return normalizeTournament(tournamentInfo.tournament);
+  }, [tournamentInfo?.tournament]);
+
+  const blindStructure = normalizedTournamentData?.blindStructureTemplate || [];
 
   const currentBlindLevel = useMemo(() => {
     if (typeof tournamentInfo?.status === "object") {
-      return (tournamentInfo.status as any).currentBlindLevel ?? 0;
+      return (tournamentInfo.status as TournamentStatusInfo).currentBlindLevel ?? 0;
     }
-    return tournamentInfo?.tournament?.current_blind_level ?? 0;
-  }, [tournamentInfo]);
+    return normalizedTournamentData?.currentBlindLevel ?? 0;
+  }, [tournamentInfo?.status, normalizedTournamentData]);
 
   const levelEndsAt = useMemo(() => {
     if (typeof tournamentInfo?.status === "object") {
-      return (tournamentInfo.status as any).levelEndsAt;
+      return (tournamentInfo.status as TournamentStatusInfo).levelEndsAt;
     }
-    return tournamentInfo?.tournament?.level_ends_at;
-  }, [tournamentInfo]);
+    return normalizedTournamentData?.levelEndsAt;
+  }, [tournamentInfo?.status, normalizedTournamentData]);
 
   const nextBlinds: BlindLevel | null =
     blindStructure[currentBlindLevel + 1] || null;
 
   const playersRemaining = useMemo(() => {
     if (typeof tournamentInfo?.status === "object") {
-      return (tournamentInfo.status as any).totalPlayers ?? 0;
+      return (tournamentInfo.status as TournamentStatusInfo).totalPlayers ?? 0;
     }
-    return (
-      tournamentInfo?.participants?.filter(
-        (p) =>
-          p.status === "active" ||
-          (p as any).status === "playing" ||
-          (p as any).status === "registered"
-      ).length ?? 0
-    );
-  }, [tournamentInfo]);
+    if (!tournamentInfo?.participants) return 0;
+    const normalizedParticipants = tournamentInfo.participants.map((p) => normalizeParticipant(p));
+    return normalizedParticipants.filter(
+      (p) => p.status === "active" || p.status === "registered"
+    ).length;
+  }, [tournamentInfo?.status, tournamentInfo?.participants]);
 
   const tablesRemaining = useMemo(() => {
     if (typeof tournamentInfo?.status === "object") {
-      return (tournamentInfo.status as any).tableCount ?? 0;
+      return (tournamentInfo.status as TournamentStatusInfo).tableCount ?? 0;
     }
     return tournamentInfo?.tables?.length ?? 0;
-  }, [tournamentInfo]);
+  }, [tournamentInfo?.status, tournamentInfo?.tables]);
 
-  const tournamentName =
-    tournamentInfo?.tournament?.title ||
-    (tournamentInfo?.tournament as any)?.name;
+  const tournamentName = normalizedTournamentData?.title;
 
   // Get current user
   useEffect(() => {
@@ -364,7 +364,7 @@ export default function TournamentGamePage() {
       });
 
       // Check if this is a tournament game
-      const tId = (state as any).tournamentId;
+      const tId = state.tournamentId;
       if (tId && !tournamentJoinedRef.current) {
         setTournamentId(tId);
         // Fetch tournament state
@@ -418,8 +418,8 @@ export default function TournamentGamePage() {
     };
 
     // Tournament events
-    const handleTournamentState = (state: TournamentStateResponse) => {
-      if (mounted && tournamentId && (state as any).tournamentId === tournamentId) {
+    const handleTournamentState = (state: TournamentStateResponse & { tournamentId?: string }) => {
+      if (mounted && tournamentId && state.tournamentId === tournamentId) {
         setTournamentInfo(state);
       }
     };
@@ -433,13 +433,14 @@ export default function TournamentGamePage() {
             status:
               typeof prev.status === "object"
                 ? {
-                    ...(prev.status as any),
+                    ...(prev.status as TournamentStatusInfo),
                     currentBlindLevel: data.level,
                     levelEndsAt: data.levelEndsAt,
                   }
                 : prev.status,
             tournament: {
               ...prev.tournament,
+              // Update both snake_case and camelCase to ensure normalization picks it up
               current_blind_level: data.level,
               level_ends_at: data.levelEndsAt,
             },
@@ -472,7 +473,7 @@ export default function TournamentGamePage() {
         );
 
         // Check if current user was eliminated
-        if (data.playerId === currentUserId || (data as any).userId === currentUserId) {
+        if (data.playerId === currentUserId) {
           toast({
             title: "Eliminated",
             description: `You finished in position #${data.finishPosition}`,

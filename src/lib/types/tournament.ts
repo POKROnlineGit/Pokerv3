@@ -114,7 +114,7 @@ export interface TournamentState {
 // Leaderboard Entry
 export interface LeaderboardEntry {
   rank: number;
-  user_id: string;
+  odanUserId: string;
   username: string;
   chips: number;
   status: ParticipantStatus;
@@ -203,11 +203,6 @@ export interface TournamentPlayerTransferredEvent {
   targetTableId: string;
   targetSeat: number;
   timestamp: string;
-  // Aliases for compatibility
-  userId?: string;
-  fromTableId?: string;
-  toTableId?: string;
-  newTableId?: string;
 }
 
 export interface TournamentTablesBalancedEvent {
@@ -302,11 +297,11 @@ export type TournamentEventType =
   | "TOURNAMENT_PLAYER_BANNED"
   | "TOURNAMENT_PLAYER_LEFT";
 
-// Full State Event
+// Full State Event (from tournamentState socket event)
 export interface TournamentStateEvent {
   tournamentId: string;
-  tournament: TournamentData | Tournament;
-  participants: TournamentPlayer[] | Participant[];
+  tournament: TournamentData;
+  participants: Participant[];
   tables: TournamentTableInfo[] | TableState[];
   status: TournamentStatusInfo | TournamentStatusType;
   hostId: string;
@@ -318,75 +313,93 @@ export interface TournamentStateEvent {
 // LEGACY/COMPATIBILITY TYPES (for existing code)
 // ============================================
 
-// Tournament interface with both snake_case and camelCase for compatibility
-export interface Tournament {
-  // Primary fields (snake_case from backend)
-  id?: string;
-  host_id?: string;
-  title?: string;
-  description?: string | null;
-  status?: TournamentStatusType;
-  max_players?: number | null;
-  max_players_per_table?: number;
-  starting_stack?: number;
-  blind_structure_template?: BlindLevel[];
-  blind_level_duration_minutes?: number;
-  current_blind_level?: number;
-  level_ends_at?: string | null;
-  created_at?: string;
-  started_at?: string | null;
-  ended_at?: string | null;
-  updated_at?: string;
+// ============================================
+// UTILITY FUNCTIONS FOR TYPE NORMALIZATION
+// ============================================
 
-  // Compatibility aliases (camelCase)
-  tournamentId?: string;
-  hostId?: string;
-  name?: string;
-  maxPlayers?: number;
-  maxPlayersPerTable?: number;
-  startingStack?: number;
-  blindStructureTemplate?: BlindLevel[];
-  blindLevelDurationMinutes?: number;
-  createdAt?: string;
-  startedAt?: string;
-  finishedAt?: string;
-
-  // Legacy config object (deprecated)
-  config?: {
-    startingStack?: number;
-    blinds?: { small: number; big: number };
-    maxPlayers?: number;
-    minPlayers?: number;
-    maxPlayersPerTable?: number;
+/**
+ * Normalize participant data from backend (handles both snake_case and camelCase)
+ * Use this when receiving participant data from socket or API
+ */
+export function normalizeParticipant(p: Participant | TournamentData | Record<string, unknown>): NormalizedParticipant {
+  const raw = p as Record<string, unknown>;
+  return {
+    id: (raw.id as string) || "",
+    odanUserId: (raw.user_id as string) || (raw.userId as string) || (raw.odanUserId as string) || "",
+    odanTournamentId: (raw.tournament_id as string) || (raw.tournamentId as string) || (raw.odanTournamentId as string) || "",
+    status: (raw.status as ParticipantStatus) || "registered",
+    currentStack: (raw.current_stack as number) ?? (raw.currentStack as number) ?? 0,
+    currentTableId: (raw.current_table_id as string | null) ?? (raw.currentTableId as string | null) ?? (raw.tableId as string | null) ?? null,
+    currentSeat: (raw.current_seat as number | null) ?? (raw.currentSeat as number | null) ?? null,
+    eliminatedAt: (raw.eliminated_at as string | null) ?? (raw.eliminatedAt as string | null) ?? null,
+    finalChips: (raw.final_chips as number | null) ?? (raw.finalChips as number | null) ?? null,
+    username: (raw.username as string) || (raw.profiles as { username: string })?.username || "Unknown",
   };
 }
 
-// TournamentPlayer - Legacy compatibility
-export interface TournamentPlayer {
-  // Backend snake_case
-  id?: string;
-  user_id?: string;
-  tournament_id?: string;
-  current_table_id?: string | null;
-  current_game_id?: string | null;
-  current_stack?: number | null;
-  current_seat?: number | null;
-  eliminated_at?: string | null;
-  final_chips?: number | null;
-
-  // Compatibility camelCase
-  userId?: string;
-  tableId?: string;
-  gameId?: string;
-  username?: string;
-  chips?: number;
-  position?: number;
-  eliminatedAt?: string;
-  rebuyCount?: number;
-  status?: ParticipantStatus;
-  profiles?: {
-    username: string;
+/**
+ * Normalize tournament data from backend
+ */
+export function normalizeTournament(t: TournamentData | Record<string, unknown>): NormalizedTournament {
+  const raw = t as Record<string, unknown>;
+  return {
+    id: (raw.id as string) || "",
+    hostId: (raw.host_id as string) || (raw.hostId as string) || "",
+    title: (raw.title as string) || (raw.name as string) || "",
+    description: (raw.description as string | null) ?? null,
+    maxPlayers: (raw.max_players as number | null) ?? (raw.maxPlayers as number | null) ?? null,
+    maxPlayersPerTable: (raw.max_players_per_table as number) ?? (raw.maxPlayersPerTable as number) ?? 9,
+    startingStack: (raw.starting_stack as number) ?? (raw.startingStack as number) ?? 0,
+    blindStructureTemplate: (raw.blind_structure_template as BlindLevel[]) || (raw.blindStructureTemplate as BlindLevel[]) || [],
+    blindLevelDurationMinutes: (raw.blind_level_duration_minutes as number) ?? (raw.blindLevelDurationMinutes as number) ?? 10,
+    status: (raw.status as TournamentStatusType) || "setup",
+    currentBlindLevel: (raw.current_blind_level as number) ?? (raw.currentBlindLevel as number) ?? 0,
+    levelEndsAt: (raw.level_ends_at as string | null) ?? (raw.levelEndsAt as string | null) ?? null,
+    startedAt: (raw.started_at as string | null) ?? (raw.startedAt as string | null) ?? null,
+    createdAt: (raw.created_at as string) || (raw.createdAt as string) || "",
+    updatedAt: (raw.updated_at as string) || (raw.updatedAt as string) || "",
   };
+}
+
+// ============================================
+// NORMALIZED TYPES (use these in components)
+// ============================================
+
+/**
+ * Normalized participant - use this in components after calling normalizeParticipant()
+ */
+export interface NormalizedParticipant {
+  id: string;
+  odanUserId: string;
+  odanTournamentId: string;
+  status: ParticipantStatus;
+  currentStack: number;
+  currentTableId: string | null;
+  currentSeat: number | null;
+  eliminatedAt: string | null;
+  finalChips: number | null;
+  username: string;
+}
+
+/**
+ * Normalized tournament - use this in components after calling normalizeTournament()
+ */
+export interface NormalizedTournament {
+  id: string;
+  hostId: string;
+  title: string;
+  description: string | null;
+  maxPlayers: number | null;
+  maxPlayersPerTable: number;
+  startingStack: number;
+  blindStructureTemplate: BlindLevel[];
+  blindLevelDurationMinutes: number;
+  status: TournamentStatusType;
+  currentBlindLevel: number;
+  levelEndsAt: string | null;
+  startedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Table Info - flexible to accommodate both simple and full table states
@@ -407,11 +420,13 @@ export interface TournamentTableInfo {
   tournamentTableIndex?: number;
 }
 
-// TournamentStateResponse - Legacy compatibility for existing pages
+// TournamentStateResponse - Response from get_tournament_state
+// Note: tournament and participants come as raw database format (snake_case)
+// Use normalizeTournament() and normalizeParticipant() to convert
 export interface TournamentStateResponse {
-  tournament: Tournament;
-  participants: TournamentPlayer[];
-  tables: TournamentTableInfo[];
+  tournament: TournamentData;
+  participants: Participant[];
+  tables: TournamentTableInfo[] | TableState[];
   status: TournamentStatusType | TournamentStatusInfo;
   hostId: string;
   canRegister?: boolean;

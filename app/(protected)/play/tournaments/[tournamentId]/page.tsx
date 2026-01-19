@@ -22,6 +22,9 @@ import {
   TournamentPlayerBannedEvent,
   TournamentPlayerLeftEvent,
   BlindLevel,
+  normalizeParticipant,
+  normalizeTournament,
+  NormalizedParticipant,
 } from "@/lib/types/tournament";
 import { useToast } from "@/lib/hooks";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
@@ -199,34 +202,21 @@ export default function TournamentDetailPage() {
   // Initialize settings form from tournament data (for registration phase)
   useEffect(() => {
     if (!tournamentData) return;
-    
+
     const tournament = tournamentData.tournament;
+    const normalized = normalizeTournament(tournament);
     const currentStatus: TournamentStatusType =
       typeof tournamentData.status === "string"
         ? (tournamentData.status as TournamentStatusType)
-        : ((tournamentData as any).status?.status || tournament?.status) as TournamentStatusType;
+        : normalized.status;
 
     if (currentStatus === "registration") {
-      const blindStructureTemplate: BlindLevel[] =
-        tournament?.blind_structure_template ||
-        tournament?.blindStructureTemplate ||
-        [];
-
       setSettingsForm({
-        maxPlayersPerTable:
-          tournament?.max_players_per_table?.toString() ||
-          tournament?.maxPlayersPerTable?.toString() ||
-          "9",
-        startingStack:
-          tournament?.starting_stack?.toString() ||
-          tournament?.startingStack?.toString() ||
-          "10000",
-        blindLevelDurationMinutes:
-          tournament?.blind_level_duration_minutes?.toString() ||
-          tournament?.blindLevelDurationMinutes?.toString() ||
-          "10",
-        blindStructure: blindStructureTemplate.length > 0
-          ? blindStructureTemplate
+        maxPlayersPerTable: normalized.maxPlayersPerTable?.toString() || "9",
+        startingStack: normalized.startingStack?.toString() || "10000",
+        blindLevelDurationMinutes: normalized.blindLevelDurationMinutes?.toString() || "10",
+        blindStructure: normalized.blindStructureTemplate.length > 0
+          ? normalized.blindStructureTemplate
           : [{ small: 10, big: 20 }, { small: 20, big: 40 }, { small: 50, big: 100 }],
       });
     }
@@ -243,43 +233,34 @@ export default function TournamentDetailPage() {
       return;
     }
 
-    // Find current user's participant data
-    const myParticipant = state.participants.find(
-      (p) => (p.userId || p.user_id) === currentUserId
+    // Find current user's participant data (normalize to handle both naming formats)
+    const normalizedParticipants = state.participants.map((p) => normalizeParticipant(p));
+    const myParticipant = normalizedParticipants.find(
+      (p) => p.odanUserId === currentUserId
     );
 
-    if (myParticipant) {
-      const tableId =
-        myParticipant.current_table_id ||
-        myParticipant.current_game_id ||
-        myParticipant.gameId ||
-        myParticipant.tableId;
-
-      if (tableId) {
-        // Join the table game
-        const result = await joinTable(tableId);
-        if ("error" in result) {
-          toast({
-            title: "Error Joining Table",
-            description: result.error || "Failed to join tournament table",
-            variant: "destructive",
-          });
-        } else {
-          // Navigate to tournament game page
-          router.push(`/play/tournaments/game/${tableId}`);
-        }
+    if (myParticipant && myParticipant.currentTableId) {
+      // Join the table game
+      const result = await joinTable(myParticipant.currentTableId);
+      if ("error" in result) {
+        toast({
+          title: "Error Joining Table",
+          description: result.error || "Failed to join tournament table",
+          variant: "destructive",
+        });
+      } else {
+        // Navigate to tournament game page
+        router.push(`/play/tournaments/game/${myParticipant.currentTableId}`);
       }
     }
   }, [tournamentId, currentUserId, getTournamentState, joinTable, router, toast]);
 
   // Handle player transferred
   const handlePlayerTransferred = useCallback(async (data: TournamentPlayerTransferredEvent) => {
-    const playerId = data.playerId || data.userId;
-    if (playerId !== currentUserId) return;
+    if (data.playerId !== currentUserId) return;
 
-    const newTableId = data.targetTableId || data.toTableId || data.newTableId;
-    if (!newTableId) {
-      console.error("[Tournament] No new table ID in transfer event");
+    if (!data.targetTableId) {
+      console.error("[Tournament] No target table ID in transfer event");
       return;
     }
 
@@ -289,7 +270,7 @@ export default function TournamentDetailPage() {
       variant: "default",
     });
 
-    const result = await joinTable(newTableId);
+    const result = await joinTable(data.targetTableId);
     if ("error" in result) {
       toast({
         title: "Error Joining Table",
@@ -297,7 +278,7 @@ export default function TournamentDetailPage() {
         variant: "destructive",
       });
     } else {
-      router.push(`/play/tournaments/game/${newTableId}`);
+      router.push(`/play/tournaments/game/${data.targetTableId}`);
     }
   }, [currentUserId, joinTable, router, toast]);
 
@@ -424,20 +405,13 @@ export default function TournamentDetailPage() {
           return;
         }
 
-        // Extract status
-        let status: TournamentStatusType;
-        let hostId: string | undefined;
-
-        if (typeof response.status === "string") {
-          status = response.status as TournamentStatusType;
-          hostId = response.hostId;
-        } else if ((response as any).status?.status) {
-          status = (response as any).status.status;
-          hostId = response.hostId;
-        } else {
-          status = (response as any).tournament?.status;
-          hostId = (response as any).tournament?.host_id || response.hostId;
-        }
+        // Extract status using normalization
+        const normalizedTournamentData = normalizeTournament(response.tournament);
+        const status: TournamentStatusType =
+          typeof response.status === "string"
+            ? (response.status as TournamentStatusType)
+            : normalizedTournamentData.status;
+        const hostId = response.hostId || normalizedTournamentData.hostId;
 
         const isHost = hostId === currentUserId;
 
@@ -505,37 +479,40 @@ export default function TournamentDetailPage() {
     );
   }
 
-  // Extract data from state
+  // Extract and normalize data from state
   const tournament = tournamentData.tournament;
+  const normalizedTournament = normalizeTournament(tournament);
+  const rawParticipants = tournamentData.participants || [];
+  const normalizedParticipants: NormalizedParticipant[] = rawParticipants.map((p) =>
+    normalizeParticipant(p)
+  );
+  const tables = tournamentData.tables || [];
+  const hostId = tournamentData.hostId || normalizedTournament.hostId;
+  const canRegister = tournamentData.canRegister ?? false;
+
+  // Determine status (handle both string and object formats)
   const status: TournamentStatusType =
     typeof tournamentData.status === "string"
       ? (tournamentData.status as TournamentStatusType)
-      : ((tournamentData as any).status?.status || tournament?.status) as TournamentStatusType;
-  const participants = tournamentData.participants || [];
-  const tables = tournamentData.tables || [];
-  const hostId = tournamentData.hostId || tournament?.host_id;
-  const canRegister = tournamentData.canRegister ?? false;
+      : normalizedTournament.status;
 
   const isHost = currentUserId ? hostId === currentUserId : false;
   const isRegistered = currentUserId
-    ? participants.some((p) => (p.userId || p.user_id) === currentUserId)
+    ? normalizedParticipants.some((p) => p.odanUserId === currentUserId)
     : false;
 
   // Get current blind level info
-  const currentBlindLevel = tournament?.current_blind_level ?? 0;
-  const blindStructure: BlindLevel[] =
-    tournament?.blind_structure_template ||
-    tournament?.blindStructureTemplate ||
-    [];
+  const currentBlindLevel = normalizedTournament.currentBlindLevel;
+  const blindStructure: BlindLevel[] = normalizedTournament.blindStructureTemplate;
   const currentBlinds = blindStructure[currentBlindLevel] || { small: 0, big: 0 };
   const nextBlinds = blindStructure[currentBlindLevel + 1];
-  const levelEndsAt = tournament?.level_ends_at;
+  const levelEndsAt = normalizedTournament.levelEndsAt;
 
   // Find my participant data
   const myParticipant = currentUserId
-    ? participants.find((p) => (p.userId || p.user_id) === currentUserId)
+    ? normalizedParticipants.find((p) => p.odanUserId === currentUserId)
     : null;
-  const myTableId = myParticipant?.current_table_id || myParticipant?.tableId;
+  const myTableId = myParticipant?.currentTableId;
   const isEliminated = myParticipant?.status === "eliminated";
 
   // Determine if user can spectate
@@ -611,7 +588,7 @@ export default function TournamentDetailPage() {
   };
 
   const handleStart = async () => {
-    if (participants.length < 2) {
+    if (normalizedParticipants.length < 2) {
       toast({
         title: "Cannot Start",
         description: "Need at least 2 players to start the tournament",
@@ -932,11 +909,11 @@ export default function TournamentDetailPage() {
   if (status === "registration") {
     return (
       <PlayLayout
-        title={tournament?.title || tournament?.name || "Tournament"}
+        title={normalizedTournament.title || "Tournament"}
         tableContent={
           <TournamentRegistrationContent
-            tournament={tournament!}
-            participants={participants}
+            tournament={tournament}
+            participants={rawParticipants}
             isHost={isHost}
             isRegistered={isRegistered}
             currentUserId={currentUserId}
@@ -987,7 +964,7 @@ export default function TournamentDetailPage() {
               <div className="flex gap-2">
                 <Button
                   onClick={handleStart}
-                  disabled={isStarting || participants.length < 2}
+                  disabled={isStarting || normalizedParticipants.length < 2}
                   size="lg"
                   className="flex-1 font-bold text-sm h-12"
                 >
@@ -1054,7 +1031,7 @@ export default function TournamentDetailPage() {
             </div>
           )}
 
-          {isHost && participants.length < 2 && (
+          {isHost && normalizedParticipants.length < 2 && (
             <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
               <p className="text-amber-400 text-xs">
                 Need at least 2 players to start
@@ -1215,16 +1192,16 @@ export default function TournamentDetailPage() {
               <AccordionItem value="participants" className="border-slate-800">
                 <AccordionTrigger className="text-sm">
                   Participants
-                  {participants.length > 0 && (
+                  {normalizedParticipants.length > 0 && (
                     <Badge className="ml-2 bg-emerald-500">
-                      {participantCount !== null ? participantCount : participants.length}
+                      {participantCount !== null ? participantCount : normalizedParticipants.length}
                     </Badge>
                   )}
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="text-xs text-slate-400 py-2">
-                    {participantCount !== null ? participantCount : participants.length}
-                    {tournament?.max_players && ` / ${tournament.max_players}`} players registered
+                    {participantCount !== null ? participantCount : normalizedParticipants.length}
+                    {normalizedTournament.maxPlayers && ` / ${normalizedTournament.maxPlayers}`} players registered
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -1239,10 +1216,10 @@ export default function TournamentDetailPage() {
                     <div className="min-w-0">
                       <p className="text-xs text-slate-400 truncate">Players</p>
                       <p className="text-lg font-bold truncate">
-                        {participantCount !== null ? participantCount : participants.length}
-                        {tournament?.max_players && (
+                        {participantCount !== null ? participantCount : normalizedParticipants.length}
+                        {normalizedTournament.maxPlayers && (
                           <span className="text-slate-500 text-xs font-normal">
-                            /{tournament.max_players}
+                            /{normalizedTournament.maxPlayers}
                           </span>
                         )}
                       </p>
@@ -1265,12 +1242,12 @@ export default function TournamentDetailPage() {
     // Tournament overview with table list
     return (
       <PlayLayout
-        title={tournament?.title || tournament?.name || "Tournament"}
+        title={normalizedTournament.title || "Tournament"}
         tableContent={
           <div className="w-full h-full overflow-auto p-4">
             <TournamentOverview
               tournament={tournament}
-              participants={participants}
+              participants={rawParticipants}
               status={status}
               isHost={isHost}
               currentUserId={currentUserId}
@@ -1377,7 +1354,7 @@ export default function TournamentDetailPage() {
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-400">Players</span>
               <span className="text-white">
-                {participants.filter((p) => p.status !== "eliminated").length} / {participants.length}
+                {normalizedParticipants.filter((p) => p.status !== "eliminated").length} / {normalizedParticipants.length}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
@@ -1414,7 +1391,7 @@ export default function TournamentDetailPage() {
 
   return (
     <PlayLayout
-      title={tournament?.title || tournament?.name || "Tournament"}
+      title={normalizedTournament.title || "Tournament"}
       footer={
         <div className="flex flex-col gap-2 w-full">
           {/* Cancel button for setup status */}
@@ -1451,12 +1428,12 @@ export default function TournamentDetailPage() {
         <div className="space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-lg font-bold truncate flex-1 min-w-0">
-              {tournament?.title || tournament?.name || "Tournament"}
+              {normalizedTournament.title || "Tournament"}
             </h1>
             <StatusBadge status={status} />
           </div>
-          {tournament?.description && (
-            <p className="text-sm text-slate-400 line-clamp-2">{tournament.description}</p>
+          {normalizedTournament.description && (
+            <p className="text-sm text-slate-400 line-clamp-2">{normalizedTournament.description}</p>
           )}
         </div>
 
@@ -1486,10 +1463,10 @@ export default function TournamentDetailPage() {
                 <div className="min-w-0">
                   <p className="text-xs text-slate-400 truncate">Participants</p>
                   <p className="text-lg font-bold truncate">
-                    {participantCount !== null ? participantCount : participants.length}
-                    {tournament?.max_players && (
+                    {participantCount !== null ? participantCount : normalizedParticipants.length}
+                    {normalizedTournament.maxPlayers && (
                       <span className="text-slate-500 text-xs font-normal">
-                        /{tournament.max_players}
+                        /{normalizedTournament.maxPlayers}
                       </span>
                     )}
                   </p>

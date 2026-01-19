@@ -17,28 +17,19 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import {
-  TournamentStateResponse,
+  TournamentData,
+  Participant,
   TournamentStatusType,
   BlindLevel,
+  normalizeParticipant,
+  normalizeTournament,
+  NormalizedParticipant,
 } from "@/lib/types/tournament";
-import { useEffect, useState } from "react";
-
-interface ParticipantLike {
-  id?: string;
-  user_id?: string;
-  userId?: string;
-  status?: string;
-  current_stack?: number | null;
-  chips?: number | null;
-  profiles?: {
-    username?: string;
-  };
-  username?: string;
-}
+import { useEffect, useState, useMemo } from "react";
 
 interface TournamentOverviewProps {
-  tournament: TournamentStateResponse["tournament"];
-  participants: ParticipantLike[];
+  tournament: TournamentData | Record<string, unknown>;
+  participants: Array<Participant | Record<string, unknown>>;
   status: TournamentStatusType;
   isHost: boolean;
   currentUserId: string | null;
@@ -150,24 +141,28 @@ export function TournamentOverview({
   isCancelling,
   isBanning,
 }: TournamentOverviewProps) {
-  const blindStructure: BlindLevel[] =
-    tournament?.blind_structure_template ||
-    (tournament as any)?.blindStructureTemplate ||
-    [];
+  // Normalize tournament and participants data
+  const normalizedTournament = useMemo(
+    () => normalizeTournament(tournament),
+    [tournament]
+  );
+  const normalizedParticipants = useMemo(
+    () => participants.map((p) => normalizeParticipant(p)),
+    [participants]
+  );
 
+  const blindStructure: BlindLevel[] = normalizedTournament.blindStructureTemplate;
   const currentBlinds = blindStructure[currentBlindLevel] || { small: 0, big: 0 };
   const nextBlinds = blindStructure[currentBlindLevel + 1];
-  const startingStack =
-    tournament?.starting_stack || (tournament as any)?.startingStack || 10000;
+  const startingStack = normalizedTournament.startingStack || 10000;
 
   // Calculate total chips in play
-  const totalChips = participants.reduce((sum, p) => {
-    const chips = p.current_stack ?? p.chips ?? 0;
-    return sum + chips;
+  const totalChips = normalizedParticipants.reduce((sum, p) => {
+    return sum + p.currentStack;
   }, 0);
 
   // Count active players
-  const activePlayers = participants.filter(
+  const activePlayers = normalizedParticipants.filter(
     (p) => p.status !== "eliminated"
   ).length;
 
@@ -181,12 +176,12 @@ export function TournamentOverview({
         <div className="inline-flex items-center gap-2 mb-3">
           <Trophy className="h-8 w-8 text-amber-400" />
           <h1 className="text-2xl md:text-3xl font-bold text-white">
-            {tournament?.title || (tournament as any)?.name || "Tournament"}
+            {normalizedTournament.title || "Tournament"}
           </h1>
         </div>
-        {tournament?.description && (
+        {normalizedTournament.description && (
           <p className="text-slate-400 text-sm max-w-2xl mx-auto mb-3">
-            {tournament.description}
+            {normalizedTournament.description}
           </p>
         )}
         <div className="flex items-center justify-center gap-3">
@@ -336,41 +331,33 @@ export function TournamentOverview({
       )}
 
       {/* Player Management (Host only) */}
-      {isHost && participants.length > 0 && (
+      {isHost && normalizedParticipants.length > 0 && (
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-slate-300 flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Players ({activePlayers} active / {participants.length} total)
+              Players ({activePlayers} active / {normalizedParticipants.length} total)
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-[200px]">
               <div className="space-y-1.5">
-                {participants
+                {[...normalizedParticipants]
                   .sort((a, b) => {
                     // Sort by status (active first), then by chips
                     if (a.status === "eliminated" && b.status !== "eliminated")
                       return 1;
                     if (a.status !== "eliminated" && b.status === "eliminated")
                       return -1;
-                    const chipsA = a.current_stack ?? a.chips ?? 0;
-                    const chipsB = b.current_stack ?? b.chips ?? 0;
-                    return chipsB - chipsA;
+                    return b.currentStack - a.currentStack;
                   })
                   .map((p, i) => {
-                    const playerId = p.user_id || (p as any).userId;
-                    const username =
-                      p.profiles?.username ||
-                      (p as any).username ||
-                      playerId?.slice(0, 8) + "...";
-                    const isMe = playerId === currentUserId;
-                    const chips = p.current_stack ?? p.chips ?? 0;
+                    const isMe = p.odanUserId === currentUserId;
                     const isEliminated = p.status === "eliminated";
 
                     return (
                       <div
-                        key={playerId || i}
+                        key={p.odanUserId || i}
                         className={`flex items-center justify-between p-2 rounded text-sm ${
                           isMe
                             ? "bg-blue-500/10 border border-blue-500/30"
@@ -386,7 +373,7 @@ export function TournamentOverview({
                               isMe ? "text-blue-400 font-medium" : "text-slate-200"
                             }`}
                           >
-                            {username}
+                            {p.username}
                           </span>
                           {isMe && (
                             <Badge
@@ -408,19 +395,19 @@ export function TournamentOverview({
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {!isEliminated && (
                             <span className="text-slate-400 font-mono text-xs">
-                              {chips.toLocaleString()}
+                              {p.currentStack.toLocaleString()}
                             </span>
                           )}
                           {!isMe && !isEliminated && onBanPlayer && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => onBanPlayer(playerId!)}
-                              disabled={isBanning === playerId}
+                              onClick={() => onBanPlayer(p.odanUserId)}
+                              disabled={isBanning === p.odanUserId}
                               className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/20"
                               title="Ban player"
                             >
-                              {isBanning === playerId ? (
+                              {isBanning === p.odanUserId ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
                               ) : (
                                 <Ban className="h-3 w-3" />

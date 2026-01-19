@@ -17,26 +17,18 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { TournamentStateResponse, BlindLevel } from "@/lib/types/tournament";
-import { useState } from "react";
-
-// Flexible participant type to handle different backend formats
-interface ParticipantLike {
-  id?: string;
-  user_id?: string;
-  userId?: string;
-  status?: string;
-  current_stack?: number | null;
-  chips?: number | null;
-  profiles?: {
-    username?: string;
-  };
-  username?: string;
-}
+import {
+  TournamentData,
+  Participant,
+  BlindLevel,
+  normalizeParticipant,
+  normalizeTournament,
+} from "@/lib/types/tournament";
+import { useState, useMemo } from "react";
 
 interface TournamentRegistrationContentProps {
-  tournament: TournamentStateResponse["tournament"];
-  participants: ParticipantLike[];
+  tournament: TournamentData | Record<string, unknown>;
+  participants: Array<Participant | Record<string, unknown>>;
   isHost: boolean;
   isRegistered: boolean;
   currentUserId: string | null;
@@ -59,16 +51,22 @@ export function TournamentRegistrationContent({
 }: TournamentRegistrationContentProps) {
   const [showAllBlinds, setShowAllBlinds] = useState(false);
 
-  const blindStructure: BlindLevel[] =
-    tournament?.blind_structure_template ||
-    (tournament as any)?.blindStructureTemplate ||
-    [];
+  // Normalize tournament and participants data
+  const normalizedTournament = useMemo(
+    () => normalizeTournament(tournament),
+    [tournament]
+  );
+  const normalizedParticipants = useMemo(
+    () => participants.map((p) => normalizeParticipant(p)),
+    [participants]
+  );
 
-  const totalParticipants = participantCount ?? participants.length;
-  const maxPlayers = tournament?.max_players;
-  const startingStack = tournament?.starting_stack || (tournament as any)?.startingStack || 10000;
-  const playersPerTable = tournament?.max_players_per_table || (tournament as any)?.maxPlayersPerTable || 9;
-  const levelDuration = tournament?.blind_level_duration_minutes || (tournament as any)?.blindLevelDurationMinutes || 10;
+  const blindStructure: BlindLevel[] = normalizedTournament.blindStructureTemplate;
+  const totalParticipants = participantCount ?? normalizedParticipants.length;
+  const maxPlayers = normalizedTournament.maxPlayers;
+  const startingStack = normalizedTournament.startingStack || 10000;
+  const playersPerTable = normalizedTournament.maxPlayersPerTable || 9;
+  const levelDuration = normalizedTournament.blindLevelDurationMinutes || 10;
 
   return (
     <div className="w-full max-w-4xl mx-auto p-4 md:p-8">
@@ -77,11 +75,11 @@ export function TournamentRegistrationContent({
         <div className="inline-flex items-center gap-2 mb-3">
           <Trophy className="h-8 w-8 text-amber-400" />
           <h1 className="text-3xl md:text-4xl font-bold text-white">
-            {tournament?.title || tournament?.name || "Tournament"}
+            {normalizedTournament.title || "Tournament"}
           </h1>
         </div>
-        {tournament?.description && (
-          <p className="text-slate-400 text-lg max-w-2xl mx-auto">{tournament.description}</p>
+        {normalizedTournament.description && (
+          <p className="text-slate-400 text-lg max-w-2xl mx-auto">{normalizedTournament.description}</p>
         )}
 
         {/* Status badges */}
@@ -191,11 +189,11 @@ export function TournamentRegistrationContent({
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-slate-300 flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Registered Players ({participants.length})
+              Registered Players ({normalizedParticipants.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {participants.length === 0 ? (
+            {normalizedParticipants.length === 0 ? (
               <div className="text-center py-8">
                 <Users className="h-8 w-8 text-slate-600 mx-auto mb-2" />
                 <p className="text-slate-500 text-sm">No players registered yet</p>
@@ -204,17 +202,12 @@ export function TournamentRegistrationContent({
             ) : (
               <ScrollArea className="h-[200px]">
                 <div className="space-y-1.5">
-                  {participants.map((p, i) => {
-                    const playerId = p.user_id || (p as any).userId;
-                    const username =
-                      p.profiles?.username ||
-                      (p as any).username ||
-                      playerId?.slice(0, 8) + "...";
-                    const isMe = playerId === currentUserId;
+                  {normalizedParticipants.map((p, i) => {
+                    const isMe = p.odanUserId === currentUserId;
 
                     return (
                       <div
-                        key={playerId || i}
+                        key={p.odanUserId || i}
                         className={`flex items-center justify-between p-2 rounded text-sm ${
                           isMe ? "bg-blue-500/10 border border-blue-500/30" : "bg-slate-900/50"
                         }`}
@@ -228,7 +221,7 @@ export function TournamentRegistrationContent({
                               isMe ? "text-blue-400 font-medium" : "text-slate-200"
                             }`}
                           >
-                            {username}
+                            {p.username}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5">
@@ -244,12 +237,12 @@ export function TournamentRegistrationContent({
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => onBanPlayer(playerId!)}
-                              disabled={isBanning === playerId}
+                              onClick={() => onBanPlayer(p.odanUserId)}
+                              disabled={isBanning === p.odanUserId}
                               className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/20"
                               title="Ban player"
                             >
-                              {isBanning === playerId ? (
+                              {isBanning === p.odanUserId ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
                               ) : (
                                 <Ban className="h-3 w-3" />
@@ -276,7 +269,7 @@ export function TournamentRegistrationContent({
         </div>
       )}
 
-      {isHost && participants.length < 2 && (
+      {isHost && normalizedParticipants.length < 2 && (
         <div className="mt-6 text-center">
           <p className="text-amber-400 text-sm">
             Need at least 2 players to start the tournament

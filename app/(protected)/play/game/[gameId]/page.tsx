@@ -10,6 +10,7 @@ import { PlayLayout } from "@/components/layout/PlayLayout";
 import { GameState, ActionType, Player } from "@/lib/types/poker";
 import { getClientHandStrength } from "@backend/domain/evaluation/ClientHandEvaluator";
 import { getSocket, disconnectSocket } from "@/lib/api/socket/client";
+import type { Socket } from "socket.io-client";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
 import { useToast } from "@/lib/hooks";
 import { useStatus } from "@/components/providers/StatusProvider";
@@ -243,7 +244,7 @@ export default function GamePage() {
     if (gameId.startsWith("local-")) return;
 
     let mounted = true;
-    let socket: any = null;
+    let socket: Socket | null = null;
 
     const connectSocket = async () => {
       if (socket) return; // Already connected
@@ -351,18 +352,16 @@ export default function GamePage() {
           let mainPot = 0;
           let sidePots: Array<{ amount: number; eligibleSeats: number[] }> = [];
 
-          if ((state as any).pots && Array.isArray((state as any).pots)) {
-            const potsArray = (state as any).pots;
+          if (state.pots && Array.isArray(state.pots)) {
+            const potsArray = state.pots;
             if (potsArray.length > 0) {
               mainPot = potsArray[0]?.amount || 0;
               // Convert eligiblePlayers (UUIDs) to eligibleSeats (seat numbers)
-              sidePots = potsArray.slice(1).map((pot: any) => ({
+              sidePots = potsArray.slice(1).map((pot) => ({
                 amount: pot?.amount || 0,
                 eligibleSeats: (pot?.eligiblePlayers || [])
                   .map((playerId: string) => {
-                    const player = state.players?.find(
-                      (p: any) => p.id === playerId
-                    );
+                    const player = state.players?.find((p) => p.id === playerId);
                     return player?.seat || 0;
                   })
                   .filter((seat: number) => seat > 0),
@@ -375,7 +374,7 @@ export default function GamePage() {
           }
 
           // Detect actual phase from server (may be "waiting")
-          const serverPhase = (state as any).currentPhase || "preflop";
+          const serverPhase = state.currentPhase || "preflop";
           const isWaitingPhase = serverPhase === "waiting";
 
           // BLOCK WAITING TRANSITION DURING ACTIVE HAND
@@ -386,7 +385,7 @@ export default function GamePage() {
             mainPot > 0 ||
             (state.players &&
               state.players.some(
-                (p: any) =>
+                (p: Player) =>
                   (p.holeCards && p.holeCards.length > 0) ||
                   (p.currentBet && p.currentBet > 0)
               ));
@@ -412,8 +411,8 @@ export default function GamePage() {
             gameId: state.gameId || gameId,
             // Ensure players array exists and is valid
             players: Array.isArray(state.players)
-              ? state.players.map((p: any) => ({
-                  id: p.id || p.userId || p.user_id || "",
+              ? state.players.map((p) => ({
+                  id: p.id || "",
                   username: p.username || `Player ${p.seat || ""}`,
                   seat: p.seat || 0,
                   chips: typeof p.chips === "number" ? p.chips : 0,
@@ -421,7 +420,7 @@ export default function GamePage() {
                   totalBet: p.totalBet ?? p.totalBetThisHand ?? 0,
                   holeCards: Array.isArray(p.holeCards)
                     ? p.holeCards.filter(
-                        (c: any): c is string => typeof c === "string"
+                        (c: unknown): c is string => typeof c === "string"
                       )
                     : [],
                   folded: Boolean(p.folded),
@@ -474,7 +473,7 @@ export default function GamePage() {
               : state.currentPhase ||
                 (serverPhase === "waiting"
                   ? "preflop"
-                  : (serverPhase as any)) ||
+                  : (serverPhase as GameState["currentPhase"])) ||
                 "preflop",
             currentActorSeat:
               typeof state.currentActorSeat === "number"
@@ -492,30 +491,28 @@ export default function GamePage() {
               typeof state.handNumber === "number" ? state.handNumber : 0,
             // Map Game Constraints: Ensure bigBlind and smallBlind are available to UI (ActionPopup needs these)
             bigBlind:
-              typeof (state as any).bigBlind === "number"
-                ? (state as any).bigBlind
-                : (state as any).config?.blinds?.big ||
-                  state.config?.bigBlind ||
+              typeof state.bigBlind === "number"
+                ? state.bigBlind
+                : state.config?.bigBlind ||
                   2,
             smallBlind:
-              typeof (state as any).smallBlind === "number"
-                ? (state as any).smallBlind
-                : (state as any).config?.blinds?.small ||
-                  state.config?.smallBlind ||
+              typeof state.smallBlind === "number"
+                ? state.smallBlind
+                : state.config?.smallBlind ||
                   1,
             // Calculate highBet from players if not directly available
             highBet:
-              typeof (state as any).highBet === "number"
-                ? (state as any).highBet
+              typeof state.highBet === "number"
+                ? state.highBet
                 : state.players?.length > 0
                 ? Math.max(
-                    ...state.players.map((p: any) => p.currentBet || 0),
+                    ...state.players.map((p: Player) => p.currentBet || 0),
                     0
                   )
                 : 0,
             // Preserve left_players if server sends it (for visual feedback)
-            ...((state as any).left_players && {
-              left_players: (state as any).left_players,
+            ...(state.left_players && {
+              left_players: state.left_players,
             }),
           };
 
@@ -947,8 +944,8 @@ export default function GamePage() {
         const normalizedState: GameState & { currentPhase?: string } = {
           gameId: state.gameId || gameId,
           players: Array.isArray(state.players)
-            ? state.players.map((p: any) => ({
-                id: p.id || p.userId || p.user_id || "",
+            ? state.players.map((p) => ({
+                id: p.id || "",
                 username: p.username || `Player ${p.seat || ""}`,
                 seat: p.seat || 0,
                 chips: typeof p.chips === "number" ? p.chips : 0,
@@ -956,7 +953,7 @@ export default function GamePage() {
                 totalBet: p.totalBet ?? p.totalBetThisHand ?? 0,
                 holeCards: Array.isArray(p.holeCards)
                   ? p.holeCards.filter(
-                      (c: any): c is string => typeof c === "string"
+                      (c: unknown): c is string => typeof c === "string"
                     )
                   : [],
                 folded: Boolean(p.folded),
@@ -1007,23 +1004,21 @@ export default function GamePage() {
             typeof state.handNumber === "number" ? state.handNumber : 0,
           // Map Game Constraints: Ensure bigBlind and smallBlind are available to UI (ActionPopup needs these)
           bigBlind:
-            typeof (state as any).bigBlind === "number"
-              ? (state as any).bigBlind
-              : (state as any).config?.blinds?.big ||
-                state.config?.bigBlind ||
+            typeof state.bigBlind === "number"
+              ? state.bigBlind
+              : state.config?.bigBlind ||
                 2,
           smallBlind:
-            typeof (state as any).smallBlind === "number"
-              ? (state as any).smallBlind
-              : (state as any).config?.blinds?.small ||
-                state.config?.smallBlind ||
+            typeof state.smallBlind === "number"
+              ? state.smallBlind
+              : state.config?.smallBlind ||
                 1,
           // Calculate highBet from players if not directly available
           highBet:
-            typeof (state as any).highBet === "number"
-              ? (state as any).highBet
+            typeof state.highBet === "number"
+              ? state.highBet
               : state.players?.length > 0
-              ? Math.max(...state.players.map((p: any) => p.currentBet || 0), 0)
+              ? Math.max(...state.players.map((p) => p.currentBet || 0), 0)
               : 0,
         } as GameState;
 
@@ -1231,7 +1226,7 @@ export default function GamePage() {
     const currentPhase = gameState.currentPhase || "preflop";
     const isWaitingPhase = currentPhase === "waiting";
     const activePlayerCount = gameState.players.filter(
-      (p) => !p.folded && p.chips > 0 && !(p as any).left
+      (p) => !p.folded && p.chips > 0 && !p.left
     ).length;
 
     if (isWaitingPhase && activePlayerCount < 2) {

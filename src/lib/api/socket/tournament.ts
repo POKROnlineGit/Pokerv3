@@ -24,7 +24,7 @@ import {
   TournamentPlayerLeftEvent,
   TournamentStateEvent,
   TournamentStatusType,
-  Tournament,
+  TournamentData,
 } from "@/lib/types/tournament";
 
 /**
@@ -299,7 +299,7 @@ export function useTournamentSocket() {
   const getActiveTournaments = useCallback(
     (
       status?: TournamentStatusType
-    ): Promise<{ tournaments: Tournament[] } | { error: string }> => {
+    ): Promise<{ tournaments: TournamentData[] } | { error: string }> => {
       return new Promise((resolve) => {
         if (!socket.connected) socket.connect();
 
@@ -708,10 +708,8 @@ export function useTournamentEvents(
       data: TournamentPlayerTransferredEvent
     ) => {
       if (data.tournamentId === tournamentId) {
-        // Normalize the playerId field
-        const playerId = data.playerId || data.userId;
         // Check if this is the current user being transferred
-        if (currentUserId && playerId === currentUserId) {
+        if (currentUserId && data.playerId === currentUserId) {
           onPlayerTransferred?.(data);
         }
       }

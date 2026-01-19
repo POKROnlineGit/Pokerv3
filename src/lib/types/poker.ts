@@ -102,4 +102,6 @@ export interface GameState {
   left_players?: string[];
   isPrivate?: boolean; // Whether this is a private game
   joinCode?: string; // Short alphanumeric code for joining private games
+  // Tournament fields
+  tournamentId?: string | null; // Set if this game is part of a tournament
 }

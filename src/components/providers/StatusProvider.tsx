@@ -76,9 +76,9 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     }
 
     const handleGameState = async (state: GameState) => {
-      // Determine game type
-      const isPrivate = (state as any).isPrivate || false;
-      const tournamentId = (state as any).tournamentId;
+      // Determine game type (these fields are now properly typed in GameState)
+      const isPrivate = state.isPrivate || false;
+      const tournamentId = state.tournamentId;
       
       // Determine the correct game path based on game type
       let gamePath: string;
@@ -105,7 +105,7 @@ export function StatusProvider({ children }: { children: ReactNode }) {
       }
 
       // Check if game is finished/completed - don't redirect to finished games
-      const gameStatus = state.status || (state as any).currentPhase;
+      const gameStatus = state.status || state.currentPhase;
       if (
         gameStatus === "finished" ||
         gameStatus === "complete" ||
