@@ -26,6 +26,10 @@ import {
 import { useToast } from "@/lib/hooks";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
 import { TournamentRegistrationContent } from "@/components/features/tournament/TournamentRegistrationContent";
+import { TournamentOverview } from "@/components/features/tournament/TournamentOverview";
+import { TournamentTableList } from "@/components/features/tournament/TournamentTableList";
+import { TournamentSpectatorView } from "@/components/features/tournament/TournamentSpectatorView";
+import { GameState } from "@/lib/types/poker";
 import {
   Loader2,
   Users,
@@ -149,6 +153,8 @@ export default function TournamentDetailPage() {
     joinTable,
     updateTournamentSettings,
     banPlayer,
+    spectateTournamentTable,
+    stopSpectatingTournament,
   } = useTournamentSocket();
   const socket = useSocket();
   const { toast } = useToast();
@@ -168,6 +174,11 @@ export default function TournamentDetailPage() {
   const [isBanning, setIsBanning] = useState<string | null>(null); // Tracks which player is being banned
   const [isLeaving, setIsLeaving] = useState(false);
   const hasCheckedRef = useRef(false);
+
+  // Spectator state
+  const [spectatingTableId, setSpectatingTableId] = useState<string | null>(null);
+  const [spectatorGameState, setSpectatorGameState] = useState<GameState | null>(null);
+  const [isSpectatingLoading, setIsSpectatingLoading] = useState<string | null>(null);
 
   // Settings form state (for registration phase)
   const [settingsForm, setSettingsForm] = useState<{
@@ -375,6 +386,7 @@ export default function TournamentDetailPage() {
     levelWarning,
     tournamentStarted,
     tournamentCompleted,
+    tablesMerged,
   } = useTournamentEvents(tournamentId, {
     currentUserId,
     onTournamentStarted: handleTournamentStarted,
@@ -385,6 +397,93 @@ export default function TournamentDetailPage() {
     onPlayerBanned: handlePlayerBanned,
     onPlayerLeft: handlePlayerLeft,
   });
+
+  // ============================================
+  // SPECTATOR SOCKET LISTENER
+  // ============================================
+
+  // Listen for game state updates while spectating
+  useEffect(() => {
+    if (!spectatingTableId || !socket) return;
+
+    const handleGameState = (gameState: GameState) => {
+      // Only update if this is for our spectated table
+      if (gameState.gameId === spectatingTableId) {
+        setSpectatorGameState(gameState);
+      }
+    };
+
+    socket.on("gameState", handleGameState);
+
+    return () => {
+      socket.off("gameState", handleGameState);
+    };
+  }, [spectatingTableId, socket]);
+
+  // Handle table merged while spectating - return to overview
+  useEffect(() => {
+    if (!tablesMerged || !spectatingTableId) return;
+
+    // If the table we're spectating was closed, go back to overview
+    if (tablesMerged.closedTableId === spectatingTableId) {
+      toast({
+        title: "Table Merged",
+        description: "The table you were watching has been merged",
+      });
+      setSpectatingTableId(null);
+      setSpectatorGameState(null);
+    }
+  }, [tablesMerged, spectatingTableId, toast]);
+
+  // Handle tournament completed while spectating
+  useEffect(() => {
+    if (tournamentCompleted && spectatingTableId) {
+      setSpectatingTableId(null);
+      setSpectatorGameState(null);
+    }
+  }, [tournamentCompleted, spectatingTableId]);
+
+  // ============================================
+  // SPECTATOR HANDLERS
+  // ============================================
+
+  const handleSpectate = useCallback(async (tableId: string) => {
+    if (!tournamentId) return;
+
+    setIsSpectatingLoading(tableId);
+    try {
+      const response = await spectateTournamentTable(tournamentId, tableId);
+      if (!response.success) {
+        toast({
+          title: "Cannot Spectate",
+          description: response.error || "Failed to spectate table",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setSpectatingTableId(tableId);
+      if (response.gameState) {
+        setSpectatorGameState(response.gameState);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to spectate table",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSpectatingLoading(null);
+    }
+  }, [tournamentId, spectateTournamentTable, toast]);
+
+  const handleStopSpectating = useCallback(async () => {
+    if (!tournamentId) return;
+
+    await stopSpectatingTournament(tournamentId);
+    setSpectatingTableId(null);
+    setSpectatorGameState(null);
+  }, [tournamentId, stopSpectatingTournament]);
 
   // Check tournament state on load
   useEffect(() => {
@@ -519,6 +618,16 @@ export default function TournamentDetailPage() {
     ? participants.find((p) => (p.userId || p.user_id) === currentUserId)
     : null;
   const myTableId = myParticipant?.current_table_id || myParticipant?.tableId;
+  const isEliminated = myParticipant?.status === "eliminated";
+
+  // Determine if user can spectate
+  // Host can always spectate, eliminated players can spectate, active players cannot
+  const canSpectate = isHost || isEliminated || !myTableId;
+
+  // Get spectated table index for display
+  const spectatedTableIndex = spectatingTableId
+    ? (tables.find((t) => t.tableId === spectatingTableId)?.tournamentTableIndex ?? 0) + 1
+    : 0;
 
   // ============================================
   // ACTION HANDLERS
@@ -1235,77 +1344,221 @@ export default function TournamentDetailPage() {
     );
   }
 
-  // Other statuses: use detailed sidebar (no tableContent)
+  // ============================================
+  // ACTIVE/PAUSED TOURNAMENT WITH SPECTATOR SYSTEM
+  // ============================================
+
+  if (status === "active" || status === "paused") {
+    // If spectating, show the spectator view
+    if (spectatingTableId && spectatorGameState) {
+      return (
+        <PlayLayout
+          title={tournament?.title || tournament?.name || "Tournament"}
+          tableContent={
+            <TournamentSpectatorView
+              gameState={spectatorGameState}
+              tableIndex={spectatedTableIndex}
+              currentBlindLevel={currentBlindLevel}
+              blindStructure={blindStructure}
+              levelEndsAt={levelEndsAt ?? null}
+              isPaused={status === "paused"}
+              onBack={handleStopSpectating}
+            />
+          }
+        >
+          {/* Minimal sidebar while spectating */}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <h3 className="font-bold text-sm text-white">Spectating</h3>
+              <Link
+                href="/play/tournaments"
+                className="inline-flex items-center text-xs text-slate-500 hover:text-white"
+              >
+                <ArrowLeft className="h-3 w-3 mr-1" /> Back to Tournaments
+              </Link>
+            </div>
+
+            <Separator className="bg-slate-800" />
+
+            {/* Quick Stats */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Level</span>
+                <span className="font-mono text-white">
+                  {currentBlindLevel + 1} ({currentBlinds.small}/{currentBlinds.big})
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Players</span>
+                <span className="text-white">
+                  {participants.filter((p) => p.status !== "eliminated").length}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Tables</span>
+                <span className="text-white">{tables.length}</span>
+              </div>
+            </div>
+          </div>
+        </PlayLayout>
+      );
+    }
+
+    // Default view: Tournament overview with table list
+    return (
+      <PlayLayout
+        title={tournament?.title || tournament?.name || "Tournament"}
+        tableContent={
+          <div className="w-full h-full overflow-auto p-4">
+            <TournamentOverview
+              tournament={tournament}
+              participants={participants}
+              status={status}
+              isHost={isHost}
+              currentUserId={currentUserId}
+              currentBlindLevel={currentBlindLevel}
+              levelEndsAt={levelEndsAt ?? null}
+              onPauseResume={handlePauseResume}
+              onCancel={handleCancel}
+              onBanPlayer={handleBanPlayer}
+              isPausing={isPausing}
+              isCancelling={isCancelling}
+              isBanning={isBanning}
+            />
+
+            <div className="max-w-4xl mx-auto mt-4 px-4 md:px-6">
+              <TournamentTableList
+                tables={tables}
+                currentUserId={currentUserId}
+                myTableId={myTableId ?? null}
+                canSpectate={canSpectate}
+                onSpectate={handleSpectate}
+                isSpectating={isSpectatingLoading}
+              />
+            </div>
+          </div>
+        }
+        footer={
+          <div className="flex flex-col gap-2 w-full">
+            {/* Go to table button for active players */}
+            {isRegistered && !isEliminated && myTableId && (
+              <Button
+                onClick={handleGoToTable}
+                size="lg"
+                className="w-full font-bold text-sm h-12"
+              >
+                <Table2 className="mr-2 h-4 w-4" />
+                Go to My Table
+              </Button>
+            )}
+
+            {/* Leave Tournament button for non-host players */}
+            {!isHost && isRegistered && (
+              <Button
+                onClick={handleLeaveTournament}
+                disabled={isLeaving}
+                size="lg"
+                variant="outline"
+                className="w-full font-bold text-sm h-10 text-red-400 border-red-400/30 hover:bg-red-500/10"
+              >
+                {isLeaving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <LogOut className="mr-2 h-4 w-4" />
+                )}
+                Leave Tournament
+              </Button>
+            )}
+          </div>
+        }
+      >
+        {/* Minimal Sidebar */}
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-white">Tournament</h3>
+              {isHost && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] bg-amber-500/10 text-amber-500 border-amber-500/20"
+                >
+                  HOST
+                </Badge>
+              )}
+            </div>
+            <Link
+              href="/play/tournaments"
+              className="inline-flex items-center text-xs text-slate-500 hover:text-white"
+            >
+              <ArrowLeft className="h-3 w-3 mr-1" /> Back to Tournaments
+            </Link>
+          </div>
+
+          <Separator className="bg-slate-800" />
+
+          {/* Level Warning */}
+          {showLevelWarning && (
+            <LevelWarningBanner
+              timeRemainingMs={showLevelWarning.timeRemainingMs}
+              currentLevel={showLevelWarning.currentLevel}
+            />
+          )}
+
+          {/* Quick Stats */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400">Status</span>
+              <StatusBadge status={status} />
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400">Level</span>
+              <span className="font-mono text-white">
+                {currentBlindLevel + 1} ({currentBlinds.small}/{currentBlinds.big})
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400">Players</span>
+              <span className="text-white">
+                {participants.filter((p) => p.status !== "eliminated").length} / {participants.length}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400">Tables</span>
+              <span className="text-white">{tables.length}</span>
+            </div>
+            {levelEndsAt && status === "active" && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Level Ends</span>
+                <CountdownTimer targetTime={levelEndsAt} label="" />
+              </div>
+            )}
+          </div>
+
+          {/* Eliminated status */}
+          {isEliminated && (
+            <div className="p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <p className="text-red-400 text-xs font-medium">
+                You have been eliminated
+              </p>
+              <p className="text-slate-500 text-[10px] mt-1">
+                You can spectate any table
+              </p>
+            </div>
+          )}
+        </div>
+      </PlayLayout>
+    );
+  }
+
+  // ============================================
+  // COMPLETED/CANCELLED/OTHER STATUSES
+  // ============================================
+
   return (
     <PlayLayout
       title={tournament?.title || tournament?.name || "Tournament"}
       footer={
         <div className="flex flex-col gap-2 w-full">
-          {/* Go to table button for active players */}
-          {isRegistered && status === "active" && myTableId && (
-            <Button
-              onClick={handleGoToTable}
-              size="lg"
-              className="w-full font-bold text-sm h-12"
-            >
-              <Table2 className="mr-2 h-4 w-4" />
-              Go to Table
-            </Button>
-          )}
-
-          {/* Leave Tournament button for non-host players */}
-          {!isHost && isRegistered && (status === "active" || status === "paused") && (
-            <Button
-              onClick={handleLeaveTournament}
-              disabled={isLeaving}
-              size="lg"
-              variant="outline"
-              className="w-full font-bold text-sm h-10 text-red-400 border-red-400/30 hover:bg-red-500/10"
-            >
-              {isLeaving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <LogOut className="mr-2 h-4 w-4" />
-              )}
-              Leave Tournament
-            </Button>
-          )}
-
-          {/* Host actions for active/paused */}
-          {isHost && (status === "active" || status === "paused") && (
-            <div className="flex gap-2">
-              <Button
-                onClick={handlePauseResume}
-                disabled={isPausing}
-                size="lg"
-                variant="outline"
-                className="flex-1 font-bold text-sm h-12"
-              >
-                {isPausing ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : status === "paused" ? (
-                  <Play className="mr-2 h-4 w-4" />
-                ) : (
-                  <Pause className="mr-2 h-4 w-4" />
-                )}
-                {status === "paused" ? "Resume" : "Pause"}
-              </Button>
-              <Button
-                onClick={handleCancel}
-                disabled={isCancelling}
-                size="lg"
-                variant="destructive"
-                className="font-bold text-sm h-12 px-3"
-              >
-                {isCancelling ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Square className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-          )}
-
           {/* Cancel button for setup status */}
           {isHost && status === "setup" && (
             <Button
@@ -1336,14 +1589,6 @@ export default function TournamentDetailPage() {
           <ArrowLeft className="h-4 w-4 mr-1" /> Back to Tournaments
         </Link>
 
-        {/* Level Warning Banner */}
-        {showLevelWarning && (
-          <LevelWarningBanner
-            timeRemainingMs={showLevelWarning.timeRemainingMs}
-            currentLevel={showLevelWarning.currentLevel}
-          />
-        )}
-
         {/* Header */}
         <div className="space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
@@ -1372,28 +1617,6 @@ export default function TournamentDetailPage() {
               </Link>
             )}
           </div>
-        )}
-
-        {/* Blind Info (active/paused tournaments) */}
-        {(status === "active" || status === "paused") && (
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="p-3">
-              <div className="space-y-2">
-                <div>
-                  <p className="text-xs text-slate-400">Level {currentBlindLevel + 1}</p>
-                  <p className="text-xl font-bold text-white">
-                    {currentBlinds.small} / {currentBlinds.big}
-                  </p>
-                  {nextBlinds && (
-                    <p className="text-xs text-slate-500">
-                      Next: {nextBlinds.small}/{nextBlinds.big}
-                    </p>
-                  )}
-                </div>
-                <CountdownTimer targetTime={levelEndsAt ?? null} label="Ends" />
-              </div>
-            </CardContent>
-          </Card>
         )}
 
         {/* Stats */}
@@ -1431,148 +1654,6 @@ export default function TournamentDetailPage() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Tournament Settings */}
-        <Card className="bg-slate-800/50 border-slate-700">
-          <CardHeader className="pb-2 px-3 pt-3">
-            <CardTitle className="text-xs font-medium text-slate-400">Settings</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1.5 text-xs px-3 pb-3">
-            <div className="flex justify-between">
-              <span className="text-slate-400 truncate">Starting Stack</span>
-              <span className="font-medium ml-2">
-                {tournament?.starting_stack || tournament?.startingStack || 10000}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400 truncate">Per Table</span>
-              <span className="font-medium ml-2">
-                {tournament?.max_players_per_table || tournament?.maxPlayersPerTable || 9}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400 truncate">Level Duration</span>
-              <span className="font-medium ml-2">
-                {tournament?.blind_level_duration_minutes || tournament?.blindLevelDurationMinutes || 10}m
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400 truncate">Blind Levels</span>
-              <span className="font-medium ml-2">{blindStructure.length}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Participants List */}
-        {participants.length > 0 && (
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardHeader className="pb-2 px-3 pt-3">
-              <CardTitle className="text-xs font-medium text-slate-400">
-                Participants ({participants.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 pb-3">
-              <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                {participants.map((p, i) => {
-                  const playerId = p.user_id || p.userId;
-                  const username = p.profiles?.username || p.username || playerId?.slice(0, 8) + "...";
-                  const isMe = playerId === currentUserId;
-                  const chips = p.current_stack ?? p.chips;
-                  const pStatus = p.status;
-
-                  return (
-                    <div
-                      key={playerId || i}
-                      className={`flex items-center justify-between p-1.5 rounded text-xs ${
-                        isMe ? "bg-slate-700/50" : ""
-                      } ${pStatus === "eliminated" ? "opacity-50" : ""}`}
-                    >
-                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                        <span className="text-slate-500 w-4 text-center text-xs flex-shrink-0">{i + 1}</span>
-                        <span className={`truncate ${isMe ? "text-blue-400 font-medium" : "text-slate-200"}`}>
-                          {username}
-                        </span>
-                        {isMe && (
-                          <Badge variant="outline" className="text-[10px] px-1 py-0 flex-shrink-0">You</Badge>
-                        )}
-                        {pStatus === "eliminated" && (
-                          <Badge variant="destructive" className="text-[10px] px-1 py-0 flex-shrink-0">Out</Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {(status === "active" || status === "paused") && chips !== undefined && (
-                          <span className="text-slate-400 font-mono text-xs">
-                            {chips.toLocaleString()}
-                          </span>
-                        )}
-                        {isHost && !isMe && pStatus !== "eliminated" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleBanPlayer(playerId!)}
-                            disabled={isBanning === playerId}
-                            className="h-5 w-5 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                            title="Ban player"
-                          >
-                            {isBanning === playerId ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Ban className="h-3 w-3" />
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Tables (for active tournaments) */}
-        {tables.length > 0 && (status === "active" || status === "paused") && (
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardHeader className="pb-2 px-3 pt-3">
-              <CardTitle className="text-xs font-medium text-slate-400">
-                Tables ({tables.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 pb-3">
-              <div className="space-y-1.5">
-                {tables.map((table, i) => (
-                  <div
-                    key={table.tableId}
-                    className={`flex items-center justify-between p-2 rounded border text-xs ${
-                      table.tableId === myTableId
-                        ? "bg-blue-500/10 border-blue-500/30"
-                        : "bg-slate-900/50 border-slate-700"
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                      <Table2 className="h-3 w-3 text-slate-400 flex-shrink-0" />
-                      <span className="font-medium truncate">
-                        Table {(table as any).tournamentTableIndex !== undefined
-                          ? (table as any).tournamentTableIndex + 1
-                          : i + 1}
-                      </span>
-                      {table.tableId === myTableId && (
-                        <Badge variant="outline" className="text-[10px] px-1 py-0 text-blue-400 flex-shrink-0">
-                          Yours
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-400 flex-shrink-0">
-                      <span className="whitespace-nowrap">
-                        {table.playerCount ?? (typeof table.players === 'number' ? table.players : Array.isArray(table.players) ? table.players.length : 0)}/{table.maxPlayers ?? 9}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Tournament Results (completed) */}
         {status === "completed" && tournamentCompleted && (
@@ -1612,6 +1693,19 @@ export default function TournamentDetailPage() {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Cancelled message */}
+        {status === "cancelled" && (
+          <Card className="bg-red-500/10 border-red-500/30">
+            <CardContent className="p-4 text-center">
+              <X className="h-8 w-8 text-red-400 mx-auto mb-2" />
+              <p className="text-red-400 font-medium">Tournament Cancelled</p>
+              <p className="text-slate-500 text-sm mt-1">
+                This tournament has been cancelled by the host.
+              </p>
             </CardContent>
           </Card>
         )}

@@ -473,6 +473,61 @@ export function useTournamentSocket() {
     [socket]
   );
 
+  // ============================================
+  // SPECTATOR ACTIONS
+  // ============================================
+
+  /**
+   * Start spectating a tournament table
+   * Only hosts and eliminated players can spectate
+   */
+  const spectateTournamentTable = useCallback(
+    (
+      tournamentId: string,
+      tableId: string
+    ): Promise<{ success: boolean; gameState?: any; error?: string }> => {
+      return new Promise((resolve) => {
+        if (!socket.connected) socket.connect();
+
+        socket.emit(
+          "spectate_tournament_table",
+          { tournamentId, tableId },
+          (response: any) => {
+            if (response?.error) {
+              resolve({ success: false, error: response.error });
+            } else {
+              resolve({
+                success: true,
+                gameState: response.gameState || response.state,
+              });
+            }
+          }
+        );
+      });
+    },
+    [socket]
+  );
+
+  /**
+   * Stop spectating a tournament
+   */
+  const stopSpectatingTournament = useCallback(
+    (tournamentId: string): Promise<{ success: boolean }> => {
+      return new Promise((resolve) => {
+        if (!socket.connected) socket.connect();
+
+        socket.emit(
+          "stop_spectating_tournament",
+          { tournamentId },
+          (response: any) => {
+            resolve({ success: !response?.error });
+          }
+        );
+      });
+    },
+    [socket]
+  );
+
   return {
     // Tournament management
     createTournament,
@@ -499,6 +554,10 @@ export function useTournamentSocket() {
     joinTable,
     leaveTable,
     submitAction,
+
+    // Spectator actions
+    spectateTournamentTable,
+    stopSpectatingTournament,
   };
 }
 
