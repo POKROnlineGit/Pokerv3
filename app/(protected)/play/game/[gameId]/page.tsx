@@ -514,21 +514,21 @@ export default function GamePage() {
             ...(state.left_players && {
               left_players: state.left_players,
             }),
+            // CRITICAL: Preserve config for seat count detection
+            config: state.config ?? {
+              maxPlayers: variantInfo?.maxPlayers ?? 6,
+              smallBlind: state.smallBlind ?? 1,
+              bigBlind: state.bigBlind ?? 2,
+              turnTimer: 30,
+            },
           };
 
           // Fully replace state - no merging, no partial updates
           // This ensures UI always reflects server state exactly
           setGameState(normalizedState);
 
-          // Detect heads-up mode from gameState (memory-authoritative)
-          if (normalizedState.players && normalizedState.players.length === 2) {
-            setIsHeadsUp(true);
-          } else if (
-            normalizedState.players &&
-            normalizedState.players.length > 2
-          ) {
-            setIsHeadsUp(false);
-          }
+          // Detect heads-up mode from game config (not player count)
+          setIsHeadsUp(normalizedState.config?.maxPlayers === 2);
         }
       });
 
@@ -1020,19 +1020,19 @@ export default function GamePage() {
               : state.players?.length > 0
               ? Math.max(...state.players.map((p) => p.currentBet || 0), 0)
               : 0,
+          // CRITICAL: Preserve config for seat count detection
+          config: state.config ?? {
+            maxPlayers: variantInfo?.maxPlayers ?? 6,
+            smallBlind: state.smallBlind ?? 1,
+            bigBlind: state.bigBlind ?? 2,
+            turnTimer: 30,
+          },
         } as GameState;
 
         setGameState(normalizedState);
 
-        // Detect heads-up mode from gameState (memory-authoritative)
-        if (normalizedState.players && normalizedState.players.length === 2) {
-          setIsHeadsUp(true);
-        } else if (
-          normalizedState.players &&
-          normalizedState.players.length > 2
-        ) {
-          setIsHeadsUp(false);
-        }
+        // Detect heads-up mode from game config (not player count)
+        setIsHeadsUp(normalizedState.config?.maxPlayers === 2);
 
         // Clear disconnect timers
         setPlayerDisconnectTimers({});

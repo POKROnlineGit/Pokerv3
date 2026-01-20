@@ -9,19 +9,30 @@ import { createClientComponentClient } from "@/lib/api/supabase/client";
 import { useIsMobile } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 import { Settings, X } from "lucide-react";
+import { GameState, DEFAULT_GAME_CONFIG } from "@/lib/types/poker";
 import { motion, AnimatePresence } from "framer-motion";
 
-// A minimal dummy state to render an empty table
-const AMBIENT_GAME_STATE: any = {
-  id: "ambient",
-  status: "WAITING",
+// A minimal dummy state to render an empty table with 6 seats
+const AMBIENT_GAME_STATE: GameState = {
+  gameId: "ambient",
+  status: "waiting",
   players: [],
   communityCards: [],
   pot: 0,
+  pots: [],
+  buttonSeat: 0,
   dealerSeat: 0,
-  currentPhase: "preflop",
-  turnTimer: null,
-  actions: [],
+  sbSeat: 0,
+  bbSeat: 0,
+  currentActorSeat: null,
+  currentPhase: "waiting",
+  handNumber: 0,
+  minRaise: 0,
+  betsThisRound: [],
+  config: {
+    ...DEFAULT_GAME_CONFIG,
+    maxPlayers: 6,
+  },
 };
 
 interface PlayLayoutProps {
@@ -244,6 +255,7 @@ export function PlayLayout({
                   gameState={AMBIENT_GAME_STATE}
                   currentUserId="ambient-user"
                   isHeadsUp={false}
+                  maxSeats={6}
                 />
               </div>
             )}

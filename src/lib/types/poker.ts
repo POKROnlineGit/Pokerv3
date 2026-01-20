@@ -73,6 +73,24 @@ export interface Pot {
   winners?: string[];
 }
 
+// ============================================
+// GAME STATE CONFIG
+// ============================================
+
+export interface GameStateConfig {
+  maxPlayers: number;
+  smallBlind: number;
+  bigBlind: number;
+  turnTimer?: number;
+}
+
+export const DEFAULT_GAME_CONFIG: GameStateConfig = {
+  maxPlayers: 6,
+  smallBlind: 1,
+  bigBlind: 2,
+  turnTimer: 30,
+};
+
 // Spectator type for private games
 export interface GameSpectator {
   odanUserId: string;
@@ -118,12 +136,7 @@ export interface GameState {
   handNumber: number;
   winnerIds?: string[];
   winningHand?: string;
-  config?: {
-    maxPlayers: number;
-    smallBlind: number;
-    bigBlind: number;
-    turnTimer: number;
-  };
+  config?: GameStateConfig;
   // Game constraint fields (needed by ActionPopup)
   bigBlind?: number;
   smallBlind?: number;

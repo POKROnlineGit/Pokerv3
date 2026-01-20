@@ -382,11 +382,8 @@ export default function TournamentGamePage() {
         tournamentJoinedRef.current = true;
       }
 
-      // Check if heads up
-      const activePlayers = state.players.filter(
-        (p) => p.chips > 0 && !p.left
-      );
-      setIsHeadsUp(activePlayers.length === 2);
+      // Detect heads-up mode from game config (not player count)
+      setIsHeadsUp(state.config?.maxPlayers === 2);
 
       setGameState(state);
     };

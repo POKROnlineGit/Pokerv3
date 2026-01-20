@@ -72,7 +72,7 @@ export function PokerTable({
   playerDisconnectTimers = {},
   turnTimer = null,
   isSyncing = false,
-  maxSeats,
+  maxSeats = 6,
 }: PokerTableProps) {
   const { isEnabled: debugMode } = useDebugMode();
   const isMobile = useIsMobile();
@@ -274,13 +274,10 @@ export function PokerTable({
   ]);
 
   // Dynamic seat count based on game type
+  // Priority: isHeadsUp (2) > maxSeats prop > config.maxPlayers > fallback (6)
   const NUM_SEATS = isHeadsUp
     ? 2
-    : maxSeats ||
-      gameState.config?.maxPlayers ||
-      (gameState.players.length > 0
-        ? Math.max(...gameState.players.map((p) => p.seat))
-        : 6);
+    : maxSeats ?? gameState.config?.maxPlayers ?? 6;
   // Use same radius for both heads-up and 6-max for consistency
   // Seats positioned so only ~20% of seat overlaps table edge
   const radiusX = isMobile ? 55 : 70; // Reduced on mobile to bring players in from edges
