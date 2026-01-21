@@ -1,16 +1,13 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PlayLayout } from "@/components/layout/PlayLayout";
 import { PokerTable } from "@/components/features/game/PokerTable";
 import { ActionPopup } from "@/components/features/game/ActionPopup";
 import { LeaveGameButton } from "@/components/features/game/LeaveGameButton";
-import { getSocket, useSocket } from "@/lib/api/socket/client";
-import { createClientComponentClient } from "@/lib/api/supabase/client";
-import { GameState, Player, PendingJoinRequest, GameSpectator } from "@/lib/types/poker";
+import { usePrivateGameSocket } from "@/lib/api/socket/private";
 import { useToast } from "@/lib/hooks";
-import { getErrorMessage } from "@/lib/utils";
 import {
   Loader2,
   Play,
@@ -49,348 +46,82 @@ export default function PrivateGamePage() {
   const { toast } = useToast();
   const { currentTheme } = useTheme();
   const gameId = params.gameId as string;
-  const socket = getSocket();
-  const socketHook = useSocket();
-  const supabase = createClientComponentClient();
 
   // Get theme colors for buttons
   const primaryColor = currentTheme.colors.primary[0];
   const primaryColorHover = currentTheme.colors.primary[1] || primaryColor;
 
-  const [gameState, setGameState] = useState<GameState | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState(true);
-  const [turnTimer, setTurnTimer] = useState<{
-    deadline: number;
-    duration: number;
-    activeSeat: number;
-  } | null>(null);
-  const wasPlayerRef = useRef<boolean>(false);
-  const [wasRejected, setWasRejected] = useState<boolean>(false);
-
-  // Private game layout state
+  // Dialog state for stack editing
   const [editStackSeat, setEditStackSeat] = useState<number | null>(null);
   const [newStackAmount, setNewStackAmount] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newSmallBlind, setNewSmallBlind] = useState("");
   const [newBigBlind, setNewBigBlind] = useState("");
 
-  // Auth Check
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        const currentPath = window.location.pathname;
-        const redirectUrl = `/signin?next=${encodeURIComponent(currentPath)}`;
-        router.replace(redirectUrl);
-      } else {
-        setCurrentUserId(data.user.id);
-      }
+  // Use the new socket hook
+  const {
+    gameState,
+    isSyncing,
+    turnTimer,
+    currentUserId,
+    isHeadsUp,
+    isHost,
+    isSpectator,
+    isSeated,
+    isHostSpectator,
+    hasPendingRequest,
+    pendingRequests,
+    wasRejected,
+    sendAction,
+    revealCard,
+    requestSeat,
+    hostSitDown,
+    approveRequest,
+    rejectRequest,
+    kickPlayer,
+    updateStack,
+    updateBlinds,
+    togglePause,
+    startGame,
+  } = usePrivateGameSocket(gameId);
+
+  // Handle stack update
+  const handleUpdateStack = useCallback(() => {
+    if (editStackSeat === null) return;
+    updateStack(editStackSeat, parseInt(newStackAmount));
+    setEditStackSeat(null);
+    setNewStackAmount("");
+    setIsDialogOpen(false);
+  }, [editStackSeat, newStackAmount, updateStack]);
+
+  // Handle blinds update
+  const handleUpdateBlinds = useCallback(() => {
+    const smallBlind = parseInt(newSmallBlind);
+    const bigBlind = parseInt(newBigBlind);
+    updateBlinds(smallBlind, bigBlind);
+    setNewSmallBlind("");
+    setNewBigBlind("");
+  }, [newSmallBlind, newBigBlind, updateBlinds]);
+
+  // Copy invite link
+  const copyInviteLink = useCallback(() => {
+    const url = `${window.location.origin}/play/private/${gameId}`;
+    navigator.clipboard.writeText(url);
+    toast({
+      title: "Link Copied",
+      description: "Share this link to invite players.",
     });
-  }, [router]);
+  }, [gameId, toast]);
 
-  // Initialize wasPlayerRef on mount
-  useEffect(() => {
-    if (gameState && currentUserId) {
-      wasPlayerRef.current = gameState.players.some(
-        (p) => p.id === currentUserId
-      );
-    }
-  }, [gameState, currentUserId]);
+  // Handle reveal card
+  const handleRevealCard = useCallback(
+    (cardIndex: number) => {
+      revealCard(cardIndex);
+    },
+    [revealCard]
+  );
 
-  // Socket Connection
-  useEffect(() => {
-    if (!currentUserId) return;
-
-    if (!socket.connected) socket.connect();
-
-    const onConnect = () => {
-      socket.emit("joinGame", gameId);
-    };
-
-    const onGameState = (state: GameState) => {
-
-      // Track transition from player to spectator (busted notification)
-      if (currentUserId) {
-        const wasPlayer = wasPlayerRef.current;
-        const isNowPlayer = state.players.some((p) => p.id === currentUserId);
-        const isNowSpectator = state.isPrivate && !isNowPlayer;
-
-        // If transitioned from player to spectator, show notification
-        if (wasPlayer && isNowSpectator) {
-          toast({
-            title: "You ran out of chips",
-            description: "You are now spectating. Request a seat to rejoin.",
-            variant: "default",
-          });
-        }
-
-        // Update ref for next check
-        wasPlayerRef.current = isNowPlayer;
-      }
-
-      // Normalize pots from server format to UI format
-      // Server sends: pots: [{ amount: 3, eligiblePlayers: [...] }]
-      // UI expects: pot: number, sidePots: [{ amount: number, eligibleSeats: number[] }]
-      let mainPot = 0;
-      let sidePots: Array<{ amount: number; eligibleSeats: number[] }> = [];
-
-      if (state.pots && Array.isArray(state.pots)) {
-        const potsArray = state.pots;
-        if (potsArray.length > 0) {
-          mainPot = potsArray[0]?.amount || 0;
-          // Convert eligiblePlayers (UUIDs) to eligibleSeats (seat numbers)
-          sidePots = potsArray.slice(1).map((pot) => ({
-            amount: pot?.amount || 0,
-            eligibleSeats: (pot?.eligiblePlayers || [])
-              .map((playerId: string) => {
-                const player = state.players?.find((p) => p.id === playerId);
-                return player?.seat || 0;
-              })
-              .filter((seat: number) => seat > 0),
-          }));
-        }
-      } else {
-        // Fallback: use pot and sidePots if they exist directly
-        mainPot = typeof state.pot === "number" ? state.pot : 0;
-        sidePots = Array.isArray(state.sidePots) ? state.sidePots : [];
-      }
-
-      // Clean up pendingRequests for players who are now seated
-      let cleanedPendingRequests = state.pendingRequests || [];
-      if (cleanedPendingRequests.length > 0) {
-        const seatedPlayerIds = state.players.map((p) => p.id);
-        cleanedPendingRequests = cleanedPendingRequests.filter((req) => {
-          const requestUserId = req.odanUserId || req.odanRequestId;
-          return !seatedPlayerIds.includes(requestUserId);
-        });
-      }
-
-      // Normalize pendingRequests to ensure username field is present
-      const normalizedPendingRequests = (cleanedPendingRequests || []).map(
-        (req) => ({
-          odanUserId: req.odanUserId || "",
-          odanRequestId: req.odanRequestId || "",
-          username: req.username || "Unknown",
-          requestedAt: req.requestedAt || "",
-          type: req.type || "join",
-        })
-      );
-
-      // Normalize players to ensure username field is present
-      const normalizedPlayers: Player[] = Array.isArray(state.players)
-        ? state.players.map((p) => ({
-            id: p.id || "",
-            username: p.username || `Player ${p.seat || ""}`,
-            seat: p.seat || 0,
-            chips: typeof p.chips === "number" ? p.chips : 0,
-            currentBet: p.currentBet || 0,
-            totalBet: p.totalBet ?? p.totalBetThisHand ?? 0,
-            holeCards: Array.isArray(p.holeCards)
-              ? p.holeCards.filter(
-                  (c: unknown): c is string => typeof c === "string"
-                )
-              : [],
-            folded: Boolean(p.folded),
-            allIn: Boolean(p.allIn),
-            isBot: Boolean(p.isBot),
-            leaving: Boolean(p.leaving),
-            playerHandType: p.playerHandType,
-            revealedIndices: Array.isArray(p.revealedIndices)
-              ? p.revealedIndices
-              : [],
-            disconnected: Boolean(p.disconnected),
-            left: Boolean(p.left),
-            isGhost: Boolean(p.isGhost),
-            status: p.status,
-          }))
-        : [];
-
-      // Create normalized state with pot/sidePots in UI format
-      const normalizedState: GameState = {
-        ...state,
-        players: normalizedPlayers,
-        pot: mainPot,
-        sidePots: sidePots,
-        pendingRequests: normalizedPendingRequests,
-        // Explicitly ensure currentActorSeat is set (null is correct during showdown)
-        currentActorSeat:
-          typeof state.currentActorSeat === "number"
-            ? state.currentActorSeat
-            : null,
-      };
-
-      // Clear turn timer if game is paused (timers are not processed on backend when paused)
-      const isPaused = state.isPaused || false;
-      if (isPaused) {
-        setTurnTimer(null);
-      } else {
-        // Clear turn timer if action is no longer being awaited
-        // When a new gameState arrives, it means the previous action has been processed
-        // If there's an active timer, clear it unless the timer is still valid (same seat still acting)
-        setTurnTimer((prevTimer) => {
-          if (!prevTimer) return null; // No timer to clear
-
-          // If currentActorSeat is null, no one is acting - clear timer
-          if (
-            state.currentActorSeat === null ||
-            state.currentActorSeat === undefined
-          ) {
-            return null;
-          }
-
-          // If currentActorSeat changed to a different seat, clear the old timer
-          if (state.currentActorSeat !== prevTimer.activeSeat) {
-            return null;
-          }
-
-          // Timer is still valid (same seat still acting)
-          return prevTimer;
-        });
-      }
-
-      setGameState(normalizedState);
-      setIsSyncing(false);
-    };
-
-    const onError = (err: unknown) => {
-      const errorMessage = getErrorMessage(err);
-      // Handle specific error messages with user-friendly toasts
-      if (errorMessage === "Not enough players") {
-        toast({
-          variant: "destructive",
-          title: "Cannot Start Game",
-          description:
-            "You need at least 2 players to start a game. Invite more players or wait for others to join.",
-        });
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: errorMessage,
-        });
-      }
-      if (errorMessage === "Game not found") router.push("/play");
-    };
-
-    const onTurnTimerStarted = (data: {
-      deadline: number;
-      duration: number;
-      activeSeat: number;
-    }) => {
-      const now = Date.now();
-      const timeUntilDeadline = data.deadline - now;
-
-      // Validate deadline is not in the past
-      if (timeUntilDeadline < 0) {
-        console.error(
-          "[PrivateGame] ⏱️ ERROR: Timer deadline is in the past!",
-          {
-            deadline: data.deadline,
-            now,
-            difference: timeUntilDeadline,
-            deadlineDate: new Date(data.deadline).toISOString(),
-            nowDate: new Date(now).toISOString(),
-          }
-        );
-      }
-
-      const timerData = {
-        deadline: data.deadline,
-        duration: data.duration,
-        activeSeat: data.activeSeat,
-      };
-
-      setTurnTimer(timerData);
-    };
-
-    const onPlayerStatusUpdate = (payload: {
-      gameId: string;
-      playerId: string;
-      status?:
-        | "ACTIVE"
-        | "WAITING_FOR_NEXT_HAND"
-        | "DISCONNECTED"
-        | "LEFT"
-        | "REMOVED"
-        | "ELIMINATED";
-      message?: string;
-      seat?: number;
-      chips?: number;
-    }) => {
-      if (!currentUserId) return;
-
-      // If this is the current user being seated
-      if (payload.playerId === currentUserId) {
-        if (
-          payload.status === "ACTIVE" ||
-          payload.status === "WAITING_FOR_NEXT_HAND"
-        ) {
-          setWasRejected(false); // Clear rejection state on approval
-          toast({
-            title: "Seat Approved",
-            description:
-              payload.message || "You have been seated and are ready to play.",
-            variant: "default",
-          });
-        } else if (payload.message === "Request rejected") {
-          setWasRejected(true);
-          toast({
-            title: "Request Rejected",
-            description:
-              "Your seat request was rejected. You can request again.",
-            variant: "destructive",
-          });
-        } else if (payload.status === "REMOVED") {
-          toast({
-            title: "Removed from Game",
-            description:
-              payload.message || "You have been removed by the host.",
-            variant: "destructive",
-          });
-        }
-      }
-    };
-
-    const onPlayerMovedToSpectator = (payload: {
-      gameId: string;
-      playerId: string;
-      playerName: string;
-      seat: number;
-      reason: string;
-    }) => {
-      if (!currentUserId) return;
-
-      // If this is the current user being moved to spectator
-      if (payload.playerId === currentUserId) {
-        toast({
-          title: "Moved to Spectator",
-          description:
-            payload.reason || "You have been moved to spectator mode.",
-          variant: "default",
-        });
-      }
-    };
-
-    socket.on("connect", onConnect);
-    socket.on("gameState", onGameState);
-    socket.on("error", onError);
-    socket.on("turn_timer_started", onTurnTimerStarted);
-    socket.on("PLAYER_STATUS_UPDATE", onPlayerStatusUpdate);
-    socket.on("PLAYER_MOVED_TO_SPECTATOR", onPlayerMovedToSpectator);
-
-    // Initial join if already connected
-    if (socket.connected) onConnect();
-
-    return () => {
-      socket.off("connect", onConnect);
-      socket.off("gameState", onGameState);
-      socket.off("error", onError);
-      socket.off("turn_timer_started", onTurnTimerStarted);
-      socket.off("PLAYER_STATUS_UPDATE", onPlayerStatusUpdate);
-      socket.off("PLAYER_MOVED_TO_SPECTATOR", onPlayerMovedToSpectator);
-    };
-  }, [gameId, currentUserId, socket]);
-
+  // Loading state
   if (isSyncing || !gameState || !currentUserId) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center space-y-4">
@@ -400,147 +131,19 @@ export default function PrivateGamePage() {
     );
   }
 
-  const handleRevealCard = (cardIndex: number) => {
-    if (!gameState || !currentUserId) return;
+  const isPaused = gameState.isPaused || false;
 
-    // Only allow revealing during showdown
-    if (gameState.currentPhase !== "showdown") {
-      return;
-    }
-
-    const player = gameState.players.find((p) => p.id === currentUserId);
-
-    if (!player) {
-      console.error("[PrivateGame] ❌ Cannot reveal card - player not found");
-      return;
-    }
-
-    // Emit reveal action
-    socketHook.emit("action", {
-      gameId,
-      type: "reveal",
-      index: cardIndex,
-      seat: player.seat,
-    });
-  };
-
-  // Prepare action popup separately to render outside stacking context
+  // Prepare action popup
   const actionPopupContent = (
     <ActionPopup
       gameState={gameState}
       currentUserId={currentUserId}
       onAction={(type, amount, isAllInCall) =>
-        socket.emit("action", { type, amount, isAllInCall })
+        sendAction(type, amount, isAllInCall)
       }
       onRevealCard={handleRevealCard}
     />
   );
-
-  // Private game layout logic - GameState already has these fields
-  const isHost = gameState.hostId === currentUserId;
-  const isPaused = gameState.isPaused || false;
-  const pendingRequests = gameState.pendingRequests || [];
-  const isSeated = gameState.players.some((p) => p.id === currentUserId);
-  const isSpectator = gameState.isPrivate && !isSeated;
-  const isHostSpectator = isHost && isSpectator;
-  const hasPendingRequest = pendingRequests.some(
-    (r) => r.odanUserId === currentUserId
-  );
-  // Show request button if no pending request (or if rejected, allow requesting again)
-  const showRequestButton = !hasPendingRequest;
-
-  // Host Actions
-  const handleAdminAction = (type: string, payload: Record<string, unknown> = {}) => {
-    if (!socketHook.connected) return;
-    socketHook.emit("admin_action", { gameId, type, ...payload });
-  };
-
-  const togglePause = () => {
-    handleAdminAction(isPaused ? "ADMIN_RESUME" : "ADMIN_PAUSE");
-  };
-
-  const handleKick = (playerId: string) => {
-    handleAdminAction("ADMIN_KICK", { playerId });
-  };
-
-  const handleApprove = (request: PendingJoinRequest) => {
-    handleAdminAction("ADMIN_APPROVE", { request });
-  };
-
-  const handleReject = (userId: string) => {
-    handleAdminAction("ADMIN_REJECT", { userId });
-  };
-
-  const handleUpdateStack = () => {
-    if (editStackSeat === null) return;
-    handleAdminAction("ADMIN_SET_STACK", {
-      seat: editStackSeat,
-      amount: parseInt(newStackAmount),
-    });
-    setEditStackSeat(null);
-    setNewStackAmount("");
-    setIsDialogOpen(false);
-  };
-
-  const handleUpdateBlinds = () => {
-    const smallBlind = parseInt(newSmallBlind);
-    const bigBlind = parseInt(newBigBlind);
-    if (
-      isNaN(smallBlind) ||
-      isNaN(bigBlind) ||
-      smallBlind <= 0 ||
-      bigBlind <= 0
-    ) {
-      toast({
-        variant: "destructive",
-        title: "Invalid Blinds",
-        description: "Please enter valid positive numbers.",
-      });
-      return;
-    }
-    if (bigBlind < smallBlind) {
-      toast({
-        variant: "destructive",
-        title: "Invalid Blinds",
-        description: "Big blind must be greater than or equal to small blind.",
-      });
-      return;
-    }
-    handleAdminAction("ADMIN_SET_BLINDS", { smallBlind, bigBlind });
-    setNewSmallBlind("");
-    setNewBigBlind("");
-    toast({
-      title: "Blinds Updated",
-      description: `Blinds set to $${smallBlind}/$${bigBlind}`,
-    });
-  };
-
-  const copyInviteLink = () => {
-    const url = `${window.location.origin}/play/private/${gameId}`;
-    navigator.clipboard.writeText(url);
-    toast({
-      title: "Link Copied",
-      description: "Share this link to invite players.",
-    });
-  };
-
-  // Guest/Spectator Actions
-  const requestSeat = () => {
-    setWasRejected(false); // Clear rejection state when requesting again
-    socketHook.emit("request_seat", { gameId });
-    toast({
-      title: "Request Sent",
-      description: "Waiting for host approval...",
-    });
-  };
-
-  const handleHostSit = () => {
-    socketHook.emit("host_self_seat", {
-      gameId,
-      seatIndex: null, // Optional: specify seat, or null for auto-assign
-    });
-    toast({ title: "Sitting Down", description: "Joining the table..." });
-  };
 
   // Prepare sidebar content
   const sidebarContent = (
@@ -558,8 +161,8 @@ export default function PrivateGamePage() {
             </Badge>
           )}
         </div>
-        
-        {/* Join Code Display - for all players */}
+
+        {/* Join Code Display */}
         {gameState?.joinCode && (
           <Button
             variant="outline"
@@ -593,7 +196,7 @@ export default function PrivateGamePage() {
             <div className="mb-4">
               <Button
                 className="w-full bg-amber-600 hover:bg-amber-700"
-                onClick={handleHostSit}
+                onClick={() => hostSitDown()}
               >
                 <Play className="w-4 h-4 mr-2" /> Sit Down
               </Button>
@@ -615,13 +218,8 @@ export default function PrivateGamePage() {
                 <div className="space-y-2">
                   <div className="text-xs text-slate-400 mb-2">
                     Current: $
-                    {gameState.smallBlind ||
-                      gameState.config?.smallBlind ||
-                      0}{" "}
-                    / $
-                    {gameState.bigBlind ||
-                      gameState.config?.bigBlind ||
-                      0}
+                    {gameState.smallBlind || gameState.config?.smallBlind || 0} / $
+                    {gameState.bigBlind || gameState.config?.bigBlind || 0}
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs">Small Blind</Label>
@@ -703,7 +301,7 @@ export default function PrivateGamePage() {
                               size="icon"
                               variant="ghost"
                               className="h-6 w-6 hover:text-emerald-500"
-                              onClick={() => handleApprove(req)}
+                              onClick={() => approveRequest(req)}
                             >
                               <Check className="w-4 h-4" />
                             </Button>
@@ -711,7 +309,7 @@ export default function PrivateGamePage() {
                               size="icon"
                               variant="ghost"
                               className="h-6 w-6 hover:text-red-500"
-                              onClick={() => handleReject(requestUserId)}
+                              onClick={() => rejectRequest(requestUserId)}
                             >
                               <X className="w-4 h-4" />
                             </Button>
@@ -735,7 +333,7 @@ export default function PrivateGamePage() {
                     .filter(
                       (p) =>
                         p.status !== "LEFT" && p.status !== "REMOVED" && !p.left
-                    ) // Filter out permanently out players (but include host)
+                    )
                     .map((p) => {
                       const isHostPlayer = p.id === currentUserId;
                       return (
@@ -810,7 +408,7 @@ export default function PrivateGamePage() {
                                 size="icon"
                                 variant="ghost"
                                 className="h-6 w-6 text-slate-400 hover:text-red-500"
-                                onClick={() => handleKick(p.id)}
+                                onClick={() => kickPlayer(p.id)}
                               >
                                 <UserMinus className="w-3 h-3" />
                               </Button>
@@ -876,8 +474,7 @@ export default function PrivateGamePage() {
                   <p className="text-xs text-muted-foreground">Blinds</p>
                   <p className="text-sm font-semibold">
                     ${gameState.smallBlind || gameState.config?.smallBlind || 0}
-                    /$
-                    {gameState.bigBlind || gameState.config?.bigBlind || 0}
+                    /${gameState.bigBlind || gameState.config?.bigBlind || 0}
                   </p>
                 </div>
               )}
@@ -951,7 +548,7 @@ export default function PrivateGamePage() {
     </div>
   );
 
-  // Prepare footer content with game controls (for host) and Leave Game button
+  // Prepare footer content
   const footerContent = (
     <div className="flex items-center gap-3 w-full">
       {isHost && (
@@ -959,7 +556,7 @@ export default function PrivateGamePage() {
           {gameState.status === "waiting" ? (
             <Button
               className="bg-emerald-600 hover:bg-emerald-700 flex-[0_0_48%]"
-              onClick={() => handleAdminAction("ADMIN_START_GAME")}
+              onClick={startGame}
             >
               <Play className="w-4 h-4 mr-2" /> Start
             </Button>
@@ -997,7 +594,7 @@ export default function PrivateGamePage() {
             hostId: gameState.hostId,
           }}
           currentUserId={currentUserId}
-          isHeadsUp={gameState.config?.maxPlayers === 2}
+          isHeadsUp={isHeadsUp}
           turnTimer={turnTimer}
           isSyncing={isSyncing}
         />
