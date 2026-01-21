@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PokerTable } from "@/components/features/game/PokerTable";
 import { ActionPopup } from "@/components/features/game/ActionPopup";
@@ -70,6 +70,15 @@ export default function GamePage() {
   } | null>(null);
   const [showHandRankings, setShowHandRankings] = useState(false);
   const [cardsLoaded, setCardsLoaded] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  type PlayerSessionStats = {
+    hands_played: number;
+    vpip_count: number;
+    pfr_count: number;
+  };
+  const [playerStats, setPlayerStats] = useState<
+    Record<string, PlayerSessionStats | null>
+  >({});
 
   // Calculate current hand strength for highlighting in sidebar
   const currentHandStrength = useMemo(() => {
@@ -113,6 +122,64 @@ export default function GamePage() {
   const supabase = createClientComponentClient();
   const { toast } = useToast();
   const { setStatus, clearStatus } = useStatus();
+
+  // Track active player IDs for stats fetch
+  const activePlayerIds = useMemo(
+    () => (gameState?.players || []).map((p) => p.id).filter(Boolean),
+    [gameState?.players]
+  );
+
+  const refreshPlayerStats = useCallback(async () => {
+    if (!gameState) return;
+    const ids = activePlayerIds;
+    if (ids.length === 0) {
+      setPlayerStats({});
+      return;
+    }
+
+    try {
+      const results = await Promise.all(
+        ids.map(async (playerId) => {
+          try {
+            const { data, error } = await supabase.rpc(
+              "get_player_session_stats",
+              {
+                target_player_id: playerId,
+                target_game_id: gameId,
+              }
+            );
+            if (error) throw error;
+            return [playerId, data as PlayerSessionStats | null] as const;
+          } catch (err) {
+            console.error("[Game] Failed to load player stats", err);
+            return [playerId, null] as const;
+          }
+        })
+      );
+      setPlayerStats(Object.fromEntries(results));
+    } catch (err) {
+      console.error("[Game] Unexpected error loading player stats", err);
+    }
+  }, [activePlayerIds, gameId, gameState, supabase]);
+
+  // Refresh stats when toggled on or when hand changes
+  useEffect(() => {
+    if (showStats) {
+      refreshPlayerStats();
+    }
+  }, [showStats, gameState?.handNumber, refreshPlayerStats]);
+
+  const handleToggleStats = useCallback(() => {
+    setShowStats((prev) => {
+      const next = !prev;
+      if (!next) {
+        setPlayerStats({});
+      } else {
+        refreshPlayerStats();
+      }
+      return next;
+    });
+  }, [refreshPlayerStats]);
 
   // Fetch variant information from database
   useEffect(() => {
@@ -1327,6 +1394,8 @@ export default function GamePage() {
               playerDisconnectTimers={playerDisconnectTimers}
               turnTimer={turnTimer}
               isSyncing={isSyncing}
+              showStats={showStats}
+              playerStats={playerStats}
             />
           </div>
 
@@ -1469,7 +1538,10 @@ export default function GamePage() {
 
   // Prepare footer content
   const footerContent = !gameFinished ? (
-    <div className="flex justify-end">
+    <div className="flex justify-end gap-3">
+      <Button variant="secondary" onClick={handleToggleStats}>
+        Toggle Stats
+      </Button>
       <LeaveGameButton gameId={gameId} />
     </div>
   ) : undefined;

@@ -32,6 +32,16 @@ interface PokerTableProps {
   } | null; // Turn timer data from turn_timer_started event
   isSyncing?: boolean; // Whether we're currently syncing authoritative state
   maxSeats?: number; // Override for seat count (e.g., from tournament config)
+  showStats?: boolean; // Whether to display per-player stats under stacks
+  playerStats?: Record<
+    string,
+    | {
+        hands_played: number;
+        vpip_count: number;
+        pfr_count: number;
+      }
+    | null
+  >;
 }
 
 // Calculate seat positions using sin/cos for equal spacing
@@ -73,6 +83,8 @@ export function PokerTable({
   turnTimer = null,
   isSyncing = false,
   maxSeats = 6,
+  showStats = false,
+  playerStats = {},
 }: PokerTableProps) {
   const { isEnabled: debugMode } = useDebugMode();
   const isMobile = useIsMobile();
@@ -1002,6 +1014,26 @@ export function PokerTable({
                   <div className="text-sm text-white font-medium mb-1">
                     ${player.chips}
                   </div>
+
+                  {/* Optional stats line (VPIP/PFR) */}
+                  {showStats && (
+                    <div className="text-xs text-slate-300">
+                      {(() => {
+                        const stats = playerStats[player.id];
+                        const hands = stats?.hands_played ?? 0;
+                        if (!stats || hands === 0) {
+                          return "N/A";
+                        }
+                        const vpipPct = Math.round(
+                          (stats.vpip_count / Math.max(1, hands)) * 100
+                        );
+                        const pfrPct = Math.round(
+                          (stats.pfr_count / Math.max(1, hands)) * 100
+                        );
+                        return `VPIP ${vpipPct}% | PFR ${pfrPct}%`;
+                      })()}
+                    </div>
+                  )}
 
                   {/* Turn Timer - Progress Bar at bottom of player box */}
                   {/* Don't show timer when game is paused (for private games) */}
