@@ -44,6 +44,38 @@ export function useTournamentSocket() {
   const socket = useSocket();
 
   // ============================================
+  // RESPONSE NORMALIZATION (supports old + new formats)
+  // ============================================
+
+  const getErrorMessageFromResponse = (response: any): string | undefined => {
+    if (!response) return undefined;
+    // New standardized format: { success: false, error: { code, message } }
+    if (response.success === false) {
+      const msg =
+        response?.error?.message ??
+        response?.error?.error ??
+        response?.message ??
+        response?.error;
+      return typeof msg === "string" ? msg : "An error occurred";
+    }
+    // Old format: { error: "..." }
+    if (typeof response.error === "string") return response.error;
+    if (response.error && typeof response.error === "object") {
+      const msg = response.error.message;
+      if (typeof msg === "string") return msg;
+    }
+    return undefined;
+  };
+
+  const getDataFromResponse = <T,>(response: any): T | undefined => {
+    if (!response) return undefined;
+    // New standardized format: { success: true, data: ... }
+    if (response.data !== undefined) return response.data as T;
+    // Old format: payload was top-level
+    return response as T;
+  };
+
+  // ============================================
   // TOURNAMENT MANAGEMENT
   // ============================================
 
@@ -59,15 +91,25 @@ export function useTournamentSocket() {
       return new Promise((resolve) => {
         if (!socket.connected) socket.connect();
 
-        socket.emit("create_tournament", payload, (response: CreateTournamentResponse) => {
-          if (response.error) {
-            resolve({ error: response.error });
-          } else if (response.tournamentId) {
-            resolve({ tournamentId: response.tournamentId });
-          } else {
-            resolve({ error: "Invalid response" });
+        socket.emit(
+          "create_tournament",
+          payload,
+          (response: CreateTournamentResponse) => {
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              resolve({ error: errorMessage });
+              return;
+            }
+
+            const data = getDataFromResponse<{ tournamentId?: string }>(response);
+            const tournamentId = data?.tournamentId;
+            if (tournamentId) {
+              resolve({ tournamentId });
+            } else {
+              resolve({ error: "Invalid response" });
+            }
           }
-        });
+        );
       });
     },
     [socket]
@@ -141,13 +183,18 @@ export function useTournamentSocket() {
           ...data,
         };
 
-        socket.emit("tournament_admin_action", payload, (response: SocketCallbackResponse) => {
-          if (response?.error) {
-            resolve({ error: response.error });
-          } else {
-            resolve({ success: true });
+        socket.emit(
+          "tournament_admin_action",
+          payload,
+          (response: SocketCallbackResponse) => {
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              resolve({ error: errorMessage });
+            } else {
+              resolve({ success: true });
+            }
           }
-        });
+        );
       });
     },
     [socket]
@@ -239,8 +286,9 @@ export function useTournamentSocket() {
           "register_tournament",
           { tournamentId },
           (response: SocketCallbackResponse) => {
-            if (response?.error) {
-              resolve({ error: response.error });
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              resolve({ error: errorMessage });
             } else {
               resolve({ success: true });
             }
@@ -265,8 +313,9 @@ export function useTournamentSocket() {
           "unregister_tournament",
           { tournamentId },
           (response: SocketCallbackResponse) => {
-            if (response?.error) {
-              resolve({ error: response.error });
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              resolve({ error: errorMessage });
             } else {
               resolve({ success: true });
             }
@@ -295,10 +344,17 @@ export function useTournamentSocket() {
           "get_tournament_state",
           { tournamentId },
           (response: GetTournamentStateResponse) => {
-            if (response?.error) {
-              resolve({ error: response.error });
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              resolve({ error: errorMessage });
+              return;
+            }
+
+            const data = getDataFromResponse<TournamentStateResponse>(response);
+            if (data) {
+              resolve(data);
             } else {
-              resolve(response as TournamentStateResponse);
+              resolve({ error: "Invalid response" });
             }
           }
         );
@@ -318,15 +374,20 @@ export function useTournamentSocket() {
       return new Promise((resolve) => {
         if (!socket.connected) socket.connect();
 
-        socket.emit("get_active_tournaments", { status }, (response: SocketCallbackResponse & { tournaments?: TournamentData[] }) => {
-          if (response?.error) {
-            resolve({ error: response.error });
-          } else if (response.tournaments) {
-            resolve({ tournaments: response.tournaments });
-          } else {
-            resolve({ tournaments: [] });
+        socket.emit(
+          "get_active_tournaments",
+          { status },
+          (response: SocketCallbackResponse & { tournaments?: TournamentData[] }) => {
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              resolve({ error: errorMessage });
+              return;
+            }
+
+            const data = getDataFromResponse<{ tournaments?: TournamentData[] }>(response);
+            resolve({ tournaments: data?.tournaments ?? [] });
           }
-        });
+        );
       });
     },
     [socket]
@@ -346,11 +407,22 @@ export function useTournamentSocket() {
           "get_tournament_leaderboard",
           { tournamentId },
           (response: SocketCallbackResponse & Partial<TournamentLeaderboard>) => {
-            if (response?.error) {
-              resolve({ error: response.error });
-            } else {
-              resolve(response as TournamentLeaderboard);
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              resolve({ error: errorMessage });
+              return;
             }
+
+            const data = getDataFromResponse<any>(response);
+            // Backend currently returns { leaderboard } (array) wrapped in success({ leaderboard })
+            // or may return the full TournamentLeaderboard shape.
+            if (data?.leaderboard && Array.isArray(data.leaderboard)) {
+              resolve(data as TournamentLeaderboard);
+              return;
+            }
+
+            // Fall back to old behavior if full object was top-level
+            resolve((data ?? response) as TournamentLeaderboard);
           }
         );
       });
@@ -376,8 +448,9 @@ export function useTournamentSocket() {
           "join_tournament_room",
           { tournamentId },
           (response: SocketCallbackResponse) => {
-            if (response?.error) {
-              resolve({ error: response.error });
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              resolve({ error: errorMessage });
             } else {
               resolve({ success: true });
             }
@@ -402,8 +475,9 @@ export function useTournamentSocket() {
           "leave_tournament_room",
           { tournamentId },
           (response: SocketCallbackResponse) => {
-            if (response?.error) {
-              resolve({ error: response.error });
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              resolve({ error: errorMessage });
             } else {
               resolve({ success: true });
             }
@@ -426,13 +500,18 @@ export function useTournamentSocket() {
       return new Promise((resolve) => {
         if (!socket.connected) socket.connect();
 
-        socket.emit("joinGame", { gameId: tableId }, (response: SocketCallbackResponse) => {
-          if (response?.error) {
-            resolve({ error: response.error });
-          } else {
-            resolve({ success: true });
+        socket.emit(
+          "joinGame",
+          { gameId: tableId },
+          (response: SocketCallbackResponse) => {
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              resolve({ error: errorMessage });
+            } else {
+              resolve({ success: true });
+            }
           }
-        });
+        );
       });
     },
     [socket]
@@ -446,13 +525,18 @@ export function useTournamentSocket() {
       return new Promise((resolve) => {
         if (!socket.connected) socket.connect();
 
-        socket.emit("leaveGame", { gameId: tableId }, (response: SocketCallbackResponse) => {
-          if (response?.error) {
-            resolve({ error: response.error });
-          } else {
-            resolve({ success: true });
+        socket.emit(
+          "leaveGame",
+          { gameId: tableId },
+          (response: SocketCallbackResponse) => {
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              resolve({ error: errorMessage });
+            } else {
+              resolve({ success: true });
+            }
           }
-        });
+        );
       });
     },
     [socket]
@@ -478,8 +562,9 @@ export function useTournamentSocket() {
             amount,
           },
           (response: SocketCallbackResponse) => {
-            if (response?.error) {
-              resolve({ error: response.error });
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              resolve({ error: errorMessage });
             } else {
               resolve({ success: true });
             }
@@ -510,14 +595,22 @@ export function useTournamentSocket() {
           "spectate_tournament_table",
           { tournamentId, tableId },
           (response: GetGameStateResponse & { state?: import("@/lib/types/poker").GameState }) => {
-            if (response?.error) {
-              resolve({ success: false, error: response.error });
-            } else {
-              resolve({
-                success: true,
-                gameState: response.gameState || response.state,
-              });
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              resolve({ success: false, error: errorMessage });
+              return;
             }
+
+            const data = getDataFromResponse<any>(response);
+            resolve({
+              success: true,
+              gameState:
+                data?.gameState ||
+                data?.state ||
+                data?.tableState ||
+                response.gameState ||
+                response.state,
+            });
           }
         );
       });
@@ -537,7 +630,8 @@ export function useTournamentSocket() {
           "stop_spectating_tournament",
           { tournamentId },
           (response: SocketCallbackResponse) => {
-            resolve({ success: !response?.error });
+            const errorMessage = getErrorMessageFromResponse(response);
+            resolve({ success: !errorMessage });
           }
         );
       });

@@ -540,7 +540,11 @@ export interface TournamentResultParticipant {
  */
 export interface SocketCallbackResponse {
   success?: boolean;
-  error?: string;
+  // Backward-compatible: older handlers returned `error` as a string.
+  // New standardized socket responses return `error` as an object.
+  error?: string | { code?: string; message?: string };
+  // New standardized socket responses wrap payloads in `data`
+  data?: unknown;
 }
 
 /**

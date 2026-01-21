@@ -11,6 +11,33 @@ import {
 } from '@/components/features/tournament/TournamentActivePopup'
 import { TournamentCompletedEvent, TournamentCancelledEvent } from '@/lib/types/tournament'
 
+// Normalize socket callback responses (supports old and new shapes)
+const getErrorMessageFromResponse = (response: any): string | undefined => {
+  if (!response) return undefined
+  // New standardized shape: { success: false, error: { code, message } }
+  if (response.success === false) {
+    const msg =
+      response?.error?.message ??
+      response?.error?.error ??
+      response?.message ??
+      response?.error
+    return typeof msg === 'string' ? msg : 'An error occurred'
+  }
+  // Old shape: { error: "..." }
+  if (typeof response?.error === 'string') return response.error
+  if (response?.error && typeof response.error === 'object') {
+    const msg = response.error.message
+    if (typeof msg === 'string') return msg
+  }
+  return undefined
+}
+
+const getDataFromResponse = <T,>(response: any): T | undefined => {
+  if (!response) return undefined
+  if (response.data !== undefined) return response.data as T
+  return response as T
+}
+
 // Response type from check_active_status
 interface ActiveStatusResponse {
   game: {
@@ -228,8 +255,9 @@ export function ActiveStatusProvider({ children }: { children: ReactNode }) {
   const leaveTournament = useCallback(() => {
     if (!tournamentId || !socket || isPlaying) return
 
-    socket.emit('unregister_tournament', { tournamentId }, (response: { error?: string }) => {
-      if (!response?.error) {
+    socket.emit('unregister_tournament', { tournamentId }, (response: any) => {
+      const errorMessage = getErrorMessageFromResponse(response)
+      if (!errorMessage) {
         setInTournament(false)
         setTournamentId(null)
         setTournamentStatus(null)
@@ -238,6 +266,8 @@ export function ActiveStatusProvider({ children }: { children: ReactNode }) {
         setIsPlaying(false)
         setIsHost(false)
         clearStatus('tournament')
+      } else {
+        console.error('[ActiveStatus] Failed to unregister tournament:', errorMessage)
       }
     })
   }, [socket, tournamentId, isPlaying, clearStatus])
@@ -372,29 +402,36 @@ export function ActiveStatusProvider({ children }: { children: ReactNode }) {
       }
 
       socket.emit('check_active_status', (response: ActiveStatusResponse) => {
-        if (!response || response.error) {
+        const errorMessage = getErrorMessageFromResponse(response)
+        if (errorMessage) {
+          resolve()
+          return
+        }
+
+        const data = getDataFromResponse<ActiveStatusResponse>(response) || response
+        if (!data) {
           resolve()
           return
         }
 
         // Update queue state
-        if (response.queue) {
+        if (data.queue) {
           setInQueue(true)
-          setQueueType(response.queue.queueType)
+          setQueueType(data.queue.queueType)
         } else {
           setInQueue(false)
           setQueueType(null)
         }
 
         // Update tournament state
-        if (response.tournament) {
+        if (data.tournament) {
           setInTournament(true)
-          setTournamentId(response.tournament.tournamentId)
-          setTournamentStatus(response.tournament.status)
-          setTournamentTitle(response.tournament.title)
-          setCurrentTableId(response.tournament.tableId)
-          setIsPlaying(response.tournament.participantStatus === 'active' && !!response.tournament.tableId)
-          setIsHost(response.tournament.isHost)
+          setTournamentId(data.tournament.tournamentId)
+          setTournamentStatus(data.tournament.status)
+          setTournamentTitle(data.tournament.title)
+          setCurrentTableId(data.tournament.tableId)
+          setIsPlaying(data.tournament.participantStatus === 'active' && !!data.tournament.tableId)
+          setIsHost(data.tournament.isHost)
         } else {
           setInTournament(false)
           setTournamentId(null)
@@ -406,8 +443,8 @@ export function ActiveStatusProvider({ children }: { children: ReactNode }) {
         }
 
         // Update status bars
-        updateQueueStatusBar(response.queue)
-        updateTournamentStatusBar(response.tournament)
+        updateQueueStatusBar(data.queue)
+        updateTournamentStatusBar(data.tournament)
 
         resolve()
       })
@@ -421,13 +458,17 @@ export function ActiveStatusProvider({ children }: { children: ReactNode }) {
     // Check status on connect/mount using check_active_status
     const doCheckStatus = () => {
       socket.emit('check_active_status', (response: ActiveStatusResponse) => {
-        if (!response || response.error) {
+        const errorMessage = getErrorMessageFromResponse(response)
+        if (errorMessage) {
           return
         }
 
+        const data = getDataFromResponse<ActiveStatusResponse>(response) || response
+        if (!data) return
+
         // Handle active game (including spectating)
-        if (response.game) {
-          const { gameId, isTournament, tournamentId: gameTournamentId, isSpectating } = response.game
+        if (data.game) {
+          const { gameId, isTournament, tournamentId: gameTournamentId, isSpectating } = data.game
 
           // Don't redirect if already on the correct page
           if (!pathname?.includes(gameId)) {

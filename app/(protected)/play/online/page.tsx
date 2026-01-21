@@ -37,7 +37,7 @@ export default function OnlinePlayPage() {
 
   // Selection State
   const [format, setFormat] = useState<string>("holdem"); // Default to Texas Hold'em
-  const [category, setCategory] = useState<string>("");
+  const [category, setCategory] = useState<"competitive" | "casual" | "">("");
   const [selectedVariantSlug, setSelectedVariantSlug] = useState<string>("");
 
   const { inQueue, queueType, matchFound, leaveQueue } = useQueue();
@@ -251,17 +251,20 @@ export default function OnlinePlayPage() {
       }));
   }, [variants]);
 
+  // Group backend categories into 2 user-facing categories to avoid duplicate labels
   const categories = useMemo(() => {
-    const unique = new Set(variants.map((v) => v.category));
-    return Array.from(unique).map((cat) => ({
-      value: cat,
-      label:
-        cat === "cash"
-          ? "Competitive"
-          : cat === "tournament" || cat === "casual" || cat === "sit_and_go"
-          ? "Casual"
-          : cat,
-    }));
+    const hasCompetitive = variants.some((v) => v.category === "cash");
+    const hasCasual = variants.some(
+      (v) =>
+        v.category === "casual" ||
+        v.category === "tournament" ||
+        v.category === "sit_and_go"
+    );
+
+    return [
+      ...(hasCompetitive ? [{ value: "competitive" as const, label: "Competitive" }] : []),
+      ...(hasCasual ? [{ value: "casual" as const, label: "Casual" }] : []),
+    ];
   }, [variants]);
 
   // 4. Filter Logic - filter by both format (engine_type) and category
@@ -270,9 +273,15 @@ export default function OnlinePlayPage() {
       return [];
     }
 
-    return variants.filter(
-      (v) => v.engine_type === format && v.category === category
-    );
+    const isInCategory =
+      category === "competitive"
+        ? (v: GameVariant) => v.category === "cash"
+        : (v: GameVariant) =>
+            v.category === "casual" ||
+            v.category === "tournament" ||
+            v.category === "sit_and_go";
+
+    return variants.filter((v) => v.engine_type === format && isInCategory(v));
   }, [variants, format, category]);
 
   // Helper function to check if user can afford a variant
@@ -421,7 +430,12 @@ export default function OnlinePlayPage() {
           <div className="flex items-center gap-3">
             <Label className="w-20 flex-shrink-0">Category</Label>
             <div className="flex-1">
-              <Select value={category} onValueChange={setCategory}>
+              <Select
+                value={category}
+                onValueChange={(value) =>
+                  setCategory(value as "competitive" | "casual")
+                }
+              >
                 <SelectTrigger className="[&>span]:text-left">
                   <SelectValue placeholder="Select Category" />
                 </SelectTrigger>
