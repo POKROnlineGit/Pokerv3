@@ -1,6 +1,6 @@
 "use client";
 
-import { useSocket } from "./client";
+import { connectSocketWithAuth, useSocket } from "./client";
 import { useCallback, useEffect, useState } from "react";
 import {
   TournamentState,
@@ -89,7 +89,7 @@ export function useTournamentSocket() {
       description?: string;
     }): Promise<{ tournamentId: string } | { error: string }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         socket.emit(
           "create_tournament",
@@ -133,7 +133,7 @@ export function useTournamentSocket() {
       data?: Record<string, any>
     ): Promise<{ success: boolean } | { error: string }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         // Validate payload before sending
         if (!tournamentId || typeof tournamentId !== "string") {
@@ -280,7 +280,7 @@ export function useTournamentSocket() {
       tournamentId: string
     ): Promise<{ success: boolean } | { error: string }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         socket.emit(
           "register_tournament",
@@ -307,7 +307,7 @@ export function useTournamentSocket() {
       tournamentId: string
     ): Promise<{ success: boolean } | { error: string }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         socket.emit(
           "unregister_tournament",
@@ -338,7 +338,7 @@ export function useTournamentSocket() {
       tournamentId: string
     ): Promise<TournamentStateResponse | { error: string }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         socket.emit(
           "get_tournament_state",
@@ -372,7 +372,7 @@ export function useTournamentSocket() {
       status?: TournamentStatusType
     ): Promise<{ tournaments: TournamentData[] } | { error: string }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         socket.emit(
           "get_active_tournaments",
@@ -401,7 +401,7 @@ export function useTournamentSocket() {
       tournamentId: string
     ): Promise<TournamentLeaderboard | { error: string }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         socket.emit(
           "get_tournament_leaderboard",
@@ -442,7 +442,7 @@ export function useTournamentSocket() {
       tournamentId: string
     ): Promise<{ success: boolean } | { error: string }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         socket.emit(
           "join_tournament_room",
@@ -469,7 +469,7 @@ export function useTournamentSocket() {
       tournamentId: string
     ): Promise<{ success: boolean } | { error: string }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         socket.emit(
           "leave_tournament_room",
@@ -498,7 +498,7 @@ export function useTournamentSocket() {
   const joinTable = useCallback(
     (tableId: string): Promise<{ success: boolean } | { error: string }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         socket.emit(
           "joinGame",
@@ -523,7 +523,7 @@ export function useTournamentSocket() {
   const leaveTable = useCallback(
     (tableId: string): Promise<{ success: boolean } | { error: string }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         socket.emit(
           "leaveGame",
@@ -552,7 +552,7 @@ export function useTournamentSocket() {
       amount?: number
     ): Promise<{ success: boolean } | { error: string }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         socket.emit(
           "playerAction",
@@ -589,7 +589,7 @@ export function useTournamentSocket() {
       tableId: string
     ): Promise<{ success: boolean; gameState?: import("@/lib/types/poker").GameState; error?: string }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         socket.emit(
           "spectate_tournament_table",
@@ -624,7 +624,7 @@ export function useTournamentSocket() {
   const stopSpectatingTournament = useCallback(
     (tournamentId: string): Promise<{ success: boolean }> => {
       return new Promise((resolve) => {
-        if (!socket.connected) socket.connect();
+        void connectSocketWithAuth(socket);
 
         socket.emit(
           "stop_spectating_tournament",
@@ -728,10 +728,8 @@ export function useTournamentEvents(
   useEffect(() => {
     if (!tournamentId) return;
 
-    // Ensure socket is connected
-    if (!socket.connected) {
-      socket.connect();
-    }
+    // Ensure socket is connected (auth prepared first)
+    void connectSocketWithAuth(socket);
 
     // Join tournament room when connected
     const joinRoom = () => {

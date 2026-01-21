@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useSocket } from "@/lib/api/socket/client";
+import { connectSocketWithAuth, useSocket } from "@/lib/api/socket/client";
 
 type LeaveGameButtonProps = {
   gameId?: string;
@@ -26,9 +26,7 @@ export function LeaveGameButton({ gameId, className }: LeaveGameButtonProps) {
 
   const handleLeave = () => {
     try {
-      if (socket && !socket.connected) {
-        socket.connect();
-      }
+      void connectSocketWithAuth(socket);
       
       // Track this game as recently left to prevent race condition redirects
       if (gameId && typeof window !== "undefined") {

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef, ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getSocket } from "@/lib/api/socket/client";
+import { connectSocketWithAuth, getSocket } from "@/lib/api/socket/client";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
 import type { GameState } from "@/lib/types/poker";
 
@@ -71,9 +71,7 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     const socket = getSocket();
     
     // Ensure socket is connected
-    if (!socket.connected) {
-      socket.connect();
-    }
+    void connectSocketWithAuth(socket);
 
     const handleGameState = async (state: GameState) => {
       // Determine game type (these fields are now properly typed in GameState)

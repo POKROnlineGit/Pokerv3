@@ -3,7 +3,14 @@
  * These handle the transformation of server payloads to the format expected by React components
  */
 
-import type { GameState, Player, PendingJoinRequest, GameStateConfig, Pot } from "@/lib/types/poker";
+import type {
+  GameState,
+  Player,
+  PendingJoinRequest,
+  GameSpectator,
+  GameStateConfig,
+  Pot,
+} from "@/lib/types/poker";
 import type { GameStateEvent, ServerPot } from "../types/game";
 
 // ============================================
@@ -153,9 +160,10 @@ export function normalizeCommunityCards(cards: unknown[] | undefined): string[] 
 
 /**
  * Normalize pending join requests for private games
+ * Handles field name mismatch between backend (id, userId) and frontend (odanUserId, odanRequestId)
  */
 export function normalizePendingRequests(
-  requests: Partial<PendingJoinRequest>[] | undefined,
+  requests: Partial<PendingJoinRequest & { id?: string; userId?: string }>[] | undefined,
   seatedPlayerIds: string[]
 ): PendingJoinRequest[] {
   if (!Array.isArray(requests) || requests.length === 0) {
@@ -163,17 +171,18 @@ export function normalizePendingRequests(
   }
 
   // Filter out requests from players who are now seated
+  // Check all possible ID field names from backend
   const cleanedRequests = requests.filter((req) => {
-    const requestUserId = req.odanUserId || req.odanRequestId;
+    const requestUserId = req.odanUserId || req.id || req.userId || req.odanRequestId;
     return requestUserId && !seatedPlayerIds.includes(requestUserId);
   });
 
-  // Normalize each request
+  // Normalize each request - map backend fields to frontend fields
   return cleanedRequests.map((req) => ({
-    odanUserId: req.odanUserId || "",
-    odanRequestId: req.odanRequestId || "",
+    odanUserId: req.odanUserId || req.id || req.userId || "",
+    odanRequestId: req.odanRequestId || req.id || req.userId || "",
     username: req.username || "Unknown",
-    requestedAt: req.requestedAt || "",
+    requestedAt: req.requestedAt || new Date().toISOString(),
     type: req.type || "join",
   }));
 }
@@ -268,6 +277,16 @@ export function normalizeGameState(
     seatedPlayerIds
   );
 
+  // Normalize spectators for private games
+  // Backend sends userId but frontend expects odanUserId
+  const spectators: GameSpectator[] = Array.isArray(serverState.spectators)
+    ? serverState.spectators.map((s: Partial<GameSpectator & { userId?: string }>) => ({
+        odanUserId: s.odanUserId || s.userId || "",
+        username: s.username || "Unknown",
+        joinedAt: s.joinedAt || new Date().toISOString(),
+      }))
+    : [];
+
   const normalizedState: GameState = {
     gameId: serverState.gameId || gameId,
     status: serverState.status,
@@ -310,7 +329,7 @@ export function normalizeGameState(
     hostId: serverState.hostId,
     isPaused: serverState.isPaused,
     pendingRequests,
-    spectators: serverState.spectators,
+    spectators,
     // Tournament fields
     tournamentId: serverState.tournamentId,
     // Preserve left_players if server sends it

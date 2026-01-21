@@ -207,11 +207,50 @@ export interface PlayerActionPayload {
   isAllInCall?: boolean;
 }
 
-export interface AdminActionPayload {
+// Base admin action payload
+interface BaseAdminActionPayload {
   gameId: string;
-  type: string;
-  [key: string]: unknown;
 }
+
+// Discriminated union for admin action types
+export type AdminActionPayload =
+  | (BaseAdminActionPayload & {
+      type: "ADMIN_APPROVE";
+      targetUserId?: string;
+      requestId?: string;
+      playerId?: string;
+      targetSeatIndex?: number;
+    })
+  | (BaseAdminActionPayload & {
+      type: "ADMIN_REJECT";
+      targetUserId?: string;
+      requestId?: string;
+      playerId?: string;
+    })
+  | (BaseAdminActionPayload & {
+      type: "ADMIN_KICK";
+      playerId: string;
+    })
+  | (BaseAdminActionPayload & {
+      type: "ADMIN_SET_STACK";
+      seat?: number;
+      playerId?: string;
+      amount: number;
+    })
+  | (BaseAdminActionPayload & {
+      type: "ADMIN_SET_BLINDS";
+      smallBlind: number;
+      bigBlind: number;
+    })
+  | (BaseAdminActionPayload & {
+      type: "ADMIN_PAUSE";
+    })
+  | (BaseAdminActionPayload & {
+      type: "ADMIN_RESUME";
+    })
+  | (BaseAdminActionPayload & {
+      type: "ADMIN_START_GAME";
+    });
 
 export interface RequestSeatPayload {
   gameId: string;

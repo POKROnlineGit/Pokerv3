@@ -7,9 +7,9 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Socket } from "socket.io-client";
-import { getSocket } from "../client";
+import { connectSocketWithAuth, getSocket } from "../client";
 import { createRetryHandler, isGameNotFoundError, isAuthError, getErrorMessage } from "../utils/errors";
-import type { SocketErrorEvent, JoinGameResponse } from "../types/game";
+import type { SocketErrorEvent } from "../types/game";
 
 export interface UseGameSocketOptions {
   gameId: string;
@@ -33,7 +33,7 @@ export interface UseGameSocketReturn {
 
 /**
  * Hook for managing game socket connection
- * Automatically joins game on connect and handles reconnection
+ * Relies on backend auto-join for reconnection; only explicitly joins when needed
  */
 export function useGameSocket(options: UseGameSocketOptions): UseGameSocketReturn {
   const {
@@ -52,6 +52,9 @@ export function useGameSocket(options: UseGameSocketOptions): UseGameSocketRetur
 
   const socketRef = useRef<Socket | null>(null);
   const mountedRef = useRef(true);
+  const lastJoinRef = useRef<{ gameId: string; socketId?: string; at: number } | null>(null);
+  const backendAutoJoinedRef = useRef(false);
+  const initialJoinTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Create retry handler for "Game not found" errors
   const retryHandlerRef = useRef(
@@ -77,14 +80,35 @@ export function useGameSocket(options: UseGameSocketOptions): UseGameSocketRetur
   }, []);
 
   // Join game function
-  const joinGame = useCallback(() => {
-    const socket = getSocketInstance();
-    if (!socket.connected) {
-      socket.connect();
-    }
-    socket.emit("joinGame", gameId);
-    setIsSyncing(true);
-  }, [gameId, getSocketInstance]);
+  const joinGameInternal = useCallback(
+    (force = false) => {
+      void (async () => {
+        const socket = getSocketInstance();
+        await connectSocketWithAuth(socket);
+
+        // Dedupe join spam: only emit once per (socket.id, gameId) within a short window,
+        // unless explicitly forced (e.g. retry after "Game not found").
+        const now = Date.now();
+        const socketId = socket.id;
+        const last = lastJoinRef.current;
+        const isDuplicate =
+          !force &&
+          !!last &&
+          last.gameId === gameId &&
+          last.socketId === socketId &&
+          now - last.at < 5000;
+
+        if (isDuplicate) return;
+
+        socket.emit("joinGame", gameId);
+        lastJoinRef.current = { gameId, socketId, at: now };
+        setIsSyncing(true);
+      })();
+    },
+    [gameId, getSocketInstance]
+  );
+
+  const joinGame = useCallback(() => joinGameInternal(false), [joinGameInternal]);
 
   // Main connection effect
   useEffect(() => {
@@ -92,9 +116,7 @@ export function useGameSocket(options: UseGameSocketOptions): UseGameSocketRetur
     const socket = getSocketInstance();
 
     // Connect socket if not connected
-    if (!socket.connected) {
-      socket.connect();
-    }
+    void connectSocketWithAuth(socket);
 
     // Handle connect event
     const handleConnect = () => {
@@ -106,8 +128,9 @@ export function useGameSocket(options: UseGameSocketOptions): UseGameSocketRetur
       // Reset retry count on fresh connection
       retryHandlerRef.current.reset();
 
-      // Join game on connect
-      joinGame();
+      // Backend will auto-join if player is in an active game
+      // We'll wait for game-reconnected or gameState to confirm
+      backendAutoJoinedRef.current = false;
     };
 
     // Handle disconnect event
@@ -117,6 +140,9 @@ export function useGameSocket(options: UseGameSocketOptions): UseGameSocketRetur
       setIsConnected(false);
       setIsDisconnected(true);
       setIsSyncing(true);
+      // Reset flags for next connection
+      lastJoinRef.current = null;
+      backendAutoJoinedRef.current = false;
     };
 
     // Handle reconnect (fires when socket reconnects after disconnect)
@@ -129,8 +155,9 @@ export function useGameSocket(options: UseGameSocketOptions): UseGameSocketRetur
       // Reset retry count on reconnect
       retryHandlerRef.current.reset();
 
-      // Re-join game on reconnect
-      joinGame();
+      // Backend will auto-join if player is in an active game
+      // We'll wait for game-reconnected or gameState to confirm
+      backendAutoJoinedRef.current = false;
     };
 
     // Handle errors
@@ -142,7 +169,7 @@ export function useGameSocket(options: UseGameSocketOptions): UseGameSocketRetur
 
       if (isGameNotFoundError(error)) {
         // Retry joinGame for "Game not found" errors
-        const retryScheduled = retryHandlerRef.current.attempt(joinGame);
+        const retryScheduled = retryHandlerRef.current.attempt(() => joinGameInternal(true));
         if (!retryScheduled) {
           // Max retries exceeded, callback will be called
         }
@@ -156,29 +183,75 @@ export function useGameSocket(options: UseGameSocketOptions): UseGameSocketRetur
       }
     };
 
+    // Handle backend auto-join signal
+    const handleGameReconnected = (data: { gameId: string; message?: string }) => {
+      if (!mountedRef.current) return;
+      // Backend auto-joined us to this game
+      backendAutoJoinedRef.current = true;
+      setIsSyncing(true); // Set syncing while we wait for gameState
+      // Clear the fallback timeout since backend joined us
+      if (initialJoinTimeoutRef.current) {
+        clearTimeout(initialJoinTimeoutRef.current);
+        initialJoinTimeoutRef.current = null;
+      }
+    };
+
+    // Successful state receipt implies join succeeded
+    const handleAnyState = () => {
+      if (!mountedRef.current) return;
+      lastJoinRef.current = null;
+      backendAutoJoinedRef.current = true;
+      setIsSyncing(false); // Clear syncing immediately when gameState arrives
+      // Clear the fallback timeout since we received state
+      if (initialJoinTimeoutRef.current) {
+        clearTimeout(initialJoinTimeoutRef.current);
+        initialJoinTimeoutRef.current = null;
+      }
+    };
+
     // Register listeners
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
     socket.on("reconnect", handleReconnect);
     socket.on("error", handleError);
+    socket.on("game-reconnected", handleGameReconnected);
+    socket.on("gameState", handleAnyState);
+    socket.on("SYNC_GAME", handleAnyState);
 
     // Initial connection check
     if (socket.connected) {
       handleConnect();
     }
 
+    // If backend didn't auto-join within 2 seconds, explicitly join
+    // This handles cases where player navigates to a game page for a game they're not in yet
+    initialJoinTimeoutRef.current = setTimeout(() => {
+      if (mountedRef.current && !backendAutoJoinedRef.current && socket.connected) {
+        console.log("[useGameSocket] Backend didn't auto-join, explicitly joining game");
+        joinGameInternal(false);
+      }
+      initialJoinTimeoutRef.current = null;
+    }, 2000);
+
     // Cleanup
     return () => {
       mountedRef.current = false;
+      if (initialJoinTimeoutRef.current) {
+        clearTimeout(initialJoinTimeoutRef.current);
+        initialJoinTimeoutRef.current = null;
+      }
 
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
       socket.off("reconnect", handleReconnect);
       socket.off("error", handleError);
+      socket.off("game-reconnected", handleGameReconnected);
+      socket.off("gameState", handleAnyState);
+      socket.off("SYNC_GAME", handleAnyState);
 
       retryHandlerRef.current.cleanup();
     };
-  }, [gameId, getSocketInstance, joinGame, onError, onAuthError]);
+  }, [gameId, getSocketInstance, joinGameInternal, onError, onAuthError]);
 
   return {
     socket: getSocketInstance(),

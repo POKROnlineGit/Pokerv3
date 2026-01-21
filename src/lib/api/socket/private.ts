@@ -9,19 +9,29 @@ import { useEffect, useCallback, useRef, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "../supabase/client";
 import { useToast } from "@/lib/hooks";
-import { getSocket, useSocket } from "./client";
+import { connectSocketWithAuth, getSocket } from "./client";
 
 import { useGameState } from "./hooks/useGameState";
 import { useTurnTimer } from "./hooks/useTurnTimer";
+import { useDisconnectTimers } from "./hooks/useDisconnectTimers";
+import { useGameEvents } from "./hooks/useGameEvents";
 
 import type { GameState, ActionType, PendingJoinRequest } from "@/lib/types/poker";
 import type {
   GameStateEvent,
+  SyncGameEvent,
   PlayerStatusUpdateEvent,
   PlayerMovedToSpectatorEvent,
   SocketErrorEvent,
   TurnTimerStartedEvent,
+  AdminActionPayload,
 } from "./types/game";
+
+// Helper type for adminAction function signature
+type AdminActionFunction = <T extends AdminActionPayload["type"]>(
+  type: T,
+  payload?: Omit<Extract<AdminActionPayload, { type: T }>, "gameId" | "type">
+) => void;
 import { getErrorMessage } from "./utils/errors";
 
 // ============================================
@@ -37,6 +47,7 @@ export interface UsePrivateGameSocketReturn {
   gameState: GameState | null;
   isSyncing: boolean;
   turnTimer: { deadline: number; duration: number; activeSeat: number } | null;
+  playerDisconnectTimers: Record<string, number>;
   currentUserId: string | null;
   isHeadsUp: boolean;
 
@@ -56,7 +67,7 @@ export interface UsePrivateGameSocketReturn {
   hostSitDown: (seatIndex?: number | null) => void;
 
   // Host Actions
-  adminAction: (type: string, payload?: Record<string, unknown>) => void;
+  adminAction: AdminActionFunction;
   approveRequest: (request: PendingJoinRequest) => void;
   rejectRequest: (userId: string) => void;
   kickPlayer: (playerId: string) => void;
@@ -85,7 +96,6 @@ export function usePrivateGameSocket(
   const supabase = createClientComponentClient();
 
   const socket = getSocket();
-  const socketHook = useSocket();
 
   // Local state
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -104,6 +114,13 @@ export function usePrivateGameSocket(
     clearTimerIfActorChanged,
     clearTimerIfPaused,
   } = useTurnTimer();
+
+  const {
+    timers: playerDisconnectTimers,
+    startTimer: startDisconnectTimer,
+    clearTimer: clearDisconnectTimer,
+    clearAllTimers: clearAllDisconnectTimers,
+  } = useDisconnectTimers();
 
   // Computed properties
   const isHost = useMemo(
@@ -170,21 +187,15 @@ export function usePrivateGameSocket(
   }, [gameState, currentUserId]);
 
   // ============================================
-  // SOCKET CONNECTION
+  // EVENT HANDLERS
   // ============================================
 
-  useEffect(() => {
-    if (!currentUserId) return;
+  const handleConnect = useCallback(() => {
+    socket.emit("joinGame", gameId);
+  }, [socket, gameId]);
 
-    mountedRef.current = true;
-
-    if (!socket.connected) socket.connect();
-
-    const handleConnect = () => {
-      socket.emit("joinGame", gameId);
-    };
-
-    const handleGameState = (state: GameStateEvent) => {
+  const handleGameState = useCallback(
+    (state: GameStateEvent) => {
       if (!mountedRef.current) return;
 
       // Track transition from player to spectator
@@ -212,9 +223,30 @@ export function usePrivateGameSocket(
 
       setRawGameState(state);
       setIsSyncing(false);
-    };
+    },
+    [currentUserId, clearTimerIfPaused, clearTimerIfActorChanged, setRawGameState, toast]
+  );
 
-    const handleError = (err: SocketErrorEvent) => {
+  const handleSyncGame = useCallback(
+    (state: SyncGameEvent) => {
+      if (!mountedRef.current) return;
+
+      clearTimerIfActorChanged(state.currentActorSeat);
+      setRawGameState(state);
+      clearAllDisconnectTimers();
+      setIsSyncing(false);
+
+      toast({
+        title: "Reconnected",
+        description: "Game state synchronized",
+        variant: "default",
+      });
+    },
+    [clearTimerIfActorChanged, setRawGameState, clearAllDisconnectTimers, toast]
+  );
+
+  const handleError = useCallback(
+    (err: SocketErrorEvent) => {
       const errorMessage = getErrorMessage(err);
 
       if (errorMessage === "Not enough players") {
@@ -237,15 +269,30 @@ export function usePrivateGameSocket(
       }
 
       onError?.(errorMessage);
-    };
+    },
+    [toast, router, onError]
+  );
 
-    const handleTurnTimer = (data: TurnTimerStartedEvent) => {
+  const handlePlayerStatusUpdate = useCallback(
+    (payload: PlayerStatusUpdateEvent) => {
       if (!mountedRef.current) return;
-      handleTurnTimerStarted(data);
-    };
 
-    const handlePlayerStatusUpdate = (payload: PlayerStatusUpdateEvent) => {
-      if (!currentUserId || !mountedRef.current) return;
+      // Handle disconnect timers for all players
+      if (payload.status === "DISCONNECTED" && payload.timestamp) {
+        startDisconnectTimer(payload.playerId, payload.timestamp);
+      }
+
+      // Clear timer on reconnect/leave/remove
+      if (
+        payload.status === "ACTIVE" ||
+        payload.status === "LEFT" ||
+        payload.status === "REMOVED"
+      ) {
+        clearDisconnectTimer(payload.playerId);
+      }
+
+      // Handle current user-specific notifications
+      if (!currentUserId) return;
 
       if (payload.playerId === currentUserId) {
         if (
@@ -274,9 +321,12 @@ export function usePrivateGameSocket(
           });
         }
       }
-    };
+    },
+    [currentUserId, startDisconnectTimer, clearDisconnectTimer, toast]
+  );
 
-    const handlePlayerMovedToSpectator = (payload: PlayerMovedToSpectatorEvent) => {
+  const handlePlayerMovedToSpectator = useCallback(
+    (payload: PlayerMovedToSpectatorEvent) => {
       if (!currentUserId || !mountedRef.current) return;
 
       if (payload.playerId === currentUserId) {
@@ -286,41 +336,46 @@ export function usePrivateGameSocket(
           variant: "default",
         });
       }
-    };
+    },
+    [currentUserId, toast]
+  );
 
-    // Register listeners
-    socket.on("connect", handleConnect);
-    socket.on("gameState", handleGameState);
-    socket.on("error", handleError);
-    socket.on("turn_timer_started", handleTurnTimer);
-    socket.on("PLAYER_STATUS_UPDATE", handlePlayerStatusUpdate);
-    socket.on("PLAYER_MOVED_TO_SPECTATOR", handlePlayerMovedToSpectator);
+  // ============================================
+  // SOCKET CONNECTION
+  // ============================================
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    mountedRef.current = true;
+
+    void connectSocketWithAuth(socket);
 
     // Initial join if already connected
     if (socket.connected) handleConnect();
 
     return () => {
       mountedRef.current = false;
-
-      socket.off("connect", handleConnect);
-      socket.off("gameState", handleGameState);
-      socket.off("error", handleError);
-      socket.off("turn_timer_started", handleTurnTimer);
-      socket.off("PLAYER_STATUS_UPDATE", handlePlayerStatusUpdate);
-      socket.off("PLAYER_MOVED_TO_SPECTATOR", handlePlayerMovedToSpectator);
     };
-  }, [
-    gameId,
-    currentUserId,
+  }, [currentUserId, socket, handleConnect]);
+
+  // ============================================
+  // REGISTER EVENT LISTENERS
+  // ============================================
+
+  useGameEvents({
     socket,
-    router,
-    toast,
-    onError,
-    handleTurnTimerStarted,
-    clearTimerIfActorChanged,
-    clearTimerIfPaused,
-    setRawGameState,
-  ]);
+    handlers: {
+      onGameState: handleGameState,
+      onSyncGame: handleSyncGame,
+      onTurnTimerStarted: handleTurnTimerStarted,
+      onPlayerStatusUpdate: handlePlayerStatusUpdate,
+      onPlayerMovedToSpectator: handlePlayerMovedToSpectator,
+      onError: handleError,
+      onConnect: handleConnect,
+    },
+    enabled: !!currentUserId,
+  });
 
   // ============================================
   // PLAYER ACTIONS
@@ -328,9 +383,23 @@ export function usePrivateGameSocket(
 
   const sendAction = useCallback(
     (action: ActionType, amount?: number, isAllInCall?: boolean) => {
-      socket.emit("action", { type: action, amount, isAllInCall });
+      if (!gameState) return;
+
+      const player = gameState.players.find((p) => p.id === currentUserId);
+      if (!player) {
+        console.error("[usePrivateGameSocket] Cannot send action - player not found");
+        return;
+      }
+
+      socket.emit("action", {
+        gameId,
+        type: action,
+        amount,
+        seat: player.seat,
+        isAllInCall,
+      });
     },
-    [socket]
+    [gameId, gameState, currentUserId, socket]
   );
 
   const revealCard = useCallback(
@@ -340,34 +409,34 @@ export function usePrivateGameSocket(
       const player = gameState.players.find((p) => p.id === currentUserId);
       if (!player) return;
 
-      socketHook.emit("action", {
+      socket.emit("action", {
         gameId,
         type: "reveal",
         index: cardIndex,
         seat: player.seat,
       });
     },
-    [gameId, gameState, currentUserId, socketHook]
+    [gameId, gameState, currentUserId, socket]
   );
 
   const requestSeat = useCallback(() => {
     setWasRejected(false);
-    socketHook.emit("request_seat", { gameId });
+    socket.emit("request_seat", { gameId });
     toast({
       title: "Request Sent",
       description: "Waiting for host approval...",
     });
-  }, [gameId, socketHook, toast]);
+  }, [gameId, socket, toast]);
 
   const hostSitDown = useCallback(
     (seatIndex?: number | null) => {
-      socketHook.emit("host_self_seat", {
+      socket.emit("host_self_seat", {
         gameId,
         seatIndex: seatIndex ?? null,
       });
       toast({ title: "Sitting Down", description: "Joining the table..." });
     },
-    [gameId, socketHook, toast]
+    [gameId, socket, toast]
   );
 
   // ============================================
@@ -375,23 +444,56 @@ export function usePrivateGameSocket(
   // ============================================
 
   const adminAction = useCallback(
-    (type: string, payload: Record<string, unknown> = {}) => {
-      if (!socketHook.connected) return;
-      socketHook.emit("admin_action", { gameId, type, ...payload });
+    <T extends AdminActionPayload["type"]>(
+      type: T,
+      payload: Omit<Extract<AdminActionPayload, { type: T }>, "gameId" | "type"> = {} as Omit<
+        Extract<AdminActionPayload, { type: T }>,
+        "gameId" | "type"
+      >
+    ) => {
+      if (!socket.connected) {
+        toast({
+          variant: "destructive",
+          title: "Not Connected",
+          description: "Cannot perform action while disconnected.",
+        });
+        return;
+      }
+
+      // Listen for error response (server emits 'error' on failure)
+      const errorHandler = (err: SocketErrorEvent) => {
+        const errorMessage = getErrorMessage(err);
+        toast({
+          variant: "destructive",
+          title: "Action Failed",
+          description: errorMessage,
+        });
+        socket.off("error", errorHandler);
+      };
+
+      // Set up temporary error listener, auto-cleanup after 3s
+      socket.once("error", errorHandler);
+      setTimeout(() => socket.off("error", errorHandler), 3000);
+
+      const actionPayload: AdminActionPayload = { gameId, type, ...payload } as AdminActionPayload;
+      socket.emit("admin_action", actionPayload);
     },
-    [gameId, socketHook]
+    [gameId, socket, toast]
   );
 
   const approveRequest = useCallback(
     (request: PendingJoinRequest) => {
-      adminAction("ADMIN_APPROVE", { request });
+      // Backend expects targetUserId, requestId, or playerId (not the full request object)
+      // Since frontend uses odanUserId (normalized from backend's id/userId), we send it as targetUserId
+      adminAction("ADMIN_APPROVE", { targetUserId: request.odanUserId });
     },
     [adminAction]
   );
 
   const rejectRequest = useCallback(
     (userId: string) => {
-      adminAction("ADMIN_REJECT", { userId });
+      // Backend expects targetUserId, requestId, or playerId (not userId)
+      adminAction("ADMIN_REJECT", { targetUserId: userId });
     },
     [adminAction]
   );
@@ -450,11 +552,12 @@ export function usePrivateGameSocket(
     adminAction("ADMIN_START_GAME");
   }, [adminAction]);
 
-  return {
+  const returnValue: UsePrivateGameSocketReturn = {
     // State
     gameState,
     isSyncing,
     turnTimer,
+    playerDisconnectTimers,
     currentUserId,
     isHeadsUp,
 
@@ -474,7 +577,7 @@ export function usePrivateGameSocket(
     hostSitDown,
 
     // Host Actions
-    adminAction,
+    adminAction: adminAction as AdminActionFunction,
     approveRequest,
     rejectRequest,
     kickPlayer,
@@ -483,4 +586,6 @@ export function usePrivateGameSocket(
     togglePause,
     startGame,
   };
+
+  return returnValue;
 }

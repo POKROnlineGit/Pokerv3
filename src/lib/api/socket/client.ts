@@ -8,6 +8,39 @@ import type { ActiveStatusResponse } from "@/lib/types/tournament";
 let socket: Socket | null = null;
 
 /**
+ * Ensure socket auth token is set BEFORE connecting.
+ * This prevents handshake auth races that can cause rapid reconnect loops.
+ */
+export async function prepareSocketAuth(socketInstance?: Socket | null): Promise<void> {
+  const s = socketInstance ?? socket;
+  if (!s) return;
+
+  try {
+    const supabase = createClientComponentClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      s.auth = { token: session.access_token };
+    }
+  } catch {
+    // Ignore auth refresh failures; server will reject if token is invalid/missing.
+  }
+}
+
+/**
+ * Connect the shared socket instance with auth prepared first.
+ */
+export async function connectSocketWithAuth(socketInstance?: Socket): Promise<Socket> {
+  const s = socketInstance ?? getSocket();
+  await prepareSocketAuth(s);
+  if (!s.connected) {
+    s.connect();
+  }
+  return s;
+}
+
+/**
  * Get or create Socket.io connection (single source of truth)
  * Connects with Supabase auth token
  */
@@ -36,17 +69,8 @@ export function getSocket(): Socket {
       reconnectionAttempts: Infinity,
     });
 
-    // Set up auth token refresh
-    socket.on("connect", async () => {
+    socket.on("connect", () => {
       console.log("[Socket] ✅ Connected to poker server");
-
-      // Refresh token on connect
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.access_token && socket) {
-        socket.auth = { token: session.access_token };
-      }
     });
 
     socket.on("disconnect", (reason) => {
@@ -57,32 +81,18 @@ export function getSocket(): Socket {
       console.error("[Socket] ❌ Connection error:", error.message);
 
       // Refresh token on connection error
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.access_token && socket) {
-        socket.auth = { token: session.access_token };
-      }
+      await prepareSocketAuth(socket);
     });
 
     // Refresh token on reconnection attempt
     socket.on("reconnect_attempt", async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.access_token && socket) {
-        socket.auth = { token: session.access_token };
-      }
+      await prepareSocketAuth(socket);
     });
   }
 
   // Set auth token before returning
-  const supabase = createClientComponentClient();
-  supabase.auth.getSession().then(({ data: { session } }) => {
-    if (session?.access_token && socket) {
-      socket.auth = { token: session.access_token };
-    }
-  });
+  // Note: this is intentionally "fire and forget" to keep getSocket synchronous.
+  void prepareSocketAuth(socket);
 
   return socket;
 }
@@ -95,9 +105,7 @@ export function useSocket(): Socket {
   const socketInstance = useMemo(() => getSocket(), []);
 
   useEffect(() => {
-    if (!socketInstance.connected) {
-      socketInstance.connect();
-    }
+    void connectSocketWithAuth(socketInstance);
   }, [socketInstance]);
 
   return socketInstance;
@@ -128,16 +136,15 @@ export function checkActiveStatus(
   socketInstance: Socket
 ): Promise<ActiveStatusResponse> {
   return new Promise((resolve) => {
-    if (!socketInstance.connected) {
-      socketInstance.connect();
-    }
-
-    socketInstance.emit(
-      "check_active_status",
-      (response: ActiveStatusResponse) => {
-        resolve(response);
-      }
-    );
+    void (async () => {
+      await connectSocketWithAuth(socketInstance);
+      socketInstance.emit(
+        "check_active_status",
+        (response: ActiveStatusResponse) => {
+          resolve(response);
+        }
+      );
+    })();
   });
 }
 
