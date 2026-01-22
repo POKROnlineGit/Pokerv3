@@ -12,6 +12,8 @@ import { getSocket } from "@/lib/api/socket/client";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
 import { useToast } from "@/lib/hooks";
 import { useStatus } from "@/components/providers/StatusProvider";
+import { normalizeGameState } from "@/lib/api/socket/utils/normalizers";
+import type { GameStateEvent } from "@/lib/api/socket/types/game";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -213,6 +215,7 @@ export default function TournamentGamePage() {
   const joinRetryCountRef = useRef<number>(0);
   const joinRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const tournamentJoinedRef = useRef<boolean>(false);
+  const previousGameStateRef = useRef<GameState | null>(null);
 
   const supabase = createClientComponentClient();
   const { toast } = useToast();
@@ -342,29 +345,39 @@ export default function TournamentGamePage() {
     };
 
     // Handle game state
-    const handleGameState = (state: GameState) => {
+    const handleGameState = (serverState: GameStateEvent) => {
       if (!mounted) return;
 
       setIsInitializing(false);
       setIsSyncing(false);
 
+      // Normalize the game state (including pots)
+      const normalizedState = normalizeGameState(serverState, {
+        gameId,
+        previousState: previousGameStateRef.current,
+        defaultConfig: undefined,
+      });
+
+      // Update previous state ref for next normalization
+      previousGameStateRef.current = normalizedState;
+
       // Clear turn timer if needed
       setTurnTimer((prevTimer) => {
         if (!prevTimer) return null;
         if (
-          state.currentActorSeat === null ||
-          state.currentActorSeat === undefined
+          normalizedState.currentActorSeat === null ||
+          normalizedState.currentActorSeat === undefined
         ) {
           return null;
         }
-        if (state.currentActorSeat !== prevTimer.activeSeat) {
+        if (normalizedState.currentActorSeat !== prevTimer.activeSeat) {
           return null;
         }
         return prevTimer;
       });
 
       // Check if this is a tournament game
-      const tId = state.tournamentId;
+      const tId = normalizedState.tournamentId;
       if (tId && !tournamentJoinedRef.current) {
         setTournamentId(tId);
         // Fetch tournament state
@@ -383,9 +396,9 @@ export default function TournamentGamePage() {
       }
 
       // Detect heads-up mode from game config (not player count)
-      setIsHeadsUp(state.config?.maxPlayers === 2);
+      setIsHeadsUp(normalizedState.config?.maxPlayers === 2);
 
-      setGameState(state);
+      setGameState(normalizedState);
     };
 
     // Handle turn timer
