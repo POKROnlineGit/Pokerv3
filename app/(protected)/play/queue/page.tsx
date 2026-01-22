@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useQueue } from "@/components/providers/ActiveStatusProvider";
-import { useTheme } from "@/components/providers/ThemeProvider";
+import { useTheme } from "@/components/providers/PreferencesProvider";
 import { useQueueSocket } from "@/lib/api/socket/queue";
 import { X, Loader2 } from "lucide-react";
 
@@ -15,9 +15,6 @@ export default function QueuePage() {
   const type = searchParams.get("type") || "six_max";
 
   const { leaveQueue: leaveQueueGlobal } = useQueue();
-
-  // Get theme colors
-  const accentColor = currentTheme.colors.accent[0];
 
   // Use the new socket hook
   const { isConnected, isLoading, queueStatus, error, leaveQueue } = useQueueSocket(type, {
@@ -75,7 +72,7 @@ export default function QueuePage() {
                 <div className="text-center py-8">
                   <div
                     className="text-3xl font-semibold mb-2"
-                    style={{ color: accentColor }}
+                    style={{ color: 'var(--theme-accent-0)' }}
                   >
                     {queueStatus
                       ? `Waiting for ${queueStatus.needed} more player${
@@ -100,7 +97,7 @@ export default function QueuePage() {
 
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>Matchmaking status</span>
-                  <span style={{ color: isConnected ? accentColor : "#ef4444" }}>
+                  <span style={{ color: isConnected ? 'var(--theme-accent-0)' : "#ef4444" }}>
                     {isConnected ? "Connected" : "Disconnected"}
                   </span>
                 </div>
@@ -110,16 +107,16 @@ export default function QueuePage() {
                   className="w-full"
                   onClick={handleLeaveQueue}
                   style={{
-                    borderColor: accentColor,
-                    color: accentColor,
+                    borderColor: 'var(--theme-accent-0)',
+                    color: 'var(--theme-accent-0)',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = accentColor;
+                    e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)';
                     e.currentTarget.style.color = "white";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = "transparent";
-                    e.currentTarget.style.color = accentColor;
+                    e.currentTarget.style.color = 'var(--theme-accent-0)';
                   }}
                 >
                   <X className="mr-2 h-4 w-4" />

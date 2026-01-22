@@ -8,17 +8,13 @@ import { useRouter } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import Link from "next/link";
 import { useLocalGameStore } from "@/lib/hooks/useLocalGameStore";
-import { useTheme } from "@/components/providers/ThemeProvider";
+import { useTheme } from "@/components/providers/PreferencesProvider";
 
 export default function BotPlayPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { startLocalGame } = useLocalGameStore();
   const { currentTheme } = useTheme();
-
-  // Get theme colors for button
-  const primaryColor = currentTheme.colors.primary[0];
-  const primaryColorHover = currentTheme.colors.primary[1] || primaryColor;
 
   const handleStartGame = () => {
     setIsLoading(true);
@@ -41,13 +37,13 @@ export default function BotPlayPage() {
           size="lg"
           className="w-full font-bold text-lg h-14"
           style={{
-            background: `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`,
+            background: 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = `linear-gradient(to right, ${primaryColorHover}, ${primaryColor})`;
+            e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-1), var(--theme-primary-0))';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`;
+            e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))';
           }}
           onClick={handleStartGame}
           disabled={isLoading}

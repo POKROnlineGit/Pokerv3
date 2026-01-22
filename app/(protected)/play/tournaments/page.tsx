@@ -10,7 +10,7 @@ import { useTournamentSocket } from "@/lib/api/socket/tournament";
 import { useRouter } from "next/navigation";
 import { Loader2, ArrowLeft, Trophy } from "lucide-react";
 import Link from "next/link";
-import { useTheme } from "@/components/providers/ThemeProvider";
+import { useTheme } from "@/components/providers/PreferencesProvider";
 import { useToast } from "@/lib/hooks";
 import { getErrorMessage } from "@/lib/utils";
 
@@ -20,14 +20,10 @@ export default function CreateTournamentPage() {
   const { currentTheme } = useTheme();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Form State - Only title and description required for creation
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-
-  // Get theme colors for button
-  const primaryColor = currentTheme.colors.primary[0];
-  const primaryColorHover = currentTheme.colors.primary[1] || primaryColor;
 
   const handleCreateTournament = async () => {
     // Validation - Only title is required
@@ -97,13 +93,13 @@ export default function CreateTournamentPage() {
           size="lg"
           className="w-full font-bold text-sm h-12"
           style={{
-            background: `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`,
+            background: 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = `linear-gradient(to right, ${primaryColorHover}, ${primaryColor})`;
+            e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-1), var(--theme-primary-0))';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`;
+            e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))';
           }}
           onClick={handleCreateTournament}
           disabled={isLoading}

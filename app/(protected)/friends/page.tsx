@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Search, UserPlus, Check, X, Users, User } from 'lucide-react'
 import { useToast, useIsMobile } from '@/lib/hooks'
 import { useRouter } from 'next/navigation'
-import { useTheme } from '@/components/providers/ThemeProvider'
+import { useTheme } from '@/components/providers/PreferencesProvider'
 import { cn } from '@/lib/utils'
 
 interface Friend {
@@ -43,11 +43,6 @@ export default function FriendsPage() {
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
 
-  // Get theme colors
-  const primaryColor = currentTheme.colors.primary[0]
-  const gradientColors = currentTheme.colors.gradient
-  const centerColor = currentTheme.colors.primary[2] || currentTheme.colors.primary[1]
-  const accentColor = currentTheme.colors.accent[0]
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -354,21 +349,21 @@ export default function FriendsPage() {
                 }
               }}
             />
-            <Button 
-              onClick={handleSearch} 
+            <Button
+              onClick={handleSearch}
               disabled={loading}
               style={{
-                backgroundColor: accentColor,
+                backgroundColor: 'var(--theme-accent-0)',
                 color: 'white',
               }}
               onMouseEnter={(e) => {
                 if (!loading) {
-                  e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || accentColor
+                  e.currentTarget.style.backgroundColor = 'var(--theme-accent-1)'
                 }
               }}
               onMouseLeave={(e) => {
                 if (!loading) {
-                  e.currentTarget.style.backgroundColor = accentColor
+                  e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)'
                 }
               }}
             >
@@ -387,14 +382,14 @@ export default function FriendsPage() {
                 size="sm"
                 onClick={() => handleSendRequest(searchResult.id)}
                 style={{
-                  backgroundColor: accentColor,
+                  backgroundColor: 'var(--theme-accent-0)',
                   color: 'white',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || accentColor
+                  e.currentTarget.style.backgroundColor = 'var(--theme-accent-1)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = accentColor
+                  e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)'
                 }}
               >
                 <UserPlus className="h-4 w-4 mr-2" />
@@ -443,16 +438,16 @@ export default function FriendsPage() {
                         variant="outline"
                         onClick={() => router.push(`/friends/profile/${friend.id}`)}
                         style={{
-                          borderColor: accentColor,
-                          color: accentColor,
+                          borderColor: 'var(--theme-accent-0)',
+                          color: 'var(--theme-accent-0)',
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = accentColor
+                          e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)'
                           e.currentTarget.style.color = 'white'
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = 'transparent'
-                          e.currentTarget.style.color = accentColor
+                          e.currentTarget.style.color = 'var(--theme-accent-0)'
                         }}
                       >
                         <User className="h-4 w-4 mr-2" />
@@ -493,14 +488,14 @@ export default function FriendsPage() {
                           variant="default"
                           onClick={() => handleRespond(request.id, true)}
                           style={{
-                            backgroundColor: accentColor,
+                            backgroundColor: 'var(--theme-accent-0)',
                             color: 'white',
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || accentColor
+                            e.currentTarget.style.backgroundColor = 'var(--theme-accent-1)'
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = accentColor
+                            e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)'
                           }}
                         >
                           <Check className="h-4 w-4 mr-2" />

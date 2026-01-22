@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { useTheme } from "@/components/providers/ThemeProvider";
+import { useTheme } from "@/components/providers/PreferencesProvider";
 import { ThemeBackground } from "@/components/theme/ThemeBackground";
 import Image from "next/image";
 import { getErrorMessage } from "@/lib/utils";
@@ -67,9 +67,6 @@ export default function SignInPage() {
     };
   }, [supabase, router, next]);
 
-  // Get theme colors
-  const primaryColor = currentTheme.colors.primary[0];
-  const accentColor = currentTheme.colors.accent[0];
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -111,7 +108,7 @@ export default function SignInPage() {
       <div className="min-h-screen relative flex items-center justify-center p-4">
         <ThemeBackground />
         <div className="flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" style={{ color: currentTheme.colors.accent[0] }} />
+          <Loader2 className="h-8 w-8 animate-spin" style={{ color: 'var(--theme-accent-0)' }} />
         </div>
       </div>
     );
@@ -139,12 +136,12 @@ export default function SignInPage() {
 
         <CardContent>
           {error && (
-            <div 
+            <div
               className="mb-4 p-3 rounded text-sm text-center border"
               style={{
-                backgroundColor: `${accentColor}20`,
-                borderColor: accentColor,
-                color: accentColor,
+                backgroundColor: 'var(--theme-accent-0-20)',
+                borderColor: 'var(--theme-accent-0)',
+                color: 'var(--theme-accent-0)',
               }}
             >
               {error}
@@ -173,22 +170,22 @@ export default function SignInPage() {
                 required
               />
             </div>
-              <Button 
-                type="submit" 
-              className="w-full" 
+              <Button
+                type="submit"
+                className="w-full"
                 disabled={loading}
                 style={{
-                  backgroundColor: accentColor,
+                  backgroundColor: 'var(--theme-accent-0)',
                   color: 'white',
                 }}
                 onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || accentColor;
+                  e.currentTarget.style.backgroundColor = 'var(--theme-accent-1)';
                 }}
                 onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = accentColor;
+                  e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)';
                 }}
               >
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Sign In"}
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Sign In"}
               </Button>
           </form>
 
@@ -207,16 +204,16 @@ export default function SignInPage() {
             onClick={handleGoogleSignIn}
             disabled={loading}
             style={{
-              borderColor: accentColor,
-              color: accentColor,
+              borderColor: 'var(--theme-accent-0)',
+              color: 'var(--theme-accent-0)',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = accentColor;
+              e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)';
               e.currentTarget.style.color = 'white';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = accentColor;
+              e.currentTarget.style.color = 'var(--theme-accent-0)';
             }}
           >
             <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
@@ -244,10 +241,10 @@ export default function SignInPage() {
         <CardFooter className="justify-center">
           <div className="text-sm text-muted-foreground">
             Don't have an account?{" "}
-            <Link 
-              href="/signup" 
+            <Link
+              href="/signup"
               className="hover:underline"
-              style={{ color: accentColor }}
+              style={{ color: 'var(--theme-accent-0)' }}
             >
               Sign Up
             </Link>

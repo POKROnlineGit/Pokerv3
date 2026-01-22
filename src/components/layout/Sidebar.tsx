@@ -25,7 +25,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useTheme } from "@/components/providers/ThemeProvider";
+import { useTheme } from "@/components/providers/PreferencesProvider";
 import { useIsMobile } from "@/lib/hooks";
 import type { User } from "@supabase/supabase-js";
 
@@ -54,9 +54,6 @@ export function Sidebar() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
-  // Get theme colors for sidebar elements (not background)
-  const primaryColor = currentTheme.colors.primary[0];
-  const accentColor = currentTheme.colors.accent[0];
 
   // Minimized state: default to false
   const [isMinimized, setIsMinimized] = useState(false);
@@ -337,7 +334,7 @@ export function Sidebar() {
                               className="flex items-center justify-between w-full px-4 py-3 text-white hover:bg-white/5 transition-colors"
                               style={
                                 isActive
-                                  ? { backgroundColor: `${accentColor}CC` }
+                                  ? { backgroundColor: 'var(--theme-accent-0-cc)' }
                                   : undefined
                               }
                             >
@@ -380,7 +377,7 @@ export function Sidebar() {
                                         style={
                                           pathname === "/play"
                                             ? {
-                                                backgroundColor: `${accentColor}CC`,
+                                                backgroundColor: 'var(--theme-accent-0-cc)',
                                               }
                                             : undefined
                                         }
@@ -412,7 +409,7 @@ export function Sidebar() {
                                           style={
                                             isSubActive
                                               ? {
-                                                  backgroundColor: `${accentColor}CC`,
+                                                  backgroundColor: 'var(--theme-accent-0-cc)',
                                                 }
                                               : undefined
                                           }
@@ -434,7 +431,7 @@ export function Sidebar() {
                             className="flex items-center gap-3 px-4 py-3 text-white hover:bg-white/5 transition-colors"
                             style={
                               isActive
-                                ? { backgroundColor: `${accentColor}CC` }
+                                ? { backgroundColor: 'var(--theme-accent-0-cc)' }
                                 : undefined
                             }
                           >
@@ -592,7 +589,7 @@ export function Sidebar() {
                       paddingTop: "12px",
                       paddingBottom: "12px",
                       ...(isActive
-                        ? { backgroundColor: `${accentColor}CC` }
+                        ? { backgroundColor: 'var(--theme-accent-0-cc)' }
                         : {}),
                     }}
                     onMouseEnter={() => {
@@ -846,7 +843,7 @@ export function Sidebar() {
                     style={
                       pathname === "/play"
                         ? {
-                            backgroundColor: `${accentColor}CC`,
+                            backgroundColor: 'var(--theme-accent-0-cc)',
                           }
                         : undefined
                     }
@@ -875,7 +872,7 @@ export function Sidebar() {
                       style={
                         isSubActive
                           ? {
-                              backgroundColor: `${accentColor}CC`,
+                              backgroundColor: 'var(--theme-accent-0-cc)',
                             }
                           : undefined
                       }

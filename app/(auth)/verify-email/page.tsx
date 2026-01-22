@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Mail, CheckCircle2 } from "lucide-react";
-import { useTheme } from "@/components/providers/ThemeProvider";
+import { useTheme } from "@/components/providers/PreferencesProvider";
 import { ThemeBackground } from "@/components/theme/ThemeBackground";
 import Image from "next/image";
 import Link from "next/link";
@@ -15,7 +15,6 @@ export default function VerifyEmailPage() {
   const router = useRouter();
   const email = searchParams.get("email");
   const { currentTheme } = useTheme();
-  const accentColor = currentTheme.colors.accent[0];
 
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4">
@@ -36,7 +35,7 @@ export default function VerifyEmailPage() {
           <div className="mx-auto mb-4 flex items-center justify-center">
             <Mail
               className="h-12 w-12"
-              style={{ color: accentColor }}
+              style={{ color: 'var(--theme-accent-0)' }}
             />
           </div>
           <CardTitle className="text-2xl font-bold">Check Your Email</CardTitle>
@@ -70,7 +69,7 @@ export default function VerifyEmailPage() {
             <Button
               className="w-full text-white"
               style={{
-                backgroundColor: accentColor,
+                backgroundColor: 'var(--theme-accent-0)',
               }}
               onClick={() => router.push("/signin")}
             >

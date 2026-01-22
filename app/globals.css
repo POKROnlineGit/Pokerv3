@@ -10,6 +10,28 @@
   }
 
   :root {
+    /* Color theme variables (defaults to emerald_felt) */
+    --theme-primary-0: #047857;
+    --theme-primary-1: #065F46;
+    --theme-primary-2: #064E3B;
+    --theme-primary-3: #022C22;
+    --theme-secondary-0: #06B6D4;
+    --theme-secondary-1: #0891B2;
+    --theme-secondary-2: #0E7490;
+    --theme-accent-0: #047857;
+    --theme-accent-0-20: #04785733;
+    --theme-accent-0-cc: #047857CC;
+    --theme-accent-1: #065F46;
+    --theme-accent-1-20: #065F4633;
+    --theme-accent-1-cc: #065F46CC;
+    --theme-accent-2: #064E3B;
+    --theme-accent-2-20: #064E3B33;
+    --theme-accent-2-cc: #064E3BCC;
+    --theme-gradient-0: #064E3B;
+    --theme-gradient-1: #022C22;
+    --theme-gradient-2: #000000;
+    --theme-background: #1F2937;
+
     /* Official PokerOnline Color Palette */
     --color-primary-500: #9A1F40;
     --color-primary-600: #861A38;

@@ -9,7 +9,7 @@ import { UserCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useIsMobile } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
-import { useTheme } from "@/components/providers/ThemeProvider";
+import { useTheme } from "@/components/providers/PreferencesProvider";
 
 export default function ProfilePage() {
   const isMobile = useIsMobile();
@@ -32,11 +32,6 @@ export default function ProfilePage() {
     pfr_count: 0,
   });
 
-  // Get theme colors
-  const primaryColor = currentTheme.colors.primary[0];
-  const gradientColors = currentTheme.colors.gradient;
-  const centerColor =
-    currentTheme.colors.primary[2] || currentTheme.colors.primary[1];
 
   useEffect(() => {
     const loadProfile = async () => {

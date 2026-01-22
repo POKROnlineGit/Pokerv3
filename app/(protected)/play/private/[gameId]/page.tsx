@@ -38,7 +38,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useTheme } from "@/components/providers/ThemeProvider";
+import { useTheme } from "@/components/providers/PreferencesProvider";
 
 export default function PrivateGamePage() {
   const params = useParams();
@@ -46,10 +46,6 @@ export default function PrivateGamePage() {
   const { toast } = useToast();
   const { currentTheme } = useTheme();
   const gameId = params.gameId as string;
-
-  // Get theme colors for buttons
-  const primaryColor = currentTheme.colors.primary[0];
-  const primaryColorHover = currentTheme.colors.primary[1] || primaryColor;
 
   // Dialog state for stack editing
   const [editStackSeat, setEditStackSeat] = useState<number | null>(null);
@@ -254,13 +250,13 @@ export default function PrivateGamePage() {
                     className="w-full"
                     size="sm"
                     style={{
-                      background: `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`,
+                      background: 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = `linear-gradient(to right, ${primaryColorHover}, ${primaryColor})`;
+                      e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-1), var(--theme-primary-0))';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`;
+                      e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))';
                     }}
                   >
                     Update Blinds

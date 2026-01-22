@@ -11,23 +11,19 @@ import { useSocket } from "@/lib/api/socket/client";
 import { useRouter } from "next/navigation";
 import { Loader2, ArrowLeft, Crown } from "lucide-react";
 import Link from "next/link";
-import { useTheme } from "@/components/providers/ThemeProvider";
+import { useTheme } from "@/components/providers/PreferencesProvider";
 
 export default function HostGamePage() {
   const socket = useSocket();
   const router = useRouter();
   const { currentTheme } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Form State
   const [variant, setVariant] = useState("six_max");
   const [buyIn, setBuyIn] = useState("200");
   const [smallBlind, setSmallBlind] = useState("1");
   const [bigBlind, setBigBlind] = useState("2");
-
-  // Get theme colors for button
-  const primaryColor = currentTheme.colors.primary[0];
-  const primaryColorHover = currentTheme.colors.primary[1] || primaryColor;
 
   const handleCreateGame = () => {
     setIsLoading(true);
@@ -59,13 +55,13 @@ export default function HostGamePage() {
           size="lg"
           className="w-full font-bold text-lg h-14"
           style={{
-            background: `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`,
+            background: 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = `linear-gradient(to right, ${primaryColorHover}, ${primaryColor})`;
+            e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-1), var(--theme-primary-0))';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`;
+            e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))';
           }}
           onClick={handleCreateGame}
           disabled={isLoading}

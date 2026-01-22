@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Loader2, User } from "lucide-react";
-import { useTheme } from "@/components/providers/ThemeProvider";
+import { useTheme } from "@/components/providers/PreferencesProvider";
 import { ThemeBackground } from "@/components/theme/ThemeBackground";
 import Image from "next/image";
 import { Filter } from "bad-words";
@@ -29,7 +29,6 @@ export default function FinishProfilePage() {
   const router = useRouter();
   const supabase = createClientComponentClient();
   const { currentTheme } = useTheme();
-  const accentColor = currentTheme.colors.accent[0];
 
   // Initialize profanity filter
   const filter = new Filter();
@@ -165,7 +164,7 @@ export default function FinishProfilePage() {
         <div className="flex items-center justify-center">
           <Loader2
             className="h-8 w-8 animate-spin"
-            style={{ color: accentColor }}
+            style={{ color: 'var(--theme-accent-0)' }}
           />
         </div>
       </div>
@@ -189,7 +188,7 @@ export default function FinishProfilePage() {
             />
           </div>
           <div className="mx-auto mb-4 flex items-center justify-center">
-            <User className="h-12 w-12" style={{ color: accentColor }} />
+            <User className="h-12 w-12" style={{ color: 'var(--theme-accent-0)' }} />
           </div>
           <CardTitle className="text-2xl font-bold">
             Choose Your Username
@@ -204,9 +203,9 @@ export default function FinishProfilePage() {
             <div
               className="mb-4 p-3 rounded text-sm text-center border"
               style={{
-                backgroundColor: `${accentColor}20`,
-                borderColor: accentColor,
-                color: accentColor,
+                backgroundColor: 'var(--theme-accent-0-20)',
+                borderColor: 'var(--theme-accent-0)',
+                color: 'var(--theme-accent-0)',
               }}
             >
               {error}
@@ -238,14 +237,13 @@ export default function FinishProfilePage() {
               className="w-full text-white"
               disabled={loading}
               style={{
-                backgroundColor: accentColor,
+                backgroundColor: 'var(--theme-accent-0)',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor =
-                  currentTheme.colors.accent[1] || accentColor;
+                e.currentTarget.style.backgroundColor = 'var(--theme-accent-1)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = accentColor;
+                e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)';
               }}
             >
               {loading ? (

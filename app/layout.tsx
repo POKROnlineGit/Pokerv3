@@ -9,8 +9,14 @@ import { GameRedirectProvider } from "@/components/layout/GameRedirectProvider";
 import { ActiveStatusProvider } from "@/components/providers/ActiveStatusProvider";
 import { StatusProvider } from "@/components/providers/StatusProvider";
 import { StatusOverlay } from "@/components/ui/StatusOverlay";
-import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { PreferencesProvider } from "@/components/providers/PreferencesProvider";
 import { ThemeBackground } from "@/components/theme/ThemeBackground";
+import {
+  PREFERENCE_REGISTRY,
+  getPreferenceColumns,
+  generateAllCSSVars,
+  generateCSSVarsScript,
+} from "@/lib/features/preferences";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -99,26 +105,48 @@ export default async function RootLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Get user theme preference - default to dark
-  let theme = "dark";
+  // Fetch all preferences in one query using the registry
+  const columns = getPreferenceColumns().join(", ");
+  let profile: { theme?: string; color_theme?: string } | null = null;
 
   if (user) {
-    const { data: profile } = await supabase
+    const { data } = await supabase
       .from("profiles")
-      .select("theme")
+      .select(columns)
       .eq("id", user.id)
       .single();
-    if (profile?.theme === "light" || profile?.theme === "dark") {
-      theme = profile.theme;
+    if (data && typeof data === 'object' && !('error' in data)) {
+      profile = data as { theme?: string; color_theme?: string };
     }
   }
+
+  // Build preferences object with defaults from registry
+  const preferences = {
+    mode: (profile?.theme as 'light' | 'dark') ?? PREFERENCE_REGISTRY.mode.defaultValue,
+    colorTheme: (profile?.color_theme as string) ?? PREFERENCE_REGISTRY.colorTheme.defaultValue,
+  };
+
+  // Validate mode
+  if (preferences.mode !== 'light' && preferences.mode !== 'dark') {
+    preferences.mode = PREFERENCE_REGISTRY.mode.defaultValue;
+  }
+
+  // Generate CSS vars and script for SSR
+  const cssVars = generateAllCSSVars(preferences);
+  const cssVarsScript = generateCSSVarsScript(cssVars);
 
   // Show sidebar for all users (persistent sidebar)
   const showSidebar = true;
 
   return (
-    <html lang="en" className={theme} suppressHydrationWarning>
+    <html lang="en" className={preferences.mode === 'dark' ? 'dark' : ''} suppressHydrationWarning>
       <head>
+        {/* Blocking script to set CSS vars before paint - prevents FOUC */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var s=document.documentElement.style;${cssVarsScript}})();`,
+          }}
+        />
         {/* Structure Data for Rich Snippets (VideoGame Schema) */}
         <script
           type="application/ld+json"
@@ -144,7 +172,7 @@ export default async function RootLayout({
         />
       </head>
       <body className={inter.className}>
-        <ThemeProvider>
+        <PreferencesProvider initialPreferences={preferences}>
           <ThemeBackground />
           <GameRedirectProvider />
           <StatusProvider>
@@ -162,7 +190,7 @@ export default async function RootLayout({
               </ToastProvider>
             </ActiveStatusProvider>
           </StatusProvider>
-        </ThemeProvider>
+        </PreferencesProvider>
         <GoogleAnalytics gaId="G-TP41LB8QH9" />
       </body>
     </html>

@@ -11,7 +11,7 @@ import {
 } from "@/lib/api/socket/tournament";
 import { TournamentStateResponse, normalizeTournament, BlindLevel, getStatusString } from "@/lib/types/tournament";
 import { useToast } from "@/lib/hooks";
-import { useTheme } from "@/components/providers/ThemeProvider";
+import { useTheme } from "@/components/providers/PreferencesProvider";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
 import {
   Loader2,
@@ -79,9 +79,6 @@ export default function TournamentSetupPage() {
       { small: 50, big: 100 },
     ],
   });
-
-  const primaryColor = currentTheme.colors.primary[0];
-  const primaryColorHover = currentTheme.colors.primary[1] || primaryColor;
 
   // Get current user
   useEffect(() => {
@@ -458,13 +455,13 @@ export default function TournamentSetupPage() {
               size="lg"
               className="w-full font-bold text-sm h-12"
               style={{
-                background: `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`,
+                background: 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = `linear-gradient(to right, ${primaryColorHover}, ${primaryColor})`;
+                e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-1), var(--theme-primary-0))';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = `linear-gradient(to right, ${primaryColor}, ${primaryColorHover})`;
+                e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))';
               }}
             >
               {isOpeningRegistration ? (

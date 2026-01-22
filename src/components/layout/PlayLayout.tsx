@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { PokerTable } from "@/components/features/game/PokerTable";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useTheme } from "@/components/providers/ThemeProvider";
+import { useTheme } from "@/components/providers/PreferencesProvider";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
 import { useIsMobile } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -218,7 +218,7 @@ export function PlayLayout({
     <div
       className="relative w-full h-screen overflow-hidden"
       style={{
-        backgroundColor: currentTheme.colors.background,
+        backgroundColor: 'var(--theme-background)',
         isolation: "isolate",
       }}
     >

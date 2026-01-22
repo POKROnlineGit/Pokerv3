@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { createClientComponentClient } from '@/lib/api/supabase/client'
 import { useRouter } from 'next/navigation'
-import { useTheme } from '@/components/providers/ThemeProvider'
+import { usePreferences } from '@/components/providers/PreferencesProvider'
 import { getTheme } from '@/lib/features/theme/themes'
 import {
   Select,
@@ -37,7 +37,7 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const { availableThemes, setTheme: setColorTheme, currentTheme } = useTheme()
+  const { availableThemes, setColorTheme, setMode, currentTheme } = usePreferences()
   const supabase = createClientComponentClient()
   const router = useRouter()
 
@@ -147,16 +147,9 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
 
       // Apply theme changes only if we're on the theme tab
       if (tab === 'theme') {
-        // Apply light/dark theme
-        const root = document.documentElement
-        if (theme === 'dark') {
-          root.classList.add('dark')
-        } else {
-          root.classList.remove('dark')
-        }
-        localStorage.setItem('theme', theme)
-
-        // Apply color theme via ThemeProvider (this will update the global state)
+        // Apply light/dark mode via provider
+        await setMode(theme)
+        // Apply color theme via provider
         await setColorTheme(colorTheme)
       }
 
@@ -236,7 +229,7 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
                     checked={theme === 'dark'}
                     onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
                     style={{
-                      backgroundColor: theme === 'dark' ? currentTheme.colors.accent[0] : undefined,
+                      backgroundColor: theme === 'dark' ? 'var(--theme-accent-0)' : undefined,
                     } as React.CSSProperties}
                   />
                 </div>
@@ -331,7 +324,7 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
                   checked={debugMode}
                   onCheckedChange={setDebugMode}
                   style={{
-                    backgroundColor: debugMode ? currentTheme.colors.accent[0] : undefined,
+                    backgroundColor: debugMode ? 'var(--theme-accent-0)' : undefined,
                   } as React.CSSProperties}
                 />
               </div>
@@ -345,33 +338,33 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
           )}
 
           {success && (
-            <div 
+            <div
               className="text-sm p-3 rounded-md text-white"
               style={{
-                backgroundColor: `${currentTheme.colors.accent[0]}20`,
-                color: currentTheme.colors.accent[0],
+                backgroundColor: 'var(--theme-accent-0-20)',
+                color: 'var(--theme-accent-0)',
               }}
             >
               Settings saved successfully!
             </div>
           )}
 
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             disabled={loading}
             className="h-9 text-sm"
             style={{
-              backgroundColor: currentTheme.colors.accent[0],
+              backgroundColor: 'var(--theme-accent-0)',
               color: 'white',
             }}
             onMouseEnter={(e) => {
               if (!loading) {
-                e.currentTarget.style.backgroundColor = currentTheme.colors.accent[1] || currentTheme.colors.accent[0]
+                e.currentTarget.style.backgroundColor = 'var(--theme-accent-1)'
               }
             }}
             onMouseLeave={(e) => {
               if (!loading) {
-                e.currentTarget.style.backgroundColor = currentTheme.colors.accent[0]
+                e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)'
               }
             }}
           >
