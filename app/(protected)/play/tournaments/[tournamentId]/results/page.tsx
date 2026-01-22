@@ -24,6 +24,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { getErrorMessage } from "@/lib/utils";
+import {
+  getErrorMessageFromResponse,
+  getDataFromResponse,
+} from "@/lib/api/socket/utils/errors";
 
 export default function TournamentResultsPage() {
   const params = useParams();
@@ -82,14 +86,23 @@ export default function TournamentResultsPage() {
         socket.emit(
           "get_tournament_results",
           { tournamentId },
-          (response: TournamentResultsResponse | { error: string }) => {
-            if ("error" in response) {
-              setError(response.error);
+          (response: unknown) => {
+            // Check for error first
+            const errorMessage = getErrorMessageFromResponse(response);
+            if (errorMessage) {
+              setError(errorMessage);
               setIsLoading(false);
-            } else {
-              setResultsData(response);
-              setIsLoading(false);
+              return;
             }
+
+            // Extract data from response (handles both old and new formats)
+            const data = getDataFromResponse<TournamentResultsResponse>(response);
+            if (data) {
+              setResultsData(data);
+            } else {
+              setError("Invalid response format");
+            }
+            setIsLoading(false);
           }
         );
       } catch (err: unknown) {
@@ -173,8 +186,13 @@ export default function TournamentResultsPage() {
 
   const { tournament, participants, isEnded } = resultsData;
 
+  // Ensure participants is always an array
+  const participantsArray: TournamentResultParticipant[] = Array.isArray(participants)
+    ? participants
+    : [];
+
   // Sort participants by placement (null placements at end)
-  const sortedParticipants = [...participants].sort((a, b) => {
+  const sortedParticipants = [...participantsArray].sort((a, b) => {
     if (a.placement === null && b.placement === null) return 0;
     if (a.placement === null) return 1;
     if (b.placement === null) return -1;
@@ -214,22 +232,22 @@ export default function TournamentResultsPage() {
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div className="min-w-0 flex-1">
                   <h1 className="text-2xl font-bold text-white truncate">
-                    {tournament.title}
+                    {tournament?.title || "Tournament"}
                   </h1>
                 </div>
                 <Badge
                   variant={
-                    tournament.status === "completed"
+                    tournament?.status === "completed"
                       ? "secondary"
                       : "destructive"
                   }
                   className={`flex-shrink-0 ${
-                    tournament.status === "completed"
+                    tournament?.status === "completed"
                       ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                       : "bg-red-500/10 text-red-400 border-red-500/20"
                   }`}
                 >
-                  {tournament.status === "completed" ? (
+                  {tournament?.status === "completed" ? (
                     <>
                       <Trophy className="h-3 w-3 mr-1" />
                       Completed
@@ -244,13 +262,15 @@ export default function TournamentResultsPage() {
               <div className="flex flex-wrap gap-4 text-sm text-slate-400">
                 <div className="flex items-center gap-1.5">
                   <Users className="h-4 w-4" />
-                  <span>{participants.length} players</span>
+                  <span>{participantsArray.length} players</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Coins className="h-4 w-4" />
-                  <span>{tournament.startingStack.toLocaleString()} starting</span>
+                  <span>
+                    {tournament?.startingStack?.toLocaleString() || "0"} starting
+                  </span>
                 </div>
-                {tournament.endedAt && (
+                {tournament?.endedAt && (
                   <div className="flex items-center gap-1.5">
                     <Calendar className="h-4 w-4" />
                     <span>{formatDate(tournament.endedAt)}</span>
@@ -305,7 +325,7 @@ export default function TournamentResultsPage() {
                                   : "text-white"
                               }`}
                             >
-                              {participant.username}
+                              {participant.username || "Unknown"}
                             </span>
                             {isCurrentUser && (
                               <Badge
@@ -327,7 +347,7 @@ export default function TournamentResultsPage() {
                                 : "text-slate-400"
                             }`}
                           >
-                            {participant.finalStack.toLocaleString()}
+                            {(participant.finalStack ?? 0).toLocaleString()}
                           </div>
                           <div className="text-[10px] text-slate-500">chips</div>
                         </div>
@@ -374,25 +394,25 @@ export default function TournamentResultsPage() {
             <Badge
               variant="secondary"
               className={`text-[10px] ${
-                tournament.status === "completed"
+                tournament?.status === "completed"
                   ? "bg-emerald-500/10 text-emerald-400"
                   : "bg-red-500/10 text-red-400"
               }`}
             >
-              {tournament.status === "completed" ? "Completed" : "Cancelled"}
+              {tournament?.status === "completed" ? "Completed" : "Cancelled"}
             </Badge>
           </div>
           <div className="flex items-center justify-between text-xs">
             <span className="text-slate-400">Players</span>
-            <span className="text-white">{participants.length}</span>
+            <span className="text-white">{participantsArray.length}</span>
           </div>
           <div className="flex items-center justify-between text-xs">
             <span className="text-slate-400">Starting Stack</span>
             <span className="text-white font-mono">
-              {tournament.startingStack.toLocaleString()}
+              {tournament?.startingStack?.toLocaleString() || "0"}
             </span>
           </div>
-          {tournament.endedAt && (
+          {tournament?.endedAt && (
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-400">Ended</span>
               <span className="text-white text-[10px]">
@@ -414,10 +434,10 @@ export default function TournamentResultsPage() {
                 </span>
               </div>
               <p className="text-white font-bold truncate">
-                {sortedParticipants[0].username}
+                {sortedParticipants[0].username || "Unknown"}
               </p>
               <p className="text-amber-400/70 text-xs font-mono">
-                {sortedParticipants[0].finalStack.toLocaleString()} chips
+                {(sortedParticipants[0].finalStack ?? 0).toLocaleString()} chips
               </p>
             </div>
           </>
