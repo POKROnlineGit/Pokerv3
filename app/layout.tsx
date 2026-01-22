@@ -17,6 +17,10 @@ import {
   generateAllCSSVars,
   generateCSSVarsScript,
 } from "@/lib/features/preferences";
+import { THEMES } from "@/lib/features/theme/themes";
+
+// Force dynamic rendering - user preferences are request-specific
+export const dynamic = 'force-dynamic';
 
 const inter = Inter({
   subsets: ["latin"],
@@ -110,20 +114,26 @@ export default async function RootLayout({
   let profile: { theme?: string; color_theme?: string } | null = null;
 
   if (user) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select(columns)
       .eq("id", user.id)
       .single();
-    if (data && typeof data === 'object' && !('error' in data)) {
+
+    if (error) {
+      console.error("[layout.tsx] Error fetching profile preferences:", error);
+    } else if (data && typeof data === 'object') {
       profile = data as { theme?: string; color_theme?: string };
     }
   }
 
   // Build preferences object with defaults from registry
+  // Validate colorTheme exists in THEMES array, fallback to default if not
   const preferences = {
     mode: (profile?.theme as 'light' | 'dark') ?? PREFERENCE_REGISTRY.mode.defaultValue,
-    colorTheme: (profile?.color_theme as string) ?? PREFERENCE_REGISTRY.colorTheme.defaultValue,
+    colorTheme: profile?.color_theme && THEMES.some(t => t.id === profile.color_theme)
+      ? profile.color_theme
+      : PREFERENCE_REGISTRY.colorTheme.defaultValue,
   };
 
   // Validate mode

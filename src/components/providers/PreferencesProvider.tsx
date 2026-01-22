@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
 import { Theme, THEMES, getTheme } from "@/lib/features/theme/themes";
 import { UserPreferences } from "@/lib/features/preferences/types";
@@ -63,6 +63,11 @@ export function PreferencesProvider({ children, initialPreferences }: Preference
   });
   const [isLoading, setIsLoading] = useState(false);
   const supabase = createClientComponentClient();
+  const hasAppliedInitialPrefs = useRef(false);
+  const initialPrefsRef = useRef<UserPreferences>({
+    mode: initialPreferences?.mode ?? PREFERENCE_REGISTRY.mode.defaultValue,
+    colorTheme: initialPreferences?.colorTheme ?? PREFERENCE_REGISTRY.colorTheme.defaultValue,
+  });
 
   // Apply CSS vars for all preferences that have them
   const applyCSSVars = useCallback((prefs: UserPreferences) => {
@@ -73,7 +78,12 @@ export function PreferencesProvider({ children, initialPreferences }: Preference
 
   // Apply mode (light/dark class)
   const applyMode = useCallback((mode: 'light' | 'dark') => {
-    document.documentElement.classList.toggle('dark', mode === 'dark');
+    const html = document.documentElement;
+    if (mode === 'dark') {
+      html.classList.add('dark');
+    } else {
+      html.classList.remove('dark');
+    }
   }, []);
 
   // Generic preference setter
@@ -113,6 +123,20 @@ export function PreferencesProvider({ children, initialPreferences }: Preference
       console.error(`Error saving preference ${key}:`, error);
     }
   }, [supabase, applyCSSVars, applyMode]);
+
+  // Apply initial preferences on mount to sync with server-rendered state
+  // This prevents hydration mismatches and theme flashing
+  useEffect(() => {
+    if (hasAppliedInitialPrefs.current) return;
+    
+    // Apply initial preferences immediately on mount
+    // The server has already set CSS vars via blocking script, but we need to
+    // ensure the client state matches and is ready for any updates
+    const initialPrefs = initialPrefsRef.current;
+    applyCSSVars(initialPrefs);
+    applyMode(initialPrefs.mode);
+    hasAppliedInitialPrefs.current = true;
+  }, [applyCSSVars, applyMode]); // Run only once on mount
 
   // Load preferences on auth state change (login/logout)
   useEffect(() => {
