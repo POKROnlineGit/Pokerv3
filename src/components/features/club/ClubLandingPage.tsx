@@ -20,7 +20,7 @@ export function ClubLandingPage({ onClubCreated, onClubJoined }: ClubLandingPage
   const isMobile = useIsMobile()
   const { getPublicClubs, joinClub } = useClubSocket()
   const { toast } = useToast()
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [clubs, setClubs] = useState<NormalizedClub[]>([])
   const [joiningClubId, setJoiningClubId] = useState<string | null>(null)
 

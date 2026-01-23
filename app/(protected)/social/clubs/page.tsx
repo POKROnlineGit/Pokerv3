@@ -7,13 +7,12 @@ import { createClientComponentClient } from '@/lib/api/supabase/client'
 import { Club, NormalizedClub, normalizeClub } from '@/lib/types/club'
 import { ClubLandingPage } from '@/components/features/club/ClubLandingPage'
 import { ClubPage } from '@/components/features/club/ClubPage'
-import { Loader2 } from 'lucide-react'
 
 export default function ClubsPage() {
   const router = useRouter()
   const supabase = createClientComponentClient()
   const { getUserClub } = useClubSocket()
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [userClub, setUserClub] = useState<NormalizedClub | null>(null)
   const [userRole, setUserRole] = useState<string>('member')
   const [userId, setUserId] = useState<string | null>(null)
@@ -30,7 +29,12 @@ export default function ClubsPage() {
         setUserId(user.id)
 
         // Check if user is in a club
-        const result = await getUserClub()
+        // Add timeout to prevent infinite hang if socket callback never fires
+        const timeoutPromise = new Promise<{ error: string }>((resolve) =>
+          setTimeout(() => resolve({ error: 'Request timed out' }), 10000)
+        )
+
+        const result = await Promise.race([getUserClub(), timeoutPromise])
         if ('error' in result) {
           console.error('Error fetching user club:', result.error)
           setLoading(false)
@@ -78,14 +82,6 @@ export default function ClubsPage() {
   const handleClubLeft = () => {
     setUserClub(null)
     setUserRole('member')
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
   }
 
   // If user is in a club, show the club page
