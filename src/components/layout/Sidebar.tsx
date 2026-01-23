@@ -163,9 +163,13 @@ export function Sidebar() {
       ],
     },
     {
-      href: "/friends",
-      label: "Friends",
+      href: "/social",
+      label: "Social",
       icon: Users,
+      submenu: [
+        { href: "/social/friends", label: "Friends" },
+        { href: "/social/clubs", label: "Clubs" },
+      ],
       badge: pendingCount > 0 ? pendingCount : null,
     },
     { href: "/profile", label: "Profile", icon: UserCircle },

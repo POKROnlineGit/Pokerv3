@@ -39,6 +39,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useTheme } from "@/components/providers/PreferencesProvider";
+import { ShareToClubButton } from "@/components/features/club";
 
 export default function PrivateGamePage() {
   const params = useParams();
@@ -180,6 +181,17 @@ export default function PrivateGamePage() {
             <Copy className="w-3 h-3 mr-2" /> Copy Invite Link
           </Button>
         </div>
+
+        {/* Share to Club */}
+        {isHost && (
+          <ShareToClubButton
+            gameId={gameId}
+            title={`Private Game (${gameState.smallBlind || 0}/${gameState.bigBlind || 0})`}
+            variant="outline"
+            size="sm"
+            className="w-full text-xs h-8"
+          />
+        )}
       </div>
 
       <Separator className="bg-slate-800" />

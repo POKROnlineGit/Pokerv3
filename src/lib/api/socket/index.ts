@@ -52,6 +52,8 @@ export {
 
 export { useTournamentSocket, useTournamentEvents } from "./tournament";
 
+export { useClubSocket, useClubEvents } from "./club";
+
 // Types
 export type * from "./types";
 

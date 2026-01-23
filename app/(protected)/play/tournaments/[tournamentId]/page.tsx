@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/accordion";
 import Link from "next/link";
 import { getErrorMessage } from "@/lib/utils";
+import { ShareToClubButton } from "@/components/features/club";
 
 // Status badge component
 function StatusBadge({ status }: { status: TournamentStatusType }) {
@@ -1018,6 +1019,17 @@ export default function TournamentDetailPage() {
             >
               <ArrowLeft className="h-3 w-3 mr-1" /> Back to Tournaments
             </Link>
+
+            {/* Share to Club */}
+            {isHost && (
+              <ShareToClubButton
+                tournamentId={tournamentId}
+                title={normalizedTournament.title || 'Tournament'}
+                variant="outline"
+                size="sm"
+                className="w-full text-xs h-8 mt-2"
+              />
+            )}
           </div>
 
           <Separator className="bg-slate-800" />
@@ -1328,6 +1340,17 @@ export default function TournamentDetailPage() {
             >
               <ArrowLeft className="h-3 w-3 mr-1" /> Back to Tournaments
             </Link>
+
+            {/* Share to Club */}
+            {isHost && (
+              <ShareToClubButton
+                tournamentId={tournamentId}
+                title={normalizedTournament.title || 'Tournament'}
+                variant="outline"
+                size="sm"
+                className="w-full text-xs h-8 mt-2"
+              />
+            )}
           </div>
 
           <Separator className="bg-slate-800" />
