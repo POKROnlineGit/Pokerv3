@@ -111,7 +111,7 @@ export default async function RootLayout({
 
   // Fetch all preferences in one query using the registry
   const columns = getPreferenceColumns().join(", ");
-  let profile: { theme?: string; color_theme?: string } | null = null;
+  let profile: { theme?: string; color_theme?: string; deck_preference?: string } | null = null;
 
   if (user) {
     const { data, error } = await supabase
@@ -123,7 +123,7 @@ export default async function RootLayout({
     if (error) {
       console.error("[layout.tsx] Error fetching profile preferences:", error);
     } else if (data && typeof data === 'object') {
-      profile = data as { theme?: string; color_theme?: string };
+      profile = data as { theme?: string; color_theme?: string; deck_preference?: string };
     }
   }
 
@@ -134,6 +134,9 @@ export default async function RootLayout({
     colorTheme: profile?.color_theme && THEMES.some(t => t.id === profile.color_theme)
       ? profile.color_theme
       : PREFERENCE_REGISTRY.colorTheme.defaultValue,
+    cardStyle: PREFERENCE_REGISTRY.cardStyle.validate(profile?.deck_preference)
+      ? profile.deck_preference
+      : PREFERENCE_REGISTRY.cardStyle.defaultValue,
   };
 
   // Validate mode

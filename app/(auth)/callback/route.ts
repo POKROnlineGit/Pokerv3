@@ -32,6 +32,7 @@ export async function GET(request: Request) {
             theme: "dark",
             is_superuser: false,
             debug_mode: false,
+            deck_preference: "standard",
           });
         }
 

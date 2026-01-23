@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { createClientComponentClient } from "@/lib/api/supabase/client";
 import { Theme, THEMES, getTheme } from "@/lib/features/theme/themes";
-import { UserPreferences } from "@/lib/features/preferences/types";
+import { UserPreferences, CardStyle } from "@/lib/features/preferences/types";
 import { PREFERENCE_REGISTRY, generateAllCSSVars } from "@/lib/features/preferences/registry";
 
 interface PreferencesContextType {
@@ -16,6 +16,8 @@ interface PreferencesContextType {
   setMode: (m: 'light' | 'dark') => Promise<void>;
   colorTheme: string;
   setColorTheme: (t: string) => Promise<void>;
+  cardStyle: CardStyle;
+  setCardStyle: (s: CardStyle) => Promise<void>;
   // Backward compatibility with useTheme hook
   currentTheme: Theme;
   setTheme: (themeId: string) => Promise<void>;
@@ -26,6 +28,7 @@ const PreferencesContext = createContext<PreferencesContextType>({
   preferences: {
     mode: PREFERENCE_REGISTRY.mode.defaultValue,
     colorTheme: PREFERENCE_REGISTRY.colorTheme.defaultValue,
+    cardStyle: PREFERENCE_REGISTRY.cardStyle.defaultValue,
   },
   setPreference: async () => {},
   isLoading: false,
@@ -33,6 +36,8 @@ const PreferencesContext = createContext<PreferencesContextType>({
   setMode: async () => {},
   colorTheme: PREFERENCE_REGISTRY.colorTheme.defaultValue,
   setColorTheme: async () => {},
+  cardStyle: PREFERENCE_REGISTRY.cardStyle.defaultValue,
+  setCardStyle: async () => {},
   currentTheme: getTheme(PREFERENCE_REGISTRY.colorTheme.defaultValue),
   setTheme: async () => {},
   availableThemes: THEMES,
@@ -60,6 +65,7 @@ export function PreferencesProvider({ children, initialPreferences }: Preference
   const [preferences, setPreferences] = useState<UserPreferences>({
     mode: initialPreferences?.mode ?? PREFERENCE_REGISTRY.mode.defaultValue,
     colorTheme: initialPreferences?.colorTheme ?? PREFERENCE_REGISTRY.colorTheme.defaultValue,
+    cardStyle: initialPreferences?.cardStyle ?? PREFERENCE_REGISTRY.cardStyle.defaultValue,
   });
   const [isLoading, setIsLoading] = useState(false);
   const supabase = createClientComponentClient();
@@ -67,6 +73,7 @@ export function PreferencesProvider({ children, initialPreferences }: Preference
   const initialPrefsRef = useRef<UserPreferences>({
     mode: initialPreferences?.mode ?? PREFERENCE_REGISTRY.mode.defaultValue,
     colorTheme: initialPreferences?.colorTheme ?? PREFERENCE_REGISTRY.colorTheme.defaultValue,
+    cardStyle: initialPreferences?.cardStyle ?? PREFERENCE_REGISTRY.cardStyle.defaultValue,
   });
 
   // Apply CSS vars for all preferences that have them
@@ -147,7 +154,7 @@ export function PreferencesProvider({ children, initialPreferences }: Preference
         if (user) {
           const { data, error } = await supabase
             .from("profiles")
-            .select("theme, color_theme")
+            .select("theme, color_theme, deck_preference")
             .eq("id", user.id)
             .single();
 
@@ -157,6 +164,7 @@ export function PreferencesProvider({ children, initialPreferences }: Preference
             const newPrefs: UserPreferences = {
               mode: PREFERENCE_REGISTRY.mode.validate(data.theme) ? data.theme : PREFERENCE_REGISTRY.mode.defaultValue,
               colorTheme: PREFERENCE_REGISTRY.colorTheme.validate(data.color_theme) ? data.color_theme : PREFERENCE_REGISTRY.colorTheme.defaultValue,
+              cardStyle: PREFERENCE_REGISTRY.cardStyle.validate(data.deck_preference) ? data.deck_preference : PREFERENCE_REGISTRY.cardStyle.defaultValue,
             };
             setPreferences(newPrefs);
             applyCSSVars(newPrefs);
@@ -167,6 +175,7 @@ export function PreferencesProvider({ children, initialPreferences }: Preference
           const defaultPrefs: UserPreferences = {
             mode: PREFERENCE_REGISTRY.mode.defaultValue,
             colorTheme: PREFERENCE_REGISTRY.colorTheme.defaultValue,
+            cardStyle: PREFERENCE_REGISTRY.cardStyle.defaultValue,
           };
           setPreferences(defaultPrefs);
           applyCSSVars(defaultPrefs);
@@ -205,6 +214,8 @@ export function PreferencesProvider({ children, initialPreferences }: Preference
     setMode: (m: 'light' | 'dark') => setPreference('mode', m),
     colorTheme: preferences.colorTheme,
     setColorTheme: (t: string) => setPreference('colorTheme', t),
+    cardStyle: preferences.cardStyle,
+    setCardStyle: (s: CardStyle) => setPreference('cardStyle', s),
     // Backward compatibility
     currentTheme,
     setTheme: (themeId: string) => setPreference('colorTheme', themeId),

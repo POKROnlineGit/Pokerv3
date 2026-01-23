@@ -5,10 +5,12 @@ export interface PreferenceConfig<T = unknown> {
   getCSSVars?: (value: T) => Record<string, string>; // Optional CSS var generator
 }
 
+export type CardStyle = 'standard' | 'simplified_4color' | 'simplified_2color';
+
 export interface UserPreferences {
   mode: 'light' | 'dark';
   colorTheme: string;
-  // Future: cardStyle, tableTexture, etc.
+  cardStyle: CardStyle;
 }
 
 export type PreferenceName = keyof UserPreferences;

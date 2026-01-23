@@ -1,5 +1,5 @@
 import { THEMES, getTheme } from '../theme/themes';
-import { PreferenceConfig } from './types';
+import { PreferenceConfig, CardStyle } from './types';
 
 export const PREFERENCE_REGISTRY = {
   mode: {
@@ -28,6 +28,12 @@ export const PREFERENCE_REGISTRY = {
       vars['--theme-background'] = theme.colors.background;
       return vars;
     },
+  },
+  cardStyle: {
+    key: 'deck_preference',
+    defaultValue: 'standard' as CardStyle,
+    validate: (v: unknown): v is CardStyle =>
+      v === 'standard' || v === 'simplified_4color' || v === 'simplified_2color',
   },
 } satisfies Record<string, PreferenceConfig>;
 

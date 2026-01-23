@@ -19,25 +19,34 @@ import {
 } from '@/components/ui/select'
 import { Filter } from 'bad-words'
 import { getErrorMessage } from '@/lib/utils'
+import { CardStyle } from '@/lib/features/preferences/types'
 
 interface SettingsFormProps {
   initialUsername: string
   initialTheme: 'light' | 'dark'
   initialColorTheme?: string
+  initialCardStyle?: CardStyle
   isSuperUser?: boolean
   initialDebugMode?: boolean
   tab?: 'profile' | 'theme' | 'debug'
 }
 
-export function SettingsForm({ initialUsername, initialTheme, initialColorTheme, isSuperUser = false, initialDebugMode = false, tab = 'profile' }: SettingsFormProps) {
+const CARD_STYLE_OPTIONS: { value: CardStyle; label: string; description: string }[] = [
+  { value: 'standard', label: 'Standard', description: 'Traditional card face images' },
+  { value: 'simplified_4color', label: 'Simplified (4-Color)', description: 'Text-based with 4 suit colors' },
+  { value: 'simplified_2color', label: 'Simplified (2-Color)', description: 'Text-based with red/black suits' },
+]
+
+export function SettingsForm({ initialUsername, initialTheme, initialColorTheme, initialCardStyle = 'standard', isSuperUser = false, initialDebugMode = false, tab = 'profile' }: SettingsFormProps) {
   const [username, setUsername] = useState(initialUsername)
   const [theme, setTheme] = useState(initialTheme)
   const [colorTheme, setColorThemeLocal] = useState(initialColorTheme || 'emerald_felt')
+  const [cardStyleLocal, setCardStyleLocal] = useState<CardStyle>(initialCardStyle)
   const [debugMode, setDebugMode] = useState(initialDebugMode)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const { availableThemes, setColorTheme, setMode, currentTheme } = usePreferences()
+  const { availableThemes, setColorTheme, setMode, setCardStyle } = usePreferences()
   const supabase = createClientComponentClient()
   const router = useRouter()
 
@@ -55,7 +64,7 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
       if (!user) throw new Error('Not authenticated')
 
       // Update profile - only update fields relevant to the current tab
-      const updateData: { username?: string; theme?: string; color_theme?: string; debug_mode?: boolean } = {}
+      const updateData: { username?: string; theme?: string; color_theme?: string; deck_preference?: CardStyle; debug_mode?: boolean } = {}
       
       if (tab === 'profile') {
         // Sanitize username (trim but preserve case)
@@ -93,6 +102,7 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
       } else if (tab === 'theme') {
         updateData.theme = theme
         updateData.color_theme = colorTheme
+        updateData.deck_preference = cardStyleLocal
       } else if (tab === 'debug' && isSuperUser) {
         updateData.debug_mode = debugMode
       }
@@ -151,6 +161,8 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
         await setMode(theme)
         // Apply color theme via provider
         await setColorTheme(colorTheme)
+        // Apply card style via provider
+        await setCardStyle(cardStyleLocal)
       }
 
       setSuccess(true)
@@ -305,6 +317,35 @@ export function SettingsForm({ initialUsername, initialTheme, initialColorTheme,
                 </Select>
                 <p className="text-sm text-muted-foreground">
                   Choose your preferred color scheme
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="card-style">Card Style</Label>
+                <Select
+                  value={cardStyleLocal}
+                  onValueChange={(value) => setCardStyleLocal(value as CardStyle)}
+                >
+                  <SelectTrigger id="card-style" className="w-full bg-card">
+                    <SelectValue>
+                      {CARD_STYLE_OPTIONS.find(opt => opt.value === cardStyleLocal)?.label || 'Standard'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CARD_STYLE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">{option.label}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {option.description}
+                          </div>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  Choose how cards are displayed
                 </p>
               </div>
             </>

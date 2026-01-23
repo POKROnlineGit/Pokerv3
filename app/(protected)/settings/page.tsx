@@ -25,7 +25,7 @@ export default function SettingsPage() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('username, theme, color_theme, is_superuser, debug_mode')
+        .select('username, theme, color_theme, deck_preference, is_superuser, debug_mode')
         .eq('id', user.id)
         .single()
 
@@ -69,6 +69,7 @@ export default function SettingsPage() {
                 initialUsername={profile?.username || ''}
                 initialTheme={profile?.theme || 'light'}
                 initialColorTheme={profile?.color_theme || 'emerald_felt'}
+                initialCardStyle={profile?.deck_preference || 'standard'}
                 isSuperUser={isSuperUser}
                 initialDebugMode={profile?.debug_mode || false}
                 tab="profile"
@@ -80,6 +81,7 @@ export default function SettingsPage() {
                 initialUsername={profile?.username || ''}
                 initialTheme={profile?.theme || 'light'}
                 initialColorTheme={profile?.color_theme || 'emerald_felt'}
+                initialCardStyle={profile?.deck_preference || 'standard'}
                 isSuperUser={isSuperUser}
                 initialDebugMode={profile?.debug_mode || false}
                 tab="theme"
@@ -92,6 +94,7 @@ export default function SettingsPage() {
             initialUsername={profile?.username || ''}
             initialTheme={profile?.theme || 'light'}
             initialColorTheme={profile?.color_theme || 'emerald_felt'}
+                  initialCardStyle={profile?.deck_preference || 'standard'}
                   isSuperUser={isSuperUser}
             initialDebugMode={profile?.debug_mode || false}
                   tab="debug"
