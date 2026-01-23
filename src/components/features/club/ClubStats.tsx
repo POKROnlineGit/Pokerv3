@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useClubSocket } from '@/lib/api/socket'
+import { useClubApi } from '@/lib/api/http'
 import { ClubMemberStats, LifetimeStats, normalizeClubMemberStats } from '@/lib/types/club'
 import { createClientComponentClient } from '@/lib/api/supabase/client'
 import {
@@ -22,7 +22,7 @@ interface ClubStatsProps {
 }
 
 export function ClubStats({ clubId }: ClubStatsProps) {
-  const { getMemberStats } = useClubSocket()
+  const { getMemberStats } = useClubApi()
   const { toast } = useToast()
   const supabase = createClientComponentClient()
   const [loading, setLoading] = useState(true)

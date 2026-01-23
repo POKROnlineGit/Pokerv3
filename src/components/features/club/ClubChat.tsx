@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useClubSocket, useClubEvents } from '@/lib/api/socket'
+import { useClubApi, useClubRealtime } from '@/lib/api/http'
 import { ClubMessage, NormalizedClubMessage, normalizeClubMessage } from '@/lib/types/club'
 import { ClubChatMessage } from './ClubChatMessage'
 import { ClubChatInput } from './ClubChatInput'
@@ -14,7 +14,7 @@ interface ClubChatProps {
 }
 
 export function ClubChat({ clubId, userId }: ClubChatProps) {
-  const { getMessages, sendMessage } = useClubSocket()
+  const { getMessages, sendMessage } = useClubApi()
   const { toast } = useToast()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -23,10 +23,10 @@ export function ClubChat({ clubId, userId }: ClubChatProps) {
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
 
-  // Real-time message updates
-  const { messages: newMessages, setInitialMessages, clearMessages } = useClubEvents(clubId, {
+  // Real-time message updates via Supabase Realtime
+  useClubRealtime(clubId, {
     onMessage: (data) => {
-      const normalized = normalizeClubMessage(data.message)
+      const normalized = normalizeClubMessage(data)
       setMessages((prev) => [...prev, normalized])
     },
   })
@@ -63,10 +63,6 @@ export function ClubChat({ clubId, userId }: ClubChatProps) {
     }
 
     loadMessages()
-
-    return () => {
-      clearMessages()
-    }
   }, [clubId])
 
   // Scroll to bottom on new messages

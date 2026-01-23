@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useClubSocket } from '@/lib/api/socket'
+import { useClubApi } from '@/lib/api/http'
 import { NormalizedClubMember } from '@/lib/types/club'
 import {
   Dialog,
@@ -31,7 +31,7 @@ export function ClubBanDialog({
   member,
   onBanned,
 }: ClubBanDialogProps) {
-  const { banMember, kickMember } = useClubSocket()
+  const { banMember, kickMember } = useClubApi()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [reason, setReason] = useState('')

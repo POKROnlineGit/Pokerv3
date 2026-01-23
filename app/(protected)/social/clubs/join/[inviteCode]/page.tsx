@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { useClubSocket } from '@/lib/api/socket'
+import { useClubApi } from '@/lib/api/http'
 import { createClientComponentClient } from '@/lib/api/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ export default function JoinClubPage() {
   const params = useParams()
   const inviteCode = params.inviteCode as string
   const supabase = createClientComponentClient()
-  const { joinClubByCode, getUserClub } = useClubSocket()
+  const { joinClubByCode, getUserClub } = useClubApi()
   const { toast } = useToast()
 
   const [loading, setLoading] = useState(true)

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useClubSocket } from '@/lib/api/socket'
+import { useClubApi } from '@/lib/api/http'
 import { NormalizedClub, normalizeClub } from '@/lib/types/club'
 import {
   Dialog,
@@ -30,7 +30,7 @@ export function ClubSettingsDialog({
   club,
   onClubUpdated,
 }: ClubSettingsDialogProps) {
-  const { updateClubSettings, regenerateInviteCode } = useClubSocket()
+  const { updateClubSettings, regenerateInviteCode } = useClubApi()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [regenerating, setRegenerating] = useState(false)

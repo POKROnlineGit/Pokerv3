@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useClubSocket, useClubEvents } from '@/lib/api/socket'
+import { useClubApi, useClubRealtime } from '@/lib/api/http'
 import {
   NormalizedClub,
   NormalizedClubMember,
@@ -28,7 +28,7 @@ interface ClubPageProps {
 export function ClubPage({ club: initialClub, isLeader: initialIsLeader, userId, onLeave }: ClubPageProps) {
   const router = useRouter()
   const isMobile = useIsMobile()
-  const { getClubState } = useClubSocket()
+  const { getClubState } = useClubApi()
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [club, setClub] = useState<NormalizedClub>(initialClub)
@@ -36,9 +36,9 @@ export function ClubPage({ club: initialClub, isLeader: initialIsLeader, userId,
   const [isLeader, setIsLeader] = useState(initialIsLeader)
   const [showSidebar, setShowSidebar] = useState(!isMobile)
 
-  // Real-time updates
-  const { disbanded, memberCount } = useClubEvents(club.id, {
-    onClubDisbanded: () => {
+  // Real-time updates via Supabase Realtime
+  const { disbanded, memberCount } = useClubRealtime(club.id, {
+    onClubDeleted: () => {
       toast({
         title: 'Club disbanded',
         description: 'This club has been disbanded',
@@ -50,31 +50,14 @@ export function ClubPage({ club: initialClub, isLeader: initialIsLeader, userId,
       // Refetch members
       fetchClubState()
     },
-    onMemberLeft: (data) => {
+    onMemberLeft: (leftUserId) => {
       // Check if it's the current user
-      if (data.userId === userId) {
+      if (leftUserId === userId) {
         onLeave()
         return
       }
       // Remove from local state
-      setMembers((prev) => prev.filter((m) => m.userId !== data.userId))
-    },
-    onMemberBanned: (data) => {
-      // Check if it's the current user
-      if (data.userId === userId) {
-        toast({
-          title: 'You have been removed',
-          description: data.reason || 'You have been removed from the club',
-          variant: 'destructive',
-        })
-        onLeave()
-        return
-      }
-      // Remove from local state
-      setMembers((prev) => prev.filter((m) => m.userId !== data.userId))
-    },
-    onSettingsUpdated: (data) => {
-      setClub(normalizeClub(data.club))
+      setMembers((prev) => prev.filter((m) => m.userId !== leftUserId))
     },
   })
 

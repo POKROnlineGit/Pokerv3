@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useClubSocket } from '@/lib/api/socket'
+import { useClubApi } from '@/lib/api/http'
 import { NormalizedClub, normalizeClub } from '@/lib/types/club'
 import { Button } from '@/components/ui/button'
 import {
@@ -31,7 +31,7 @@ export function ShareToClubButton({
   size = 'sm',
   className,
 }: ShareToClubButtonProps) {
-  const { getUserClub, shareGame, shareTournament } = useClubSocket()
+  const { getUserClub, shareGame, shareTournament } = useClubApi()
   const { toast } = useToast()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [loading, setLoading] = useState(false)

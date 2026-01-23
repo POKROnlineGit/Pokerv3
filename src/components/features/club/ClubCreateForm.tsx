@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useClubSocket } from '@/lib/api/socket'
+import { useClubApi } from '@/lib/api/http'
 import { Club } from '@/lib/types/club'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,7 @@ interface ClubCreateFormProps {
 }
 
 export function ClubCreateForm({ onClubCreated }: ClubCreateFormProps) {
-  const { createClub, getClubState } = useClubSocket()
+  const { createClub, getClubState } = useClubApi()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [name, setName] = useState('')

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useClubSocket } from '@/lib/api/socket'
+import { useClubApi } from '@/lib/api/http'
 import { Club, NormalizedClub, normalizeClub } from '@/lib/types/club'
 import { ClubCard } from './ClubCard'
 import { ClubCreateForm } from './ClubCreateForm'
@@ -18,7 +18,7 @@ interface ClubLandingPageProps {
 
 export function ClubLandingPage({ onClubCreated, onClubJoined }: ClubLandingPageProps) {
   const isMobile = useIsMobile()
-  const { getPublicClubs, joinClub } = useClubSocket()
+  const { getPublicClubs, joinClub } = useClubApi()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [clubs, setClubs] = useState<NormalizedClub[]>([])

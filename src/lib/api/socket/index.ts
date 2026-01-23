@@ -52,7 +52,9 @@ export {
 
 export { useTournamentSocket, useTournamentEvents } from "./tournament";
 
-export { useClubSocket, useClubEvents } from "./club";
+// NOTE: Club socket hooks have been migrated to HTTP API
+// Use useClubApi and useClubRealtime from '@/lib/api/http' instead
+// The socket-based club hooks are deprecated and will be removed
 
 // Types
 export type * from "./types";

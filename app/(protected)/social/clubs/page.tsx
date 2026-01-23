@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useClubSocket, useClubEvents } from '@/lib/api/socket'
+import { useClubApi, useClubRealtime } from '@/lib/api/http'
 import { createClientComponentClient } from '@/lib/api/supabase/client'
 import { Club, NormalizedClub, normalizeClub } from '@/lib/types/club'
 import { ClubLandingPage } from '@/components/features/club/ClubLandingPage'
@@ -11,8 +11,8 @@ import { ClubPage } from '@/components/features/club/ClubPage'
 export default function ClubsPage() {
   const router = useRouter()
   const supabase = createClientComponentClient()
-  const { getUserClub } = useClubSocket()
-  const [loading, setLoading] = useState(false)
+  const { getUserClub } = useClubApi()
+  const [loading, setLoading] = useState(true)
   const [userClub, setUserClub] = useState<NormalizedClub | null>(null)
   const [userRole, setUserRole] = useState<string>('member')
   const [userId, setUserId] = useState<string | null>(null)
@@ -28,13 +28,8 @@ export default function ClubsPage() {
         }
         setUserId(user.id)
 
-        // Check if user is in a club
-        // Add timeout to prevent infinite hang if socket callback never fires
-        const timeoutPromise = new Promise<{ error: string }>((resolve) =>
-          setTimeout(() => resolve({ error: 'Request timed out' }), 10000)
-        )
-
-        const result = await Promise.race([getUserClub(), timeoutPromise])
+        // Check if user is in a club via HTTP API
+        const result = await getUserClub()
         if ('error' in result) {
           console.error('Error fetching user club:', result.error)
           setLoading(false)
@@ -55,9 +50,9 @@ export default function ClubsPage() {
     fetchUserClub()
   }, [supabase, getUserClub])
 
-  // Listen for club disbanded event
-  const { disbanded } = useClubEvents(userClub?.id, {
-    onClubDisbanded: () => {
+  // Listen for club disbanded event via Supabase Realtime
+  const { disbanded } = useClubRealtime(userClub?.id, {
+    onClubDeleted: () => {
       setUserClub(null)
       setUserRole('member')
     },

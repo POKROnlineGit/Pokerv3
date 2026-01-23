@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useClubSocket } from '@/lib/api/socket'
+import { useClubApi } from '@/lib/api/http'
 import {
   Dialog,
   DialogContent,
@@ -30,7 +30,7 @@ export function ClubLeaveDialog({
   onLeave,
   onDisbanded,
 }: ClubLeaveDialogProps) {
-  const { leaveClub, disbandClub } = useClubSocket()
+  const { leaveClub, disbandClub } = useClubApi()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
 
