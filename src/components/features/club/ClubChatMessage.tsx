@@ -54,6 +54,8 @@ export function ClubChatMessage({ message, isOwnMessage }: ClubChatMessageProps)
 
   // Game link messages
   if (message.messageType === 'game_link' && message.metadata.gameId) {
+    const { title, blinds, playerCount, maxPlayers, hostUsername, variant } = message.metadata
+
     return (
       <div className={cn(
         "flex flex-col max-w-[80%] mb-2",
@@ -69,11 +71,14 @@ export function ClubChatMessage({ message, isOwnMessage }: ClubChatMessageProps)
         )}>
           <div className="flex items-center gap-2 mb-2">
             <Gamepad2 className="h-4 w-4 text-primary" />
-            <span className="font-medium">Game Shared</span>
+            <span className="font-medium">
+              {hostUsername ? `${hostUsername}'s Private Game` : (title || 'Private Game')}
+            </span>
           </div>
           <p className="text-sm text-muted-foreground mb-2">
-            {message.metadata.title || 'Private Game'}
-            {message.metadata.blinds && ` (${message.metadata.blinds})`}
+            {playerCount ?? 1}/{maxPlayers ?? 9} players
+            {blinds && ` \u2022 Blinds ${blinds}`}
+            {variant && ` \u2022 ${variant}`}
           </p>
           <Button
             size="sm"

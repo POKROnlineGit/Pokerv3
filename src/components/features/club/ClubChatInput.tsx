@@ -4,14 +4,15 @@ import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Send, Loader2 } from 'lucide-react'
+import { Send, Loader2, Plus } from 'lucide-react'
 
 interface ClubChatInputProps {
   onSend: (content: string) => Promise<void>
+  onCreateGame?: () => void
   disabled?: boolean
 }
 
-export function ClubChatInput({ onSend, disabled }: ClubChatInputProps) {
+export function ClubChatInput({ onSend, onCreateGame, disabled }: ClubChatInputProps) {
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -49,6 +50,18 @@ export function ClubChatInput({ onSend, disabled }: ClubChatInputProps) {
             disabled={sending || disabled}
             className="flex-1"
           />
+          {onCreateGame && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={onCreateGame}
+              disabled={disabled}
+              title="Create & Share Game"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          )}
           <Button
             type="submit"
             size="icon"

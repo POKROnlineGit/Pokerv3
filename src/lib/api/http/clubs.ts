@@ -456,16 +456,30 @@ export function useClubApi() {
     async (
       clubId: string,
       gameId: string,
-      title?: string
+      options?: {
+        title?: string;
+        blinds?: string;
+        maxPlayers?: number;
+        hostUsername?: string;
+        variant?: string;
+      }
     ): Promise<{ success: boolean } | { error: string }> => {
       const result = await apiFetch<{ success: boolean }>(
         `/api/clubs/${clubId}/messages`,
         {
           method: "POST",
           body: JSON.stringify({
-            content: title || "Check out this game!",
+            content: options?.title || "Private Game",
             messageType: "game_link",
-            metadata: { gameId, title },
+            metadata: {
+              gameId,
+              title: options?.title,
+              blinds: options?.blinds,
+              maxPlayers: options?.maxPlayers,
+              hostUsername: options?.hostUsername,
+              variant: options?.variant,
+              playerCount: 1,
+            },
           }),
         }
       );

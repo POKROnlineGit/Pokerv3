@@ -62,7 +62,7 @@ export function ShareToClubButton({
     try {
       let result
       if (gameId) {
-        result = await shareGame(userClub.id, gameId, title)
+        result = await shareGame(userClub.id, gameId, title ? { title } : undefined)
       } else if (tournamentId) {
         result = await shareTournament(userClub.id, tournamentId, title)
       } else {

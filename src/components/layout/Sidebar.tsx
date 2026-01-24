@@ -150,6 +150,7 @@ export function Sidebar() {
         { href: "/play/online", label: "Play Online" },
         { href: "/play/bots", label: "Play Bots" },
         { href: "/play/host", label: "Host Game" },
+        { href: "/play/tournaments", label: "Host MTT" },
       ],
     },
     {

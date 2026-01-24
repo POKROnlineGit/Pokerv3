@@ -59,6 +59,9 @@ export interface ClubMessageMetadata {
   title?: string;
   blinds?: string;
   playerCount?: number;
+  maxPlayers?: number;
+  hostUsername?: string;
+  variant?: string;
 }
 
 // ============================================

@@ -266,7 +266,7 @@ export default function PlayRootPage() {
                 <div className="h-10 w-10 rounded-full bg-slate-800/50 flex items-center justify-center">
                   <Trophy className="h-4 w-4 text-slate-400" />
                 </div>
-                <h3 className="text-lg font-bold text-white">Create Tournament</h3>
+                <h3 className="text-lg font-bold text-white">Host Tournament</h3>
               </div>
               <ChevronRight className="h-4 w-4 text-slate-500 group-hover:translate-x-1 transition-transform" />
             </CardContent>

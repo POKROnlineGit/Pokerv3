@@ -5,7 +5,6 @@ import { PlayLayout } from "@/components/layout/PlayLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { useTournamentSocket } from "@/lib/api/socket/tournament";
 import { useRouter } from "next/navigation";
 import { Loader2, ArrowLeft, Trophy } from "lucide-react";
@@ -21,9 +20,8 @@ export default function CreateTournamentPage() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
-  // Form State - Only title and description required for creation
+  // Form State - Only title required for creation
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
 
   const handleCreateTournament = async () => {
     // Validation - Only title is required
@@ -39,15 +37,7 @@ export default function CreateTournamentPage() {
     setIsLoading(true);
 
     try {
-      const payload: any = {
-        title: title.trim(),
-      };
-
-      if (description.trim()) {
-        payload.description = description.trim();
-      }
-
-      const response = await createTournament(payload);
+      const response = await createTournament({ title: title.trim() });
 
       if ("error" in response) {
         toast({
@@ -118,20 +108,6 @@ export default function CreateTournamentPage() {
           <ArrowLeft className="h-4 w-4 mr-1" /> Back to Modes
         </Link>
 
-        <Card className="bg-slate-800/50 border-slate-700">
-          <CardContent className="p-3 flex items-start gap-2">
-            <div className="p-1.5 bg-slate-800/50 rounded-lg flex-shrink-0">
-              <Trophy className="h-4 w-4 text-slate-400" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="font-bold text-sm text-slate-300">Create Tournament</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Start by creating your tournament with a title. You'll configure the settings (blinds, players, etc.) after creation.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label className="text-xs">Tournament Title *</Label>
@@ -142,18 +118,6 @@ export default function CreateTournamentPage() {
               placeholder="Enter tournament title"
               className="bg-slate-900 border-slate-800 h-9 text-sm"
               maxLength={100}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs">Description (Optional)</Label>
-            <Input 
-              type="text" 
-              value={description} 
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter tournament description"
-              className="bg-slate-900 border-slate-800 h-9 text-sm"
-              maxLength={500}
             />
           </div>
 

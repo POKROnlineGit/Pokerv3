@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useClubApi, useClubRealtime } from '@/lib/api/http'
 import { ClubMessage, NormalizedClubMessage, normalizeClubMessage } from '@/lib/types/club'
 import { ClubChatMessage } from './ClubChatMessage'
 import { ClubChatInput } from './ClubChatInput'
+import { CreateGamePopup } from './CreateGamePopup'
 import { Loader2 } from 'lucide-react'
 import { useToast } from '@/lib/hooks'
 
@@ -16,12 +18,14 @@ interface ClubChatProps {
 export function ClubChat({ clubId, userId }: ClubChatProps) {
   const { getMessages, sendMessage } = useClubApi()
   const { toast } = useToast()
+  const router = useRouter()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(true)
   const [messages, setMessages] = useState<NormalizedClubMessage[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [showCreateGame, setShowCreateGame] = useState(false)
 
   // Real-time message updates via Supabase Realtime
   useClubRealtime(clubId, {
@@ -112,6 +116,11 @@ export function ClubChat({ clubId, userId }: ClubChatProps) {
     }
   }
 
+  const handleGameCreated = (gameId: string) => {
+    setShowCreateGame(false)
+    router.push(`/play/private/${gameId}`)
+  }
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -150,7 +159,15 @@ export function ClubChat({ clubId, userId }: ClubChatProps) {
       </div>
 
       {/* Input area */}
-      <ClubChatInput onSend={handleSend} />
+      <ClubChatInput onSend={handleSend} onCreateGame={() => setShowCreateGame(true)} />
+
+      {/* Create Game Popup */}
+      <CreateGamePopup
+        open={showCreateGame}
+        onOpenChange={setShowCreateGame}
+        clubId={clubId}
+        onGameCreated={handleGameCreated}
+      />
     </div>
   )
 }

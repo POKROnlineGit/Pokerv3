@@ -80,16 +80,6 @@ export default function HostGamePage() {
           <ArrowLeft className="h-4 w-4 mr-1" /> Back to Modes
         </Link>
 
-        <div className="p-4 bg-slate-800/50 border border-slate-700 rounded-xl flex items-start gap-4">
-          <div className="p-2 bg-slate-800/50 rounded-lg">
-            <Crown className="h-6 w-6 text-slate-400" />
-          </div>
-          <div>
-            <h3 className="font-bold text-slate-300">You are the Host</h3>
-            <p className="text-sm text-slate-400">You will have full control over the game state, including pausing, editing stacks, and managing players.</p>
-          </div>
-        </div>
-
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Table Size</Label>
