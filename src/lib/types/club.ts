@@ -110,6 +110,7 @@ export interface ClubMemberStats {
 }
 
 export interface LifetimeStats {
+  hands_played: number;
   vpip: number;
   pfr: number;
   lifetime_chip_change: number;

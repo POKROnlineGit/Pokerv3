@@ -67,7 +67,7 @@ export default function ProfilePage() {
     if (!user) return;
 
     const fetchStats = async () => {
-      const { data, error } = await supabase.rpc("get_player_stats", {
+      const { data, error } = await supabase.rpc("get_player_lifetime_stats", {
         target_player_id: user.id,
       });
 

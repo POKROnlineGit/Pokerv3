@@ -47,30 +47,56 @@ export function ClubStats({ clubId }: ClubStatsProps) {
 
       // Fetch lifetime stats for each member using the public RPC
       const lifetimeStatsPromises = normalizedStats.map(async (member) => {
-        const { data, error } = await supabase.rpc('get_lifetime_stats_public', {
-          target_user_id: member.userId,
+        const { data: lifetimeData, error: lifetimeError } = await supabase.rpc('get_lifetime_stats_public', {
+          target_player_id: member.userId,
         })
-        if (error) {
-          console.error(`Error fetching lifetime stats for ${member.username}:`, error)
-          return { userId: member.userId, lifetimeChipChange: null }
+
+        if (lifetimeError) {
+          console.error(`Error fetching lifetime stats for ${member.username}:`, lifetimeError)
+          return {
+            userId: member.userId,
+            vpipPercent: 0,
+            pfrPercent: 0,
+            lifetimeChipChange: null,
+            handsPlayed: 0,
+          }
         }
-        const lifetimeData = data as LifetimeStats | null
+
+        const lifetime = lifetimeData as LifetimeStats | null
+
         return {
           userId: member.userId,
-          lifetimeChipChange: lifetimeData?.lifetime_chip_change ?? 0,
+          vpipPercent: lifetime?.vpip ?? 0,
+          pfrPercent: lifetime?.pfr ?? 0,
+          lifetimeChipChange: lifetime?.lifetime_chip_change ?? null,
+          handsPlayed: lifetime?.hands_played ?? 0,
         }
       })
 
       const lifetimeStatsResults = await Promise.all(lifetimeStatsPromises)
       const lifetimeStatsMap = new Map(
-        lifetimeStatsResults.map((r) => [r.userId, r.lifetimeChipChange])
+        lifetimeStatsResults.map((r) => [
+          r.userId,
+          {
+            vpipPercent: r.vpipPercent,
+            pfrPercent: r.pfrPercent,
+            lifetimeChipChange: r.lifetimeChipChange,
+            handsPlayed: r.handsPlayed,
+          },
+        ])
       )
 
       // Merge lifetime stats into normalized stats
-      const statsWithLifetime = normalizedStats.map((member) => ({
-        ...member,
-        lifetimeChipChange: lifetimeStatsMap.get(member.userId) ?? null,
-      }))
+      const statsWithLifetime = normalizedStats.map((member) => {
+        const stats = lifetimeStatsMap.get(member.userId)
+        return {
+          ...member,
+          vpipPercent: stats?.vpipPercent ?? 0,
+          pfrPercent: stats?.pfrPercent ?? 0,
+          lifetimeChipChange: stats?.lifetimeChipChange ?? null,
+          handsPlayed: stats?.handsPlayed ?? 0,
+        }
+      })
 
       setStats(statsWithLifetime)
     } catch (error) {
