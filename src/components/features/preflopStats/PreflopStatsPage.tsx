@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { RangeGrid } from '@/components/features/analysis/RangeGrid';
 import { PreflopStatsSidebar } from './PreflopStatsSidebar';
 import type { PreflopStatsPageProps } from './types';
@@ -51,9 +53,18 @@ export function PreflopStatsPage({ userId }: PreflopStatsPageProps) {
   return (
     <div className="flex h-screen">
       {/* Main grid area */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="flex flex-col items-center gap-4 w-full max-w-[80vh]">
-          <h1 className="text-2xl font-bold">Preflop Range Stats</h1>
+      <div className="flex-1 flex flex-col p-8 overflow-auto">
+        <div className="flex items-center gap-3 mb-4 flex-shrink-0">
+          <Link
+            href="/profile"
+            className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Back to Profile
+          </Link>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 w-full max-w-[80vh] mx-auto">
+          <h1 className="text-2xl font-bold">Preflop Stats</h1>
           <p className="text-muted-foreground text-sm">
             {isLoading
               ? 'Loading your stats...'

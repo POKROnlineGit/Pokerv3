@@ -271,24 +271,24 @@ export default function ProfilePage() {
                         <p className="text-3xl font-bold">{pfr.toFixed(1)}%</p>
                       </CardContent>
                     </Card>
+
+                    {/* Preflop Stats Link */}
+                    <Link href="/profile/preflop-stats" className="block rounded-lg group">
+                      <Card className="bg-card backdrop-blur-sm border h-full group-hover:bg-muted/50 transition-colors">
+                        <CardHeader>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <BarChart3 className="h-5 w-5" />
+                            Preflop Stats by Hand
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-muted-foreground">View detailed statistics for each starting hand</p>
+                        </CardContent>
+                      </Card>
+                    </Link>
                   </div>
                 );
               })()}
-
-              {/* Preflop Stats Link */}
-              <Card className="bg-card backdrop-blur-sm border">
-                <Link href="/profile/preflop-stats" className="block hover:bg-muted/50 transition-colors rounded-lg">
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <BarChart3 className="h-5 w-5" />
-                      Preflop Stats by Hand
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground">View detailed statistics for each starting hand</p>
-                  </CardContent>
-                </Link>
-              </Card>
             </TabsContent>
 
             <TabsContent

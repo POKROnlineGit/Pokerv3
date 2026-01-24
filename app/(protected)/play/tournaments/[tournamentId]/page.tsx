@@ -950,6 +950,15 @@ export default function TournamentDetailPage() {
                   disabled={isRegistering}
                   size="lg"
                   className="w-full font-bold text-sm h-12"
+                  style={{
+                    background: 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-1), var(--theme-primary-0))';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))';
+                  }}
                 >
                   {isRegistering ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -969,6 +978,15 @@ export default function TournamentDetailPage() {
                   disabled={isStarting || normalizedParticipants.length < 2}
                   size="lg"
                   className="flex-1 font-bold text-sm h-12"
+                  style={{
+                    background: 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-1), var(--theme-primary-0))';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))';
+                  }}
                 >
                   {isStarting ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1015,9 +1033,9 @@ export default function TournamentDetailPage() {
             {/* Back link */}
             <Link
               href="/play/tournaments"
-              className="inline-flex items-center text-xs text-slate-500 hover:text-white"
+              className="inline-flex items-center text-sm text-slate-500 hover:text-white"
             >
-              <ArrowLeft className="h-3 w-3 mr-1" /> Back to Tournaments
+              <ArrowLeft className="h-4 w-4 mr-1" /> Back to Tournaments
             </Link>
 
             {/* Share to Club */}
@@ -1294,6 +1312,15 @@ export default function TournamentDetailPage() {
                 onClick={handleGoToTable}
                 size="lg"
                 className="w-full font-bold text-sm h-12"
+                style={{
+                  background: 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-1), var(--theme-primary-0))';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))';
+                }}
               >
                 <Table2 className="mr-2 h-4 w-4" />
                 Go to My Table
@@ -1336,9 +1363,9 @@ export default function TournamentDetailPage() {
             </div>
             <Link
               href="/play/tournaments"
-              className="inline-flex items-center text-xs text-slate-500 hover:text-white"
+              className="inline-flex items-center text-sm text-slate-500 hover:text-white"
             >
-              <ArrowLeft className="h-3 w-3 mr-1" /> Back to Tournaments
+              <ArrowLeft className="h-4 w-4 mr-1" /> Back to Tournaments
             </Link>
 
             {/* Share to Club */}

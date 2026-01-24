@@ -4,24 +4,11 @@ import { useState } from 'react'
 import { NormalizedClub, NormalizedClubMember } from '@/lib/types/club'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  Crown,
-  Settings,
-  Copy,
-  LogOut,
-  UserMinus,
-  Ban,
-  Trash2,
-  Users,
-  Lock,
-  Globe,
-} from 'lucide-react'
+import { Crown, Copy, Ban, Users, Lock, Globe } from 'lucide-react'
 import { useToast } from '@/lib/hooks'
-import { ClubSettingsDialog } from './ClubSettingsDialog'
 import { ClubBanDialog } from './ClubBanDialog'
-import { ClubLeaveDialog } from './ClubLeaveDialog'
 import { UserProfileFooter } from '@/components/layout/UserProfileFooter'
 
 interface ClubSidebarProps {
@@ -29,11 +16,8 @@ interface ClubSidebarProps {
   members: NormalizedClubMember[]
   isLeader: boolean
   userId: string
-  onLeave: () => void
   onMemberKicked?: (userId: string) => void
   onMemberBanned?: (userId: string) => void
-  onClubUpdated?: (club: NormalizedClub) => void
-  onClubDisbanded?: () => void
 }
 
 export function ClubSidebar({
@@ -41,16 +25,11 @@ export function ClubSidebar({
   members,
   isLeader,
   userId,
-  onLeave,
   onMemberKicked,
   onMemberBanned,
-  onClubUpdated,
-  onClubDisbanded,
 }: ClubSidebarProps) {
   const { toast } = useToast()
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [banDialogOpen, setBanDialogOpen] = useState(false)
-  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false)
   const [selectedMember, setSelectedMember] = useState<NormalizedClubMember | null>(null)
 
   const copyInviteLink = () => {
@@ -70,14 +49,16 @@ export function ClubSidebar({
   return (
     <Card className="flex flex-col h-[calc(100vh-8rem)] bg-card backdrop-blur-sm w-[280px] rounded-lg shadow-sm">
       {/* Club info header */}
-      <div className="p-4 border-b">
+      <CardHeader className="flex-shrink-0 border-b p-4 rounded-t-lg transition-none">
         <div className="flex items-center gap-2 mb-2">
           {club.isPublic ? (
             <Globe className="h-4 w-4 text-muted-foreground" />
           ) : (
             <Lock className="h-4 w-4 text-muted-foreground" />
           )}
-          <h2 className="font-semibold truncate">{club.name}</h2>
+          <CardTitle className="text-2xl font-bold text-white tracking-tight truncate">
+            {club.name}
+          </CardTitle>
         </div>
         {club.description && (
           <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
@@ -98,7 +79,7 @@ export function ClubSidebar({
             Invite
           </Button>
         </div>
-      </div>
+      </CardHeader>
 
       {/* Members list */}
       <div className="flex-1 overflow-hidden">
@@ -134,48 +115,10 @@ export function ClubSidebar({
         </ScrollArea>
       </div>
 
-      {/* Actions footer */}
-      <div className="p-3 border-t space-y-2">
-        {isLeader && (
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings className="h-4 w-4 mr-2" />
-            Club Settings
-          </Button>
-        )}
-        <Button
-          variant="destructive"
-          className="w-full"
-          onClick={() => setLeaveDialogOpen(true)}
-        >
-          {isLeader ? (
-            <>
-              <Trash2 className="h-4 w-4 mr-2" />
-              Disband Club
-            </>
-          ) : (
-            <>
-              <LogOut className="h-4 w-4 mr-2" />
-              Leave Club
-            </>
-          )}
-        </Button>
-      </div>
-
       {/* User Profile Footer */}
       <UserProfileFooter className="rounded-b-lg" />
 
       {/* Dialogs */}
-      <ClubSettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        club={club}
-        onClubUpdated={onClubUpdated}
-      />
-
       <ClubBanDialog
         open={banDialogOpen}
         onOpenChange={setBanDialogOpen}
@@ -186,15 +129,6 @@ export function ClubSidebar({
             onMemberBanned?.(selectedMember.userId)
           }
         }}
-      />
-
-      <ClubLeaveDialog
-        open={leaveDialogOpen}
-        onOpenChange={setLeaveDialogOpen}
-        clubId={club.id}
-        isLeader={isLeader}
-        onLeave={onLeave}
-        onDisbanded={onClubDisbanded}
       />
     </Card>
   )

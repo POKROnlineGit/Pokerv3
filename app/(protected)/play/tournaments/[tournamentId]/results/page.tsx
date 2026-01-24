@@ -379,9 +379,9 @@ export default function TournamentResultsPage() {
           <h3 className="font-bold text-sm text-white">Tournament Results</h3>
           <Link
             href="/play/tournaments"
-            className="inline-flex items-center text-xs text-slate-500 hover:text-white"
+            className="inline-flex items-center text-sm text-slate-500 hover:text-white"
           >
-            <ArrowLeft className="h-3 w-3 mr-1" /> Back to Tournaments
+            <ArrowLeft className="h-4 w-4 mr-1" /> Back to Tournaments
           </Link>
         </div>
 

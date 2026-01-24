@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { Card } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -11,7 +10,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, BarChart3 } from 'lucide-react';
 import type { PreflopStatsSidebarProps } from './types';
 import type { PlayerCountFilter, PokerPosition, StatType } from '@/lib/types/preflopStats';
 import { UserProfileFooter } from '@/components/layout/UserProfileFooter';
@@ -80,15 +78,11 @@ export function PreflopStatsSidebar({
   return (
     <Card className="flex flex-col h-[calc(100vh-8rem)] bg-card backdrop-blur-sm w-[280px] rounded-lg shadow-sm">
       {/* Header */}
-      <div className="p-4 border-b">
-        <div className="flex items-center gap-2">
-          <Link href="/profile" className="p-1 -ml-1 hover:bg-muted/50 rounded transition-colors">
-            <ArrowLeft className="h-4 w-4 text-muted-foreground" />
-          </Link>
-          <BarChart3 className="h-5 w-5 text-primary" />
-          <h2 className="font-semibold">Preflop Statistics</h2>
-        </div>
-      </div>
+      <CardHeader className="flex-shrink-0 border-b py-2 rounded-t-lg transition-none">
+        <CardTitle className="text-2xl font-bold text-white tracking-tight text-center transition-none">
+          Preflop Stats
+        </CardTitle>
+      </CardHeader>
 
       {/* Filters Section */}
       <div className="p-4 space-y-4 border-b">

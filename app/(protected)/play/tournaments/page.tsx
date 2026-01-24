@@ -114,8 +114,8 @@ export default function CreateTournamentPage() {
       }
     >
       <div className="space-y-3">
-        <Link href="/play" className="inline-flex items-center text-xs text-slate-500 hover:text-white">
-          <ArrowLeft className="h-3 w-3 mr-1" /> Back
+        <Link href="/play" className="inline-flex items-center text-sm text-slate-500 hover:text-white">
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back to Modes
         </Link>
 
         <Card className="bg-slate-800/50 border-slate-700">

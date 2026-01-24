@@ -494,10 +494,19 @@ export default function OnlinePlayPage() {
                           !canAfford
                             ? "opacity-50 cursor-not-allowed bg-slate-800/20 border-slate-800"
                             : selectedVariantSlug === variant.slug
-                            ? "bg-emerald-950/30 border-emerald-500 ring-1 ring-emerald-500/50"
+                            ? "ring-1"
                             : "bg-slate-800/40 border-slate-700 hover:border-slate-600 hover:bg-slate-800/60"
                         }
                       `}
+                      style={
+                        canAfford && selectedVariantSlug === variant.slug
+                          ? {
+                              backgroundColor: 'color-mix(in srgb, var(--theme-accent-0) 20%, transparent)',
+                              borderColor: 'var(--theme-accent-0)',
+                              boxShadow: '0 0 0 1px color-mix(in srgb, var(--theme-accent-0) 50%, transparent)',
+                            }
+                          : undefined
+                      }
                     >
                       <div className="space-y-1">
                         <div
@@ -521,7 +530,10 @@ export default function OnlinePlayPage() {
                         </div>
                       </div>
                       {selectedVariantSlug === variant.slug && canAfford && (
-                        <div className="absolute top-2 right-2 h-2 w-2 rounded-full bg-emerald-500" />
+                        <div
+                          className="absolute top-2 right-2 h-2 w-2 rounded-full"
+                          style={{ backgroundColor: 'var(--theme-accent-0)' }}
+                        />
                       )}
                     </button>
                   );
@@ -541,7 +553,16 @@ export default function OnlinePlayPage() {
         <>
           <Button
             size="lg"
-            className="w-full font-bold text-lg h-14 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 shadow-lg shadow-emerald-900/20"
+            className="w-full font-bold text-lg h-14 shadow-lg"
+            style={{
+              background: 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-1), var(--theme-primary-0))';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))';
+            }}
             disabled={
               checkingGame ||
               inQueue ||
@@ -558,9 +579,6 @@ export default function OnlinePlayPage() {
             )}
             Find Game
           </Button>
-          <p className="text-center text-xs text-slate-500 mt-3">
-            You will be placed in a queue until a match is found.
-          </p>
         </>
       }
     >

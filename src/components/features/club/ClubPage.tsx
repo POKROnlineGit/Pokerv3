@@ -253,11 +253,8 @@ export function ClubPage({ club: initialClub, isLeader: initialIsLeader, userId,
                 members={members}
                 isLeader={isLeader}
                 userId={userId}
-                onLeave={onLeave}
                 onMemberKicked={handleMemberRemoved}
                 onMemberBanned={handleMemberRemoved}
-                onClubUpdated={handleClubUpdated}
-                onClubDisbanded={onLeave}
               />
             </div>
           )}

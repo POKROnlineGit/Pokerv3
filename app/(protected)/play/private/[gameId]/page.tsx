@@ -203,7 +203,10 @@ export default function PrivateGamePage() {
           {isHostSpectator && (
             <div className="mb-4">
               <Button
-                className="w-full bg-amber-600 hover:bg-amber-700"
+                className="w-full"
+                style={{ backgroundColor: 'var(--theme-accent-0)', color: 'white' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--theme-accent-1)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)'}
                 onClick={() => hostSitDown()}
               >
                 <Play className="w-4 h-4 mr-2" /> Sit Down
@@ -504,14 +507,20 @@ export default function PrivateGamePage() {
                     </div>
                   ) : wasRejected ? (
                     <Button
-                      className="w-full bg-emerald-600 hover:bg-emerald-700"
+                      className="w-full"
+                      style={{ backgroundColor: 'var(--theme-accent-0)', color: 'white' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--theme-accent-1)'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)'}
                       onClick={requestSeat}
                     >
                       <UserPlus className="w-4 h-4 mr-2" /> Request Seat Again
                     </Button>
                   ) : (
                     <Button
-                      className="w-full bg-emerald-600 hover:bg-emerald-700"
+                      className="w-full"
+                      style={{ backgroundColor: 'var(--theme-accent-0)', color: 'white' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--theme-accent-1)'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)'}
                       onClick={requestSeat}
                     >
                       <UserPlus className="w-4 h-4 mr-2" /> Request Seat
@@ -538,14 +547,20 @@ export default function PrivateGamePage() {
             </div>
           ) : wasRejected ? (
             <Button
-              className="w-full bg-emerald-600 hover:bg-emerald-700"
+              className="w-full"
+              style={{ backgroundColor: 'var(--theme-accent-0)', color: 'white' }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--theme-accent-1)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)'}
               onClick={requestSeat}
             >
               <UserPlus className="w-4 h-4 mr-2" /> Request Seat Again
             </Button>
           ) : (
             <Button
-              className="w-full bg-emerald-600 hover:bg-emerald-700"
+              className="w-full"
+              style={{ backgroundColor: 'var(--theme-accent-0)', color: 'white' }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--theme-accent-1)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--theme-accent-0)'}
               onClick={requestSeat}
             >
               <UserPlus className="w-4 h-4 mr-2" /> Request Seat
@@ -563,7 +578,16 @@ export default function PrivateGamePage() {
         <>
           {gameState.status === "waiting" ? (
             <Button
-              className="bg-emerald-600 hover:bg-emerald-700 flex-[0_0_48%]"
+              className="flex-[0_0_48%]"
+              style={{
+                background: 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-1), var(--theme-primary-0))';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))';
+              }}
               onClick={startGame}
             >
               <Play className="w-4 h-4 mr-2" /> Start

@@ -174,9 +174,9 @@ function TournamentHUD({
       {/* Back to Tournament Link */}
       <Link
         href={`/play/tournaments`}
-        className="inline-flex items-center text-xs text-slate-500 hover:text-white"
+        className="inline-flex items-center text-sm text-slate-500 hover:text-white"
       >
-        <ArrowLeft className="h-3 w-3 mr-1" /> Tournament Lobby
+        <ArrowLeft className="h-4 w-4 mr-1" /> Tournament Lobby
       </Link>
     </div>
   );
