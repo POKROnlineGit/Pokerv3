@@ -31,6 +31,9 @@ import { createClientComponentClient } from "@/lib/api/supabase/client";
 import { TournamentRegistrationContent } from "@/components/features/tournament/TournamentRegistrationContent";
 import { TournamentOverview } from "@/components/features/tournament/TournamentOverview";
 import { TournamentTableList } from "@/components/features/tournament/TournamentTableList";
+import { TournamentCancelDialog } from "@/components/features/tournament/TournamentCancelDialog";
+import { TournamentBanDialog } from "@/components/features/tournament/TournamentBanDialog";
+import { TournamentLeaveDialog } from "@/components/features/tournament/TournamentLeaveDialog";
 import {
   Loader2,
   Users,
@@ -174,7 +177,14 @@ export default function TournamentDetailPage() {
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const [isBanning, setIsBanning] = useState<string | null>(null); // Tracks which player is being banned
   const [isLeaving, setIsLeaving] = useState(false);
+  const [isOpeningRegistration, setIsOpeningRegistration] = useState(false);
   const hasCheckedRef = useRef(false);
+
+  // Dialog state
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showBanDialog, setShowBanDialog] = useState(false);
+  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+  const [banTargetPlayer, setBanTargetPlayer] = useState<{id: string, name: string} | null>(null);
 
   // Spectator loading state (for button)
   const [isSpectatingLoading, setIsSpectatingLoading] = useState<string | null>(null);
@@ -212,7 +222,7 @@ export default function TournamentDetailPage() {
         ? (tournamentData.status as TournamentStatusType)
         : normalized.status;
 
-    if (currentStatus === "registration") {
+    if (currentStatus === "registration" || currentStatus === "setup") {
       setSettingsForm({
         maxPlayersPerTable: normalized.maxPlayersPerTable?.toString() || "9",
         startingStack: normalized.startingStack?.toString() || "10000",
@@ -242,20 +252,10 @@ export default function TournamentDetailPage() {
     );
 
     if (myParticipant && myParticipant.currentTableId) {
-      // Join the table game
-      const result = await joinTable(myParticipant.currentTableId);
-      if ("error" in result) {
-        toast({
-          title: "Error Joining Table",
-          description: result.error || "Failed to join tournament table",
-          variant: "destructive",
-        });
-      } else {
-        // Navigate to tournament game page
-        router.push(`/play/tournaments/game/${myParticipant.currentTableId}`);
-      }
+      // Navigate to tournament game page - the game page will handle joining
+      router.push(`/play/tournaments/game/${myParticipant.currentTableId}`);
     }
-  }, [tournamentId, currentUserId, getTournamentState, joinTable, router, toast]);
+  }, [tournamentId, currentUserId, getTournamentState, router]);
 
   // Handle player transferred
   const handlePlayerTransferred = useCallback(async (data: TournamentPlayerTransferredEvent) => {
@@ -417,18 +417,14 @@ export default function TournamentDetailPage() {
 
         const isHost = hostId === currentUserId;
 
-        // Handle setup status
-        if (status === "setup") {
-          if (isHost) {
-            router.replace(`/play/tournaments/setup/${tournamentId}`);
-          } else {
-            toast({
-              title: "Tournament Not Available",
-              description: "This tournament is not currently open for registration.",
-              variant: "default",
-            });
-            router.replace("/play/tournaments");
-          }
+        // Handle setup status - only hosts can access during setup phase
+        if (status === "setup" && !isHost) {
+          toast({
+            title: "Tournament Not Available",
+            description: "This tournament is not currently open for registration.",
+            variant: "default",
+          });
+          router.replace("/play/tournaments");
           return;
         }
 
@@ -654,10 +650,7 @@ export default function TournamentDetailPage() {
   };
 
   const handleCancel = async () => {
-    if (!confirm("Are you sure you want to cancel this tournament? This cannot be undone.")) {
-      return;
-    }
-
+    setShowCancelDialog(false);
     setIsCancelling(true);
     try {
       const response = await tournamentAdminAction(tournamentId, "CANCEL_TOURNAMENT");
@@ -692,10 +685,8 @@ export default function TournamentDetailPage() {
   };
 
   const handleBanPlayer = async (playerId: string) => {
-    if (!confirm("Are you sure you want to ban this player from the tournament?")) {
-      return;
-    }
-
+    setShowBanDialog(false);
+    setBanTargetPlayer(null);
     setIsBanning(playerId);
     try {
       const response = await banPlayer(tournamentId, playerId);
@@ -727,11 +718,13 @@ export default function TournamentDetailPage() {
     }
   };
 
-  const handleLeaveTournament = async () => {
-    if (!confirm("Are you sure you want to leave this tournament?")) {
-      return;
-    }
+  const openBanDialog = (playerId: string, playerName: string) => {
+    setBanTargetPlayer({ id: playerId, name: playerName });
+    setShowBanDialog(true);
+  };
 
+  const handleLeaveTournament = async () => {
+    setShowLeaveDialog(false);
     setIsLeaving(true);
     try {
       const response = await unregisterTournament(tournamentId);
@@ -756,6 +749,38 @@ export default function TournamentDetailPage() {
       });
     } finally {
       setIsLeaving(false);
+    }
+  };
+
+  const handleOpenRegistration = async () => {
+    setIsOpeningRegistration(true);
+    try {
+      const response = await tournamentAdminAction(tournamentId, "OPEN_REGISTRATION");
+      if ("error" in response) {
+        toast({
+          title: "Error Opening Registration",
+          description: response.error,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Registration Opened",
+          description: "Players can now register for the tournament",
+        });
+        // Refresh state
+        const updated = await getTournamentState(tournamentId);
+        if (!("error" in updated)) {
+          setTournamentData(updated as TournamentStateResponse);
+        }
+      }
+    } catch (error: unknown) {
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setIsOpeningRegistration(false);
     }
   };
 
@@ -907,9 +932,10 @@ export default function TournamentDetailPage() {
   // RENDER
   // ============================================
 
-  // Registration phase: use tableContent for main area, minimal sidebar
-  if (status === "registration") {
+  // Setup and Registration phase: use tableContent for main area, minimal sidebar
+  if (status === "setup" || status === "registration") {
     return (
+      <>
       <PlayLayout
         title={normalizedTournament.title || "Tournament"}
         tableContent={
@@ -921,7 +947,7 @@ export default function TournamentDetailPage() {
             currentUserId={currentUserId}
             participantCount={participantCount}
             canRegister={canRegister}
-            onBanPlayer={handleBanPlayer}
+            onBanPlayer={openBanDialog}
             isBanning={isBanning}
           />
         }
@@ -970,33 +996,58 @@ export default function TournamentDetailPage() {
               ) : null
             )}
 
-            {/* Host buttons - Start and End side by side */}
+            {/* Host buttons - Open/Start and End side by side */}
             {isHost && (
               <div className="flex gap-2">
+                {status === "setup" ? (
+                  <Button
+                    onClick={handleOpenRegistration}
+                    disabled={isOpeningRegistration}
+                    size="lg"
+                    className="flex-1 font-bold text-sm h-12"
+                    style={{
+                      background: 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-1), var(--theme-primary-0))';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))';
+                    }}
+                  >
+                    {isOpeningRegistration ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Users className="mr-2 h-4 w-4" />
+                    )}
+                    Open
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleStart}
+                    disabled={isStarting || normalizedParticipants.length < 2}
+                    size="lg"
+                    className="flex-1 font-bold text-sm h-12"
+                    style={{
+                      background: 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-1), var(--theme-primary-0))';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))';
+                    }}
+                  >
+                    {isStarting ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Play className="mr-2 h-4 w-4" />
+                    )}
+                    Start
+                  </Button>
+                )}
                 <Button
-                  onClick={handleStart}
-                  disabled={isStarting || normalizedParticipants.length < 2}
-                  size="lg"
-                  className="flex-1 font-bold text-sm h-12"
-                  style={{
-                    background: 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-1), var(--theme-primary-0))';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'linear-gradient(to right, var(--theme-primary-0), var(--theme-primary-1))';
-                  }}
-                >
-                  {isStarting ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Play className="mr-2 h-4 w-4" />
-                  )}
-                  Start
-                </Button>
-                <Button
-                  onClick={handleCancel}
+                  onClick={() => setShowCancelDialog(true)}
                   disabled={isCancelling}
                   size="lg"
                   variant="destructive"
@@ -1019,7 +1070,9 @@ export default function TournamentDetailPage() {
           {/* Header Info */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-lg text-white">Tournament Lobby</h3>
+              <h3 className="font-bold text-lg text-white">
+                {status === "setup" ? "Tournament Setup" : "Tournament Lobby"}
+              </h3>
               {isHost && (
                 <Badge
                   variant="secondary"
@@ -1062,7 +1115,7 @@ export default function TournamentDetailPage() {
             </div>
           )}
 
-          {isHost && normalizedParticipants.length < 2 && (
+          {isHost && status === "registration" && normalizedParticipants.length < 2 && (
             <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
               <p className="text-amber-400 text-xs">
                 Need at least 2 players to start
@@ -1262,6 +1315,31 @@ export default function TournamentDetailPage() {
           )}
         </div>
       </PlayLayout>
+
+      {/* Dialogs */}
+      <TournamentCancelDialog
+        open={showCancelDialog}
+        onOpenChange={setShowCancelDialog}
+        onConfirm={handleCancel}
+        isLoading={isCancelling}
+      />
+      <TournamentBanDialog
+        open={showBanDialog}
+        onOpenChange={(open) => {
+          setShowBanDialog(open);
+          if (!open) setBanTargetPlayer(null);
+        }}
+        onConfirm={() => banTargetPlayer && handleBanPlayer(banTargetPlayer.id)}
+        isLoading={isBanning !== null}
+        playerName={banTargetPlayer?.name}
+      />
+      <TournamentLeaveDialog
+        open={showLeaveDialog}
+        onOpenChange={setShowLeaveDialog}
+        onConfirm={handleLeaveTournament}
+        isLoading={isLeaving}
+      />
+    </>
     );
   }
 
@@ -1272,6 +1350,7 @@ export default function TournamentDetailPage() {
   if (status === "active" || status === "paused") {
     // Tournament overview with table list
     return (
+      <>
       <PlayLayout
         title={normalizedTournament.title || "Tournament"}
         tableContent={
@@ -1285,8 +1364,8 @@ export default function TournamentDetailPage() {
               currentBlindLevel={currentBlindLevel}
               levelEndsAt={levelEndsAt ?? null}
               onPauseResume={handlePauseResume}
-              onCancel={handleCancel}
-              onBanPlayer={handleBanPlayer}
+              onCancel={() => setShowCancelDialog(true)}
+              onBanPlayer={openBanDialog}
               isPausing={isPausing}
               isCancelling={isCancelling}
               isBanning={isBanning}
@@ -1330,7 +1409,7 @@ export default function TournamentDetailPage() {
             {/* Leave Tournament button for non-host players */}
             {!isHost && isRegistered && (
               <Button
-                onClick={handleLeaveTournament}
+                onClick={() => setShowLeaveDialog(true)}
                 disabled={isLeaving}
                 size="lg"
                 variant="outline"
@@ -1433,6 +1512,31 @@ export default function TournamentDetailPage() {
           )}
         </div>
       </PlayLayout>
+
+      {/* Dialogs */}
+      <TournamentCancelDialog
+        open={showCancelDialog}
+        onOpenChange={setShowCancelDialog}
+        onConfirm={handleCancel}
+        isLoading={isCancelling}
+      />
+      <TournamentBanDialog
+        open={showBanDialog}
+        onOpenChange={(open) => {
+          setShowBanDialog(open);
+          if (!open) setBanTargetPlayer(null);
+        }}
+        onConfirm={() => banTargetPlayer && handleBanPlayer(banTargetPlayer.id)}
+        isLoading={isBanning !== null}
+        playerName={banTargetPlayer?.name}
+      />
+      <TournamentLeaveDialog
+        open={showLeaveDialog}
+        onOpenChange={setShowLeaveDialog}
+        onConfirm={handleLeaveTournament}
+        isLoading={isLeaving}
+      />
+    </>
     );
   }
 
@@ -1443,29 +1547,7 @@ export default function TournamentDetailPage() {
   return (
     <PlayLayout
       title={normalizedTournament.title || "Tournament"}
-      footer={
-        <div className="flex flex-col gap-2 w-full">
-          {/* Cancel button for setup status */}
-          {isHost && status === "setup" && (
-            <Button
-              onClick={handleCancel}
-              disabled={isCancelling}
-              size="lg"
-              variant="destructive"
-              className="w-full font-bold text-sm h-12"
-            >
-              {isCancelling ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <Square className="mr-2 h-4 w-4" />
-                  Cancel
-                </>
-              )}
-            </Button>
-          )}
-        </div>
-      }
+      footer={null}
     >
       <div className="space-y-3 p-0">
         <Link
@@ -1495,13 +1577,6 @@ export default function TournamentDetailPage() {
             <p className="text-blue-400 text-xs font-medium truncate flex-1 min-w-0">
               You are the host
             </p>
-            {status === "setup" && (
-              <Link href={`/play/tournaments/setup/${tournamentId}`}>
-                <Button variant="link" size="sm" className="text-blue-400 text-xs h-auto p-0 ml-1">
-                  Settings →
-                </Button>
-              </Link>
-            )}
           </div>
         )}
 

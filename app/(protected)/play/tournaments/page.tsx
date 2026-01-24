@@ -52,10 +52,10 @@ export default function CreateTournamentPage() {
       if (response.tournamentId) {
         toast({
           title: "Tournament Created",
-          description: "Configure your tournament settings before opening registration",
+          description: "Your tournament is ready. Configure settings and open registration when ready.",
           variant: "default",
         });
-        router.push(`/play/tournaments/setup/${response.tournamentId}`);
+        router.push(`/play/tournaments/${response.tournamentId}`);
       } else {
         toast({
           title: "Error Creating Tournament",

@@ -65,15 +65,24 @@ function clearCachedProfile(): void {
 export function useUserProfile(): UserProfileData {
   const supabase = createClientComponentClient();
 
-  // Initialize from cache to prevent flash
-  const cached = getCachedProfile();
-  const [username, setUsername] = useState<string | null>(cached.username);
-  const [chips, setChips] = useState<number | null>(cached.chips);
-  const [userId, setUserId] = useState<string | null>(cached.userId);
-  const [isLoading, setIsLoading] = useState(!cached.username);
+  // Initialize with null/true so server and client first render match (avoids hydration mismatch).
+  // Cache is applied in useEffect after mount to prevent flash without breaking SSR.
+  const [username, setUsername] = useState<string | null>(null);
+  const [chips, setChips] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Fetch user profile
   useEffect(() => {
+    // Apply cache immediately on client to prevent flash (runs only after mount, so safe for hydration)
+    const cached = getCachedProfile();
+    if (cached.username != null) {
+      setUsername(cached.username);
+      setChips(cached.chips);
+      if (cached.userId) setUserId(cached.userId);
+      setIsLoading(false);
+    }
+
     const fetchProfile = async () => {
       const {
         data: { user },

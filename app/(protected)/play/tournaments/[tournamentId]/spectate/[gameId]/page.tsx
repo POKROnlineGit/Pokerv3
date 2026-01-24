@@ -28,18 +28,10 @@ import {
   isStatusInfo,
 } from "@/lib/types/tournament";
 import {
-  Users,
-  Clock,
-  TrendingUp,
-  Table2,
   Trophy,
   AlertTriangle,
   ArrowLeft,
   Eye,
-  Play,
-  Pause,
-  Square,
-  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -119,8 +111,6 @@ export default function TournamentSpectatePage() {
   const [tournamentInfo, setTournamentInfo] = useState<TournamentStateResponse | null>(null);
   const [showLevelWarning, setShowLevelWarning] = useState(false);
   const [levelWarningSeconds, setLevelWarningSeconds] = useState<number>(0);
-  const [isPausing, setIsPausing] = useState(false);
-  const [isCancelling, setIsCancelling] = useState(false);
 
   // Refs
   const tournamentJoinedRef = useRef<boolean>(false);
@@ -167,8 +157,6 @@ export default function TournamentSpectatePage() {
   const tournamentStatus: TournamentStatusType = tournamentInfo
     ? getStatusString(tournamentInfo.status, tournamentInfo.tournament?.status)
     : "active";
-
-  const isHost = currentUserId === tournamentInfo?.hostId;
 
   // Get table index for display
   const tableIndex = useMemo(() => {
@@ -410,52 +398,6 @@ export default function TournamentSpectatePage() {
     }
   }, [isDisconnected, setStatus, clearStatus]);
 
-  // Host actions
-  const handlePauseResume = async () => {
-    if (!tournamentId) return;
-    setIsPausing(true);
-    const socket = getSocket();
-    const action = tournamentStatus === "paused" ? "RESUME_TOURNAMENT" : "PAUSE_TOURNAMENT";
-
-    socket.emit(
-      "tournament_admin_action",
-      { tournamentId, action },
-      (response: any) => {
-        setIsPausing(false);
-        if (response?.error) {
-          toast({
-            title: "Error",
-            description: response.error,
-            variant: "destructive",
-          });
-        }
-      }
-    );
-  };
-
-  const handleCancel = async () => {
-    if (!tournamentId) return;
-    setIsCancelling(true);
-    const socket = getSocket();
-
-    socket.emit(
-      "tournament_admin_action",
-      { tournamentId, action: "CANCEL_TOURNAMENT" },
-      (response: any) => {
-        setIsCancelling(false);
-        if (response?.error) {
-          toast({
-            title: "Error",
-            description: response.error,
-            variant: "destructive",
-          });
-        } else {
-          router.push(`/play/tournaments/${tournamentId}`);
-        }
-      }
-    );
-  };
-
   // Table content
   const tableContent = (
     <>
@@ -566,46 +508,6 @@ export default function TournamentSpectatePage() {
           </div>
         )}
       </div>
-
-      {/* Host controls */}
-      {isHost && (
-        <>
-          <Separator className="bg-slate-800" />
-          <div className="space-y-2">
-            <p className="text-xs text-slate-400 font-medium">Host Controls</p>
-            <div className="flex gap-2">
-              <Button
-                onClick={handlePauseResume}
-                disabled={isPausing}
-                variant="outline"
-                size="sm"
-                className="flex-1 text-xs"
-              >
-                {isPausing ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : tournamentStatus === "paused" ? (
-                  <Play className="h-3 w-3" />
-                ) : (
-                  <Pause className="h-3 w-3" />
-                )}
-              </Button>
-              <Button
-                onClick={handleCancel}
-                disabled={isCancelling}
-                variant="destructive"
-                size="sm"
-                className="text-xs px-3"
-              >
-                {isCancelling ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Square className="h-3 w-3" />
-                )}
-              </Button>
-            </div>
-          </div>
-        </>
-      )}
 
       <Separator className="bg-slate-800" />
 

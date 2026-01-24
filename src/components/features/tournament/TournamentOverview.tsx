@@ -37,7 +37,7 @@ interface TournamentOverviewProps {
   levelEndsAt: string | null;
   onPauseResume?: () => void;
   onCancel?: () => void;
-  onBanPlayer?: (playerId: string) => void;
+  onBanPlayer?: (playerId: string, playerName: string) => void;
   isPausing?: boolean;
   isCancelling?: boolean;
   isBanning?: string | null;
@@ -402,7 +402,7 @@ export function TournamentOverview({
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => onBanPlayer(p.odanUserId)}
+                              onClick={() => onBanPlayer(p.odanUserId, p.username)}
                               disabled={isBanning === p.odanUserId}
                               className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/20"
                               title="Ban player"
