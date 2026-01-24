@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { NormalizedClub, NormalizedClubMember } from '@/lib/types/club'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Crown,
@@ -67,7 +68,7 @@ export function ClubSidebar({
   }
 
   return (
-    <div className="flex flex-col h-full border-l bg-card w-[280px]">
+    <Card className="flex flex-col h-[calc(100vh-8rem)] bg-card backdrop-blur-sm w-[280px] rounded-lg shadow-sm">
       {/* Club info header */}
       <div className="p-4 border-b">
         <div className="flex items-center gap-2 mb-2">
@@ -165,7 +166,7 @@ export function ClubSidebar({
       </div>
 
       {/* User Profile Footer */}
-      <UserProfileFooter />
+      <UserProfileFooter className="rounded-b-lg" />
 
       {/* Dialogs */}
       <ClubSettingsDialog
@@ -195,6 +196,6 @@ export function ClubSidebar({
         onLeave={onLeave}
         onDisbanded={onClubDisbanded}
       />
-    </div>
+    </Card>
   )
 }

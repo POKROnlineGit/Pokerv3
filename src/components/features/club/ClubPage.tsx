@@ -13,7 +13,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ClubChat } from './ClubChat'
 import { ClubStats } from './ClubStats'
 import { ClubSidebar } from './ClubSidebar'
-import { Loader2, MessageSquare, BarChart3 } from 'lucide-react'
+import { ClubSettingsDialog } from './ClubSettingsDialog'
+import { ClubLeaveDialog } from './ClubLeaveDialog'
+import { Button } from '@/components/ui/button'
+import { Loader2, MessageSquare, BarChart3, Settings, LogOut, Trash2 } from 'lucide-react'
 import { useToast } from '@/lib/hooks'
 import { useIsMobile } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
@@ -35,6 +38,8 @@ export function ClubPage({ club: initialClub, isLeader: initialIsLeader, userId,
   const [members, setMembers] = useState<NormalizedClubMember[]>([])
   const [isLeader, setIsLeader] = useState(initialIsLeader)
   const [showSidebar, setShowSidebar] = useState(!isMobile)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false)
 
   // Real-time updates via Supabase Realtime
   const { disbanded, memberCount } = useClubRealtime(club.id, {
@@ -143,6 +148,10 @@ export function ClubPage({ club: initialClub, isLeader: initialIsLeader, userId,
                     <BarChart3 className="h-4 w-4" />
                     Stats
                   </TabsTrigger>
+                  <TabsTrigger value="settings" className="gap-2">
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </TabsTrigger>
                 </TabsList>
               </div>
 
@@ -153,6 +162,70 @@ export function ClubPage({ club: initialClub, isLeader: initialIsLeader, userId,
               <TabsContent value="stats" className="flex-1 m-0 overflow-auto">
                 <ClubStats clubId={club.id} />
               </TabsContent>
+
+              <TabsContent value="settings" className="flex-1 m-0 overflow-auto p-6">
+                <div className="max-w-md space-y-6">
+                  <div>
+                    <h2 className="text-lg font-semibold mb-4">Club Settings</h2>
+
+                    {/* Admin Settings */}
+                    {isLeader && (
+                      <div className="space-y-3 mb-6">
+                        <h3 className="text-sm font-medium text-muted-foreground">Admin</h3>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start"
+                          onClick={() => setSettingsOpen(true)}
+                        >
+                          <Settings className="h-4 w-4 mr-2" />
+                          Edit Club Settings
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Member Actions */}
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-medium text-muted-foreground">
+                        {isLeader ? 'Danger Zone' : 'Membership'}
+                      </h3>
+                      <Button
+                        variant="destructive"
+                        className="w-full justify-start"
+                        onClick={() => setLeaveDialogOpen(true)}
+                      >
+                        {isLeader ? (
+                          <>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Disband Club
+                          </>
+                        ) : (
+                          <>
+                            <LogOut className="h-4 w-4 mr-2" />
+                            Leave Club
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dialogs */}
+                <ClubSettingsDialog
+                  open={settingsOpen}
+                  onOpenChange={setSettingsOpen}
+                  club={club}
+                  onClubUpdated={handleClubUpdated}
+                />
+
+                <ClubLeaveDialog
+                  open={leaveDialogOpen}
+                  onOpenChange={setLeaveDialogOpen}
+                  clubId={club.id}
+                  isLeader={isLeader}
+                  onLeave={onLeave}
+                  onDisbanded={onLeave}
+                />
+              </TabsContent>
             </Tabs>
           </div>
 
@@ -161,7 +234,7 @@ export function ClubPage({ club: initialClub, isLeader: initialIsLeader, userId,
             <div className={cn(
               isMobile
                 ? "fixed inset-0 z-50 bg-background"
-                : "w-72 flex-shrink-0"
+                : "w-[280px] flex-shrink-0 flex items-center pr-4"
             )}>
               {isMobile && (
                 <div className="flex items-center justify-between p-3 border-b">

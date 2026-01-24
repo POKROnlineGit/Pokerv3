@@ -276,14 +276,19 @@ export default function ProfilePage() {
               })()}
 
               {/* Preflop Stats Link */}
-              <div className="pt-4">
-                <Button variant="outline" asChild>
-                  <Link href="/profile/preflop-stats">
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    View Preflop Stats by Hand
-                  </Link>
-                </Button>
-              </div>
+              <Card className="bg-card backdrop-blur-sm border">
+                <Link href="/profile/preflop-stats" className="block hover:bg-muted/50 transition-colors rounded-lg">
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5" />
+                      Preflop Stats by Hand
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground">View detailed statistics for each starting hand</p>
+                  </CardContent>
+                </Link>
+              </Card>
             </TabsContent>
 
             <TabsContent

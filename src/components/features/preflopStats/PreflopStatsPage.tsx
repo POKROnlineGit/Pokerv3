@@ -51,7 +51,7 @@ export function PreflopStatsPage({ userId }: PreflopStatsPageProps) {
   return (
     <div className="flex h-screen">
       {/* Main grid area */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-background">
+      <div className="flex-1 flex items-center justify-center p-8">
         <div className="flex flex-col items-center gap-4 w-full max-w-[80vh]">
           <h1 className="text-2xl font-bold">Preflop Range Stats</h1>
           <p className="text-muted-foreground text-sm">
@@ -74,13 +74,15 @@ export function PreflopStatsPage({ userId }: PreflopStatsPageProps) {
       </div>
 
       {/* Sidebar */}
-      <PreflopStatsSidebar
-        filters={filters}
-        onFiltersChange={setFilters}
-        hoveredHand={hoveredHand}
-        hoveredHandStats={hoveredHandStats}
-        isLoading={isLoading}
-      />
+      <div className="flex-shrink-0 flex items-center pr-4">
+        <PreflopStatsSidebar
+          filters={filters}
+          onFiltersChange={setFilters}
+          hoveredHand={hoveredHand}
+          hoveredHandStats={hoveredHandStats}
+          isLoading={isLoading}
+        />
+      </div>
     </div>
   );
 }

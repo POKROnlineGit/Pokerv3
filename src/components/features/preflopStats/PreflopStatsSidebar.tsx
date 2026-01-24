@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -77,7 +78,7 @@ export function PreflopStatsSidebar({
   };
 
   return (
-    <div className="flex flex-col h-full border-l bg-card w-[280px]">
+    <Card className="flex flex-col h-[calc(100vh-8rem)] bg-card backdrop-blur-sm w-[280px] rounded-lg shadow-sm">
       {/* Header */}
       <div className="p-4 border-b">
         <div className="flex items-center gap-2">
@@ -244,7 +245,7 @@ export function PreflopStatsSidebar({
       </ScrollArea>
 
       {/* User Profile Footer */}
-      <UserProfileFooter />
-    </div>
+      <UserProfileFooter className="rounded-b-lg" />
+    </Card>
   );
 }

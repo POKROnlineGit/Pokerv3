@@ -126,7 +126,7 @@ export function ClubChat({ clubId, userId }: ClubChatProps) {
       <div
         ref={messagesContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 space-y-1"
+        className="flex-1 overflow-y-auto p-4 space-y-1 bg-muted/30 rounded-lg m-3 border"
       >
         {loadingMore && (
           <div className="flex justify-center py-2">
