@@ -283,7 +283,7 @@ export function Sidebar() {
                 {/* Header with Close Button */}
                 <div className="flex items-center justify-between p-4 border-b">
                   <Link
-                    href={user ? "/play" : "/"}
+                    href="/"
                     onClick={closeMobileSidebar}
                     className="flex items-center"
                   >
@@ -537,7 +537,7 @@ export function Sidebar() {
               className="flex justify-center items-center w-full"
             >
               <Link
-                href={user ? "/play" : "/"}
+                href="/"
                 className="flex items-center justify-center"
               >
                 <Image

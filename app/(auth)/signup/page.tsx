@@ -45,7 +45,7 @@ export default function SignUpPage() {
       if (mounted) {
         setCheckingAuth(false);
         if (user) {
-          router.replace("/play");
+          router.replace("/");
           return;
         }
       }
@@ -56,9 +56,9 @@ export default function SignUpPage() {
     // Listen for auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } =     supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted && session?.user) {
-        router.replace("/play");
+        router.replace("/");
       }
     });
 
@@ -126,8 +126,8 @@ export default function SignUpPage() {
         // Email verification is required
         router.push(`/verify-email?email=${encodeURIComponent(email)}`);
       } else if (data.user && data.session) {
-        // Auto-confirmed, redirect to play
-        router.push('/play');
+        // Auto-confirmed, redirect to home
+        router.push('/');
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err) || "Failed to sign up");
