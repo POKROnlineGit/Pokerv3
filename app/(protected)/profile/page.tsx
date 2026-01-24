@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HandHistoryList } from "@/components/features/replay/HandHistoryList";
-import { UserCircle } from "lucide-react";
+import { UserCircle, BarChart3 } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { useIsMobile } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -272,6 +274,16 @@ export default function ProfilePage() {
                   </div>
                 );
               })()}
+
+              {/* Preflop Stats Link */}
+              <div className="pt-4">
+                <Button variant="outline" asChild>
+                  <Link href="/profile/preflop-stats">
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    View Preflop Stats by Hand
+                  </Link>
+                </Button>
+              </div>
             </TabsContent>
 
             <TabsContent

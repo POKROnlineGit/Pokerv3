@@ -6,10 +6,29 @@ import { cn } from "@/lib/utils";
 const RANKS = ["A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"];
 
 interface RangeGridProps {
+  // === EXISTING PROPS (Selection Mode) - unchanged ===
   selectedHands: Set<string>;
   onToggle: (hand: string) => void;
   isMouseDown?: boolean;
   onMouseEnter?: (hand: string) => void;
+
+  // === NEW OPTIONAL PROPS (Stats Mode) ===
+  /** Stats data - when provided, enables stats display mode */
+  statsData?: Map<string, { percentage: number; sampleSize: number }>;
+  /** Callback when hovering over a cell in stats mode */
+  onCellHover?: (hand: string | null) => void;
+  /** Currently hovered hand (for highlighting) */
+  hoveredHand?: string | null;
+  /** Read-only mode - disables click interactions */
+  readOnly?: boolean;
+}
+
+function getColorForType(type: 'pair' | 'suited' | 'offsuit'): string {
+  switch (type) {
+    case 'pair': return 'rgb(5, 150, 105)';    // emerald-600
+    case 'suited': return 'rgb(37, 99, 235)';  // blue-600
+    case 'offsuit': return 'rgb(217, 119, 6)'; // amber-600
+  }
 }
 
 export function RangeGrid({
@@ -17,7 +36,14 @@ export function RangeGrid({
   onToggle,
   isMouseDown,
   onMouseEnter,
+  statsData,
+  onCellHover,
+  hoveredHand,
+  readOnly,
 }: RangeGridProps) {
+  // Determine mode based on props
+  const isStatsMode = statsData !== undefined;
+
   const gridCells = React.useMemo(() => {
     const cells = [];
 
@@ -26,7 +52,7 @@ export function RangeGrid({
         const r1 = RANKS[row];
         const r2 = RANKS[col];
         let handLabel = "";
-        let type = "";
+        let type: 'pair' | 'suited' | 'offsuit' = 'pair';
 
         if (row === col) {
           handLabel = `${r1}${r1}`;
@@ -40,34 +66,90 @@ export function RangeGrid({
         }
 
         const isSelected = selectedHands.has(handLabel);
+        const isHovered = hoveredHand === handLabel;
+
+        // Stats mode specific data
+        const cellData = statsData?.get(handLabel);
+        const percentage = cellData?.percentage ?? 0;
+
+        // Determine cell style based on mode
+        let cellStyle: React.CSSProperties | undefined;
+        let cellClassName: string;
+
+        if (isStatsMode) {
+          // Stats mode: gradient fill based on percentage
+          const color = getColorForType(type);
+          cellStyle = percentage > 0 ? {
+            background: `linear-gradient(to top, ${color} ${percentage}%, rgba(15, 23, 42, 0.8) ${percentage}%)`
+          } : undefined;
+
+          cellClassName = cn(
+            "text-[9px] font-medium border border-slate-800 flex items-center justify-center transition-colors select-none",
+            "aspect-square w-full h-full",
+            isHovered && "ring-2 ring-white ring-inset",
+            percentage > 0
+              ? "text-white"
+              : "bg-slate-900 text-slate-400"
+          );
+        } else {
+          // Selection mode: original behavior
+          cellClassName = cn(
+            "text-[9px] font-medium border border-slate-800 flex items-center justify-center transition-colors select-none",
+            "aspect-square w-full h-full",
+            isSelected
+              ? type === "pair"
+                ? "bg-emerald-600 text-white"
+                : type === "suited"
+                ? "bg-blue-600 text-white"
+                : "bg-amber-600 text-white"
+              : "bg-slate-900 text-slate-400 hover:bg-slate-800"
+          );
+        }
+
+        // Cell content: percentage in stats mode, hand label otherwise
+        const cellContent = isStatsMode && percentage > 0
+          ? `${Math.round(percentage)}%`
+          : handLabel;
+
+        // Event handlers
+        const handleMouseDown = () => {
+          if (!readOnly && !isStatsMode) {
+            onToggle(handLabel);
+          }
+        };
+
+        const handleMouseEnterEvent = () => {
+          if (isStatsMode && onCellHover) {
+            onCellHover(handLabel);
+          } else if (isMouseDown && onMouseEnter) {
+            onMouseEnter(handLabel);
+          }
+        };
+
+        const handleMouseLeave = () => {
+          if (isStatsMode && onCellHover) {
+            onCellHover(null);
+          }
+        };
 
         cells.push(
           <button
             key={handLabel}
-            onMouseDown={() => onToggle(handLabel)}
-            onMouseEnter={() =>
-              isMouseDown && onMouseEnter && onMouseEnter(handLabel)
-            }
-            className={cn(
-              "text-[9px] font-medium border border-slate-800 flex items-center justify-center transition-colors select-none",
-              "aspect-square w-full h-full",
-              isSelected
-                ? type === "pair"
-                  ? "bg-emerald-600 text-white"
-                  : type === "suited"
-                  ? "bg-blue-600 text-white"
-                  : "bg-amber-600 text-white"
-                : "bg-slate-900 text-slate-400 hover:bg-slate-800"
-            )}
+            onMouseDown={handleMouseDown}
+            onMouseEnter={handleMouseEnterEvent}
+            onMouseLeave={handleMouseLeave}
+            className={cellClassName}
+            style={cellStyle}
+            title={isStatsMode && cellData ? `${handLabel}: ${percentage.toFixed(1)}% (${cellData.sampleSize} hands)` : undefined}
           >
-            {handLabel}
+            {cellContent}
           </button>
         );
       }
     }
 
     return cells;
-  }, [selectedHands, onToggle, isMouseDown, onMouseEnter]);
+  }, [selectedHands, onToggle, isMouseDown, onMouseEnter, statsData, onCellHover, hoveredHand, readOnly, isStatsMode]);
 
   return (
     <div className="overflow-auto bg-white/5 p-1 rounded border border-slate-600 flex justify-center" style={{ width: 'fit-content', maxWidth: '100%', margin: '0 auto' }}>
