@@ -52,7 +52,7 @@ export function PreflopStatsPage({ userId }: PreflopStatsPageProps) {
     <div className="flex h-screen">
       {/* Main grid area */}
       <div className="flex-1 flex items-center justify-center p-8 bg-background">
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-4 w-full max-w-[80vh]">
           <h1 className="text-2xl font-bold">Preflop Range Stats</h1>
           <p className="text-muted-foreground text-sm">
             {isLoading
@@ -68,21 +68,8 @@ export function PreflopStatsPage({ userId }: PreflopStatsPageProps) {
             onCellHover={setHoveredHand}
             hoveredHand={hoveredHand}
             readOnly
+            className="w-full"
           />
-          <div className="flex gap-4 text-xs text-muted-foreground mt-2">
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 bg-emerald-600 rounded" />
-              <span>Pairs</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 bg-blue-600 rounded" />
-              <span>Suited</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 bg-amber-600 rounded" />
-              <span>Offsuit</span>
-            </div>
-          </div>
         </div>
       </div>
 

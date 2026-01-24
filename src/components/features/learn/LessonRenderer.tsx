@@ -205,7 +205,7 @@ export function LessonRenderer({ lesson }: LessonRendererProps) {
         return (
           <div key={index} className="mb-8">
             <div className="flex justify-center">
-              <div className="inline-block">
+              <div className="w-full max-w-md">
                 <RangeGrid
                   selectedHands={new Set(block.hands || [])}
                   onToggle={() => {}} // Read-only

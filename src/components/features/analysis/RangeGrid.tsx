@@ -21,6 +21,8 @@ interface RangeGridProps {
   hoveredHand?: string | null;
   /** Read-only mode - disables click interactions */
   readOnly?: boolean;
+  /** Additional CSS classes for the outer container */
+  className?: string;
 }
 
 function getColorForType(type: 'pair' | 'suited' | 'offsuit'): string {
@@ -40,6 +42,7 @@ export function RangeGrid({
   onCellHover,
   hoveredHand,
   readOnly,
+  className,
 }: RangeGridProps) {
   // Determine mode based on props
   const isStatsMode = statsData !== undefined;
@@ -77,15 +80,16 @@ export function RangeGrid({
         let cellClassName: string;
 
         if (isStatsMode) {
-          // Stats mode: gradient fill based on percentage
-          const color = getColorForType(type);
+          // Stats mode: gradient fill based on percentage - single emerald color for all
+          const color = 'rgb(5, 150, 105)'; // emerald-600 for all stats cells
           cellStyle = percentage > 0 ? {
             background: `linear-gradient(to top, ${color} ${percentage}%, rgba(15, 23, 42, 0.8) ${percentage}%)`
           } : undefined;
 
           cellClassName = cn(
-            "text-[9px] font-medium border border-slate-800 flex items-center justify-center transition-colors select-none",
+            "font-medium border border-slate-800 flex items-center justify-center transition-colors select-none",
             "aspect-square w-full h-full",
+            "text-[clamp(8px,1.5vw,14px)]", // Responsive text size
             isHovered && "ring-2 ring-white ring-inset",
             percentage > 0
               ? "text-white"
@@ -94,8 +98,9 @@ export function RangeGrid({
         } else {
           // Selection mode: original behavior
           cellClassName = cn(
-            "text-[9px] font-medium border border-slate-800 flex items-center justify-center transition-colors select-none",
+            "font-medium border border-slate-800 flex items-center justify-center transition-colors select-none",
             "aspect-square w-full h-full",
+            "text-[clamp(8px,1.5vw,14px)]", // Responsive text size
             isSelected
               ? type === "pair"
                 ? "bg-emerald-600 text-white"
@@ -106,10 +111,8 @@ export function RangeGrid({
           );
         }
 
-        // Cell content: percentage in stats mode, hand label otherwise
-        const cellContent = isStatsMode && percentage > 0
-          ? `${Math.round(percentage)}%`
-          : handLabel;
+        // Always show the hand label
+        const cellContent = handLabel;
 
         // Event handlers
         const handleMouseDown = () => {
@@ -152,14 +155,16 @@ export function RangeGrid({
   }, [selectedHands, onToggle, isMouseDown, onMouseEnter, statsData, onCellHover, hoveredHand, readOnly, isStatsMode]);
 
   return (
-    <div className="overflow-auto bg-white/5 p-1 rounded border border-slate-600 flex justify-center" style={{ width: 'fit-content', maxWidth: '100%', margin: '0 auto' }}>
+    <div className={cn(
+      "bg-white/5 p-1 rounded border border-slate-600",
+      className
+    )}>
       <div
-        className="inline-grid bg-slate-800 border-2 border-slate-400 p-1 select-none"
+        className="grid bg-slate-800 border-2 border-slate-400 p-1 select-none aspect-square"
         style={{
-          gridTemplateColumns: "repeat(13, minmax(1.25rem, 1.5rem))",
-          gridTemplateRows: "repeat(13, minmax(1.25rem, 1.5rem))",
+          gridTemplateColumns: "repeat(13, 1fr)",
+          gridTemplateRows: "repeat(13, 1fr)",
           gap: "1px",
-          minWidth: "fit-content",
         }}
         onContextMenu={(e) => e.preventDefault()}
       >

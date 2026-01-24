@@ -24,9 +24,6 @@ const PLAYER_COUNT_OPTIONS: { value: PlayerCountFilter; label: string }[] = [
 
 const POSITION_OPTIONS: { value: PokerPosition | 'all'; label: string }[] = [
   { value: 'all', label: 'All Positions' },
-  { value: 'BTN', label: 'Button (BTN)' },
-  { value: 'SB', label: 'Small Blind (SB)' },
-  { value: 'BB', label: 'Big Blind (BB)' },
   { value: 'UTG', label: 'Under the Gun (UTG)' },
   { value: 'UTG+1', label: 'UTG+1' },
   { value: 'UTG+2', label: 'UTG+2' },
@@ -35,6 +32,9 @@ const POSITION_OPTIONS: { value: PokerPosition | 'all'; label: string }[] = [
   { value: 'LJ', label: 'Lojack (LJ)' },
   { value: 'HJ', label: 'Hijack (HJ)' },
   { value: 'CO', label: 'Cutoff (CO)' },
+  { value: 'BTN', label: 'Button (BTN)' },
+  { value: 'SB', label: 'Small Blind (SB)' },
+  { value: 'BB', label: 'Big Blind (BB)' },
 ];
 
 const STAT_TYPE_OPTIONS: { value: StatType; label: string }[] = [

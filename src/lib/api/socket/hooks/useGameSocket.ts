@@ -55,6 +55,13 @@ export function useGameSocket(options: UseGameSocketOptions): UseGameSocketRetur
   const lastJoinRef = useRef<{ gameId: string; socketId?: string; at: number } | null>(null);
   const backendAutoJoinedRef = useRef(false);
   const initialJoinTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const onErrorRef = useRef(onError);
+  const onAuthErrorRef = useRef(onAuthError);
+
+  // Keep refs current so handleError can call latest without being in effect deps
+  // (avoids effect re-runs / timeout reschedules when parent re-renders after onError/toast)
+  onErrorRef.current = onError;
+  onAuthErrorRef.current = onAuthError;
 
   // Create retry handler for "Game not found" errors
   const retryHandlerRef = useRef(
@@ -175,11 +182,11 @@ export function useGameSocket(options: UseGameSocketOptions): UseGameSocketRetur
         }
       } else if (isAuthError(error)) {
         // Authorization error - don't retry
-        onAuthError?.();
-        onError?.(errorMessage);
+        onAuthErrorRef.current?.();
+        onErrorRef.current?.(errorMessage);
       } else {
         // Other errors
-        onError?.(errorMessage);
+        onErrorRef.current?.(errorMessage);
       }
     };
 
@@ -251,7 +258,7 @@ export function useGameSocket(options: UseGameSocketOptions): UseGameSocketRetur
 
       retryHandlerRef.current.cleanup();
     };
-  }, [gameId, getSocketInstance, joinGameInternal, onError, onAuthError]);
+  }, [gameId, getSocketInstance, joinGameInternal]);
 
   return {
     socket: getSocketInstance(),
