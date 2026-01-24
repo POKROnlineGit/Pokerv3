@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { PokerTable } from "@/components/features/game/PokerTable";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTheme } from "@/components/providers/PreferencesProvider";
-import { createClientComponentClient } from "@/lib/api/supabase/client";
-import { useIsMobile } from "@/lib/hooks";
+import { useIsMobile, useUserProfile } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 import { Settings, X } from "lucide-react";
 import { GameState, DEFAULT_GAME_CONFIG } from "@/lib/types/poker";
@@ -51,165 +50,9 @@ export function PlayLayout({
   actionPopup,
 }: PlayLayoutProps) {
   const { currentTheme } = useTheme();
-  const supabase = createClientComponentClient();
   const isMobile = useIsMobile();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  // Initialize from cache to prevent flash
-  const getCachedProfile = () => {
-    if (typeof window === "undefined")
-      return { username: null, chips: null, userId: null };
-    try {
-      const cached = localStorage.getItem("playLayout_profile");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        // Check if cache is less than 5 minutes old
-        if (parsed.timestamp && Date.now() - parsed.timestamp < 5 * 60 * 1000) {
-          return parsed;
-        }
-      }
-    } catch (e) {
-      // Ignore cache errors
-    }
-    return { username: null, chips: null, userId: null };
-  };
-
-  const cached = getCachedProfile();
-  const [username, setUsername] = useState<string | null>(cached.username);
-  const [chips, setChips] = useState<number | null>(cached.chips);
-  const [userId, setUserId] = useState<string | null>(cached.userId);
-
-  // Fetch user profile
-  useEffect(() => {
-    const fetchProfile = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        setUsername(null);
-        setChips(null);
-        setUserId(null);
-        // Clear cache on logout
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.removeItem("playLayout_profile");
-          } catch (e) {
-            // Ignore cache errors
-          }
-        }
-        return;
-      }
-
-      setUserId(user.id);
-
-      // Fetch initial profile
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("username, chips")
-        .eq("id", user.id)
-        .single();
-
-      if (error) {
-        console.error("Error fetching profile:", error);
-        return;
-      }
-
-      if (data) {
-        setUsername(data.username);
-        setChips(data.chips);
-
-        // Cache the profile data
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.setItem(
-              "playLayout_profile",
-              JSON.stringify({
-                username: data.username,
-                chips: data.chips,
-                userId: user.id,
-                timestamp: Date.now(),
-              })
-            );
-          } catch (e) {
-            // Ignore cache errors
-          }
-        }
-      }
-    };
-
-    fetchProfile();
-
-    // Subscribe to auth changes
-    const {
-      data: { subscription: authSub },
-    } = supabase.auth.onAuthStateChange(() => {
-      fetchProfile();
-    });
-
-    return () => {
-      authSub.unsubscribe();
-    };
-  }, [supabase]);
-
-  // Set up realtime subscription for profile updates
-  useEffect(() => {
-    if (!userId) return;
-
-    const channel = supabase
-      .channel(`profile_updates_${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "profiles",
-          filter: `id=eq.${userId}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            if (payload.new.username !== undefined) {
-              setUsername(payload.new.username);
-            }
-            if (payload.new.chips !== undefined) {
-              setChips(payload.new.chips);
-            }
-
-            // Update cache when profile changes
-            if (typeof window !== "undefined") {
-              try {
-                const cached = localStorage.getItem("playLayout_profile");
-                if (cached) {
-                  const parsed = JSON.parse(cached);
-                  localStorage.setItem(
-                    "playLayout_profile",
-                    JSON.stringify({
-                      username:
-                        payload.new.username !== undefined
-                          ? payload.new.username
-                          : parsed.username,
-                      chips:
-                        payload.new.chips !== undefined
-                          ? payload.new.chips
-                          : parsed.chips,
-                      userId: parsed.userId,
-                      timestamp: Date.now(),
-                    })
-                  );
-                }
-              } catch (e) {
-                // Ignore cache errors
-              }
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [supabase, userId]);
+  const { username, chips } = useUserProfile();
 
   // Determine if we should show settings button (mobile + active game)
   const showSettingsButton = isMobile && tableContent;

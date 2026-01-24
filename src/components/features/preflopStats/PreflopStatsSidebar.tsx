@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -14,6 +13,7 @@ import {
 import { ArrowLeft, BarChart3 } from 'lucide-react';
 import type { PreflopStatsSidebarProps } from './types';
 import type { PlayerCountFilter, PokerPosition, StatType } from '@/lib/types/preflopStats';
+import { UserProfileFooter } from '@/components/layout/UserProfileFooter';
 
 const PLAYER_COUNT_OPTIONS: { value: PlayerCountFilter; label: string }[] = [
   { value: 'all', label: 'All Table Sizes' },
@@ -81,6 +81,9 @@ export function PreflopStatsSidebar({
       {/* Header */}
       <div className="p-4 border-b">
         <div className="flex items-center gap-2">
+          <Link href="/profile" className="p-1 -ml-1 hover:bg-muted/50 rounded transition-colors">
+            <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+          </Link>
           <BarChart3 className="h-5 w-5 text-primary" />
           <h2 className="font-semibold">Preflop Statistics</h2>
         </div>
@@ -240,15 +243,8 @@ export function PreflopStatsSidebar({
         )}
       </ScrollArea>
 
-      {/* Footer */}
-      <div className="p-3 border-t">
-        <Button variant="outline" className="w-full" asChild>
-          <Link href="/profile">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Profile
-          </Link>
-        </Button>
-      </div>
+      {/* User Profile Footer */}
+      <UserProfileFooter />
     </div>
   );
 }

@@ -21,6 +21,7 @@ import { useToast } from '@/lib/hooks'
 import { ClubSettingsDialog } from './ClubSettingsDialog'
 import { ClubBanDialog } from './ClubBanDialog'
 import { ClubLeaveDialog } from './ClubLeaveDialog'
+import { UserProfileFooter } from '@/components/layout/UserProfileFooter'
 
 interface ClubSidebarProps {
   club: NormalizedClub
@@ -66,7 +67,7 @@ export function ClubSidebar({
   }
 
   return (
-    <div className="flex flex-col h-full border-l bg-card">
+    <div className="flex flex-col h-full border-l bg-card w-[280px]">
       {/* Club info header */}
       <div className="p-4 border-b">
         <div className="flex items-center gap-2 mb-2">
@@ -162,6 +163,9 @@ export function ClubSidebar({
           )}
         </Button>
       </div>
+
+      {/* User Profile Footer */}
+      <UserProfileFooter />
 
       {/* Dialogs */}
       <ClubSettingsDialog

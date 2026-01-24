@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/lib/hooks";
 import { motion, AnimatePresence } from "framer-motion";
 import { LessonCard } from "@/components/features/learn/LessonCard";
+import { UserProfileFooter } from "@/components/layout/UserProfileFooter";
 
 interface LessonDashboardProps {
   initialLessons: Lesson[];
@@ -65,9 +66,9 @@ export function LessonDashboard({ initialLessons }: LessonDashboardProps) {
 
   // Render progress card content
   const progressCardContent = (
-    <Card className="bg-card backdrop-blur-sm border flex flex-col">
+    <Card className="bg-card backdrop-blur-sm border flex flex-col h-[calc(100vh-14rem)]">
       {/* Course Progress */}
-      <CardHeader className="border-b">
+      <CardHeader className="border-b flex-shrink-0">
         <CardTitle className="text-lg">Course Progress</CardTitle>
         <div className="mt-4 space-y-2">
           <div className="flex items-center justify-between">
@@ -81,7 +82,7 @@ export function LessonDashboard({ initialLessons }: LessonDashboardProps) {
       </CardHeader>
 
       {/* Quick Links */}
-      <CardHeader>
+      <CardHeader className="flex-1">
         <CardTitle className="text-lg">Quick Links</CardTitle>
         <CardContent className="p-0 pt-4 space-y-4">
           <Link href="/tools/equity-calculator">
@@ -108,6 +109,9 @@ export function LessonDashboard({ initialLessons }: LessonDashboardProps) {
           </Link>
         </CardContent>
       </CardHeader>
+
+      {/* User Profile Footer */}
+      <UserProfileFooter className="rounded-b-lg" />
     </Card>
   );
 
@@ -356,10 +360,8 @@ export function LessonDashboard({ initialLessons }: LessonDashboardProps) {
 
       {/* Fixed Right Sidebar - Hidden on Mobile */}
       {!isMobile && (
-        <div className="w-80 flex-shrink-0">
-          <div className="mt-[4.5rem]">
-            {progressCardContent}
-          </div>
+        <div className="w-[280px] flex-shrink-0 flex items-center">
+          {progressCardContent}
         </div>
       )}
       </div>
