@@ -285,11 +285,19 @@ export function PokerTable({
     isPaused,
   ]);
 
-  // Dynamic seat count based on game type
-  // Priority: isHeadsUp (2) > maxSeats prop > config.maxPlayers > fallback (6)
+  // Dynamic seat count based on game type and active players
+  // Count current players (excluding those who have left)
+  const seatedPlayerCount = gameState.players.filter(
+    p => !p.left && p.status !== 'LEFT' && p.status !== 'REMOVED'
+  ).length;
+
+  // For non-heads-up games, show dynamic seats:
+  // - Minimum 6 seats
+  // - Or player count + 1 (to show one empty seat for joining), up to maxPlayers
+  const maxPlayers = maxSeats ?? gameState.config?.maxPlayers ?? 6;
   const NUM_SEATS = isHeadsUp
     ? 2
-    : maxSeats ?? gameState.config?.maxPlayers ?? 6;
+    : Math.min(maxPlayers, Math.max(6, seatedPlayerCount + 1));
   // Use same radius for both heads-up and 6-max for consistency
   // Seats positioned so only ~20% of seat overlaps table edge
   const radiusX = isMobile ? 55 : 70; // Reduced on mobile to bring players in from edges

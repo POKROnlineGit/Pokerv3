@@ -5,7 +5,6 @@ import { PlayLayout } from "@/components/layout/PlayLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useSocket } from "@/lib/api/socket/client";
 import { useRouter } from "next/navigation";
@@ -20,7 +19,6 @@ export default function HostGamePage() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Form State
-  const [variant, setVariant] = useState("six_max");
   const [buyIn, setBuyIn] = useState("200");
   const [smallBlind, setSmallBlind] = useState("1");
   const [bigBlind, setBigBlind] = useState("2");
@@ -31,7 +29,7 @@ export default function HostGamePage() {
     if (!socket.connected) socket.connect();
 
     socket.emit("create_private_game", {
-      variantSlug: variant,
+      variantSlug: 'ten_max',
       config: {
         buyIn: parseInt(buyIn),
         startingStack: parseInt(buyIn),
@@ -81,20 +79,6 @@ export default function HostGamePage() {
         </Link>
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Table Size</Label>
-            <Select value={variant} onValueChange={setVariant}>
-              <SelectTrigger className="bg-slate-900 border-slate-800">
-                <SelectValue placeholder="Select size" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="heads_up">Heads Up (2 Max)</SelectItem>
-                <SelectItem value="six_max">6-Max</SelectItem>
-                <SelectItem value="ten_max">Full Ring (10 Max)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Starting Stack</Label>

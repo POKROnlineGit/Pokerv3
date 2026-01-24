@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useSocket } from '@/lib/api/socket/client'
 import { useClubApi } from '@/lib/api/http/clubs'
 import { useToast } from '@/lib/hooks'
@@ -26,17 +25,9 @@ export function CreateGamePopup({ open, onOpenChange, clubId, onGameCreated }: C
   const { profile } = useProfile()
 
   const [isCreating, setIsCreating] = useState(false)
-  const [variant, setVariant] = useState('nine_max')
   const [startingStack, setStartingStack] = useState('200')
   const [smallBlind, setSmallBlind] = useState('1')
   const [bigBlind, setBigBlind] = useState('2')
-
-  const variantToMaxPlayers: Record<string, number> = {
-    heads_up: 2,
-    six_max: 6,
-    nine_max: 9,
-    ten_max: 10,
-  }
 
   const handleCreate = async () => {
     setIsCreating(true)
@@ -47,7 +38,7 @@ export function CreateGamePopup({ open, onOpenChange, clubId, onGameCreated }: C
       // 1. Create private game via socket
       const gameId = await new Promise<string>((resolve, reject) => {
         socket.emit('create_private_game', {
-          variantSlug: variant,
+          variantSlug: 'ten_max',
           config: {
             buyIn: parseInt(startingStack),
             startingStack: parseInt(startingStack),
@@ -66,7 +57,7 @@ export function CreateGamePopup({ open, onOpenChange, clubId, onGameCreated }: C
       const shareResult = await shareGame(clubId, gameId, {
         title: `${profile?.username || 'Player'}'s Private Game`,
         blinds: `${smallBlind}/${bigBlind}`,
-        maxPlayers: variantToMaxPlayers[variant] || 9,
+        maxPlayers: 10,
         hostUsername: profile?.username,
         variant: 'Texas Hold\'em',
       })
@@ -103,22 +94,6 @@ export function CreateGamePopup({ open, onOpenChange, clubId, onGameCreated }: C
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Table Size */}
-          <div className="space-y-2">
-            <Label>Table Size</Label>
-            <Select value={variant} onValueChange={setVariant}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="heads_up">Heads Up (2-Max)</SelectItem>
-                <SelectItem value="six_max">6-Max</SelectItem>
-                <SelectItem value="nine_max">9-Max</SelectItem>
-                <SelectItem value="ten_max">10-Max</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Starting Stack */}
           <div className="space-y-2">
             <Label>Starting Stack</Label>
